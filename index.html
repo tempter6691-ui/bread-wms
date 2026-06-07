@@ -968,7 +968,7 @@ function drawObItems() {
       '<td><span style="font-weight:600;'+unitColor+'">'+item.qty+unit+'</span></td>'+
       '<td><span style="font-size:1.2rem;font-weight:bold;color:'+numColor+';">'+remaining+'</span></td>'+
       '<td>'+statusBadge+'</td>'+
-      '<td>'+(scanned>0?'<button class="btn btn-gray btn-sm" onclick="undoOb(''+item.pid+'')">↩️</button>':'')+'</td></tr>';
+      '<td>'+(scanned>0?'<button class="btn btn-gray btn-sm" onclick="undoOb(\''+item.pid+'\')">↩️</button>':'')+'</td></tr>';
   }).join('');
   var panColor=totalPanRemaining===0?'#27ae60':'#2563eb';
   var bongColor=totalBongRemaining===0?'#27ae60':'#333';
