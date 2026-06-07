@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>브레드뱅크 발주 관리</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --primary:#1e3a5f;--accent:#c9a96e;--bg:#f8f5f0;--white:#fff;
+  --success:#27ae60;--warning:#f39c12;--danger:#e74c3c;--border:#ddd;--sub:#888;
+}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-height:100vh;}
+
+.header{background:var(--primary);color:#fff;padding:.9rem 1rem;display:flex;align-items:center;gap:.6rem;position:sticky;top:0;z-index:100;}
+.header h1{font-size:.95rem;font-weight:700;flex:1;}
+.header-sub{font-size:.72rem;color:var(--accent);}
+.refresh-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.45rem .8rem;font-size:.78rem;cursor:pointer;font-family:inherit;font-weight:700;}
+
+/* 통계 */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;padding:.7rem;}
+.stat{background:#fff;border-radius:8px;padding:.6rem;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.stat-num{font-size:1.3rem;font-weight:700;color:var(--primary);}
+.stat-label{font-size:.68rem;color:var(--sub);margin-top:1px;}
+
+/* 필터/검색 */
+.toolbar{background:#fff;padding:.6rem .8rem;border-bottom:1px solid var(--border);position:sticky;top:52px;z-index:90;}
+.search-row{display:flex;gap:.5rem;margin-bottom:.5rem;}
+.search-input{flex:1;padding:.55rem .8rem;border:1px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit;}
+.search-input:focus{outline:none;border-color:var(--primary);}
+.filter-row{display:flex;gap:.35rem;overflow-x:auto;padding-bottom:2px;}
+.filter-row::-webkit-scrollbar{height:3px;}
+.filter-row::-webkit-scrollbar-thumb{background:var(--accent);}
+.fbtn{padding:.3rem .7rem;border-radius:16px;border:1px solid var(--border);background:#fff;font-size:.74rem;cursor:pointer;white-space:nowrap;font-family:inherit;transition:.15s;}
+.fbtn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.fbtn.yellow.active{background:var(--warning);border-color:var(--warning);}
+.fbtn.green.active{background:var(--success);border-color:var(--success);}
+.fbtn.red.active{background:var(--danger);border-color:var(--danger);}
+
+/* 날짜 그룹 */
+.date-group{margin:.6rem .7rem 0;}
+.date-header{display:flex;align-items:center;gap:.5rem;padding:.55rem .8rem;background:var(--primary);color:#fff;border-radius:8px 8px 0 0;cursor:pointer;user-select:none;}
+.date-header-title{flex:1;font-size:.88rem;font-weight:700;}
+.date-header-count{font-size:.75rem;color:var(--accent);}
+.date-header-arrow{font-size:.8rem;transition:.2s;}
+.date-header.collapsed .date-header-arrow{transform:rotate(-90deg);}
+.date-body{background:#f8f5f0;border:1px solid #ddd;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background-color:#ddd;}
+.date-body.hidden{display:none;}
+.order-card{background:#fff;}
+
+/* 발주 카드 */
+.order-card{border-bottom:1px solid #f0f0f0;padding:.7rem .8rem;}
+.order-card:last-child{border:none;}
+.order-top{display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;}
+.order-client{font-weight:700;font-size:.88rem;flex:1;}
+.order-time{font-size:.72rem;color:var(--sub);}
+.order-driver{font-size:.7rem;padding:.15rem .5rem;border-radius:10px;background:#e8f0ff;color:var(--primary);font-weight:500;}
+.status-badge{padding:.2rem .55rem;border-radius:10px;font-size:.68rem;font-weight:700;}
+.status-pending{background:#fff3cd;color:#856404;}
+.status-confirmed{background:#d4edda;color:#155724;}
+.status-cancelled{background:#f8d7da;color:#721c24;}
+
+/* 아이템 토글 */
+.items-toggle{font-size:.75rem;color:var(--primary);cursor:pointer;text-decoration:underline;margin-bottom:.3rem;display:inline-block;}
+.items-body{display:none;}
+.items-body.show{display:block;}
+.item-row{display:flex;justify-content:space-between;font-size:.78rem;padding:.15rem 0;border-bottom:1px solid #f8f8f8;}
+.item-row:last-child{border:none;}
+.item-qty{font-weight:700;color:var(--primary);}
+
+.order-memo{font-size:.72rem;color:var(--sub);font-style:italic;margin:.2rem 0;}
+.order-actions{display:flex;gap:.4rem;margin-top:.4rem;}
+.btn-sm{padding:.35rem .7rem;border:none;border-radius:5px;font-size:.72rem;cursor:pointer;font-family:inherit;font-weight:700;color:#fff;}
+.btn-confirm{background:var(--success);}
+.btn-cancel{background:var(--danger);}
+.btn-print{background:var(--primary);}
+
+.status-exported{background:#e8d5f5;color:#6c3483;}
+.new-dot{display:inline-block;width:7px;height:7px;background:var(--danger);border-radius:50%;margin-left:4px;vertical-align:middle;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="flex:1;">
+    <h1>🥐 브레드뱅크 발주 관리</h1>
+    <div class="header-sub" id="header-sub">로딩 중...</div>
+  </div>
+  <button class="refresh-btn" onclick="loadOrders()">↻ 새로고침</button>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-num" id="s-total">-</div><div class="stat-label">전체</div></div>
+  <div class="stat"><div class="stat-num" id="s-pending" style="color:var(--warning);">-</div><div class="stat-label">대기중</div></div>
+  <div class="stat"><div class="stat-num" id="s-confirmed" style="color:var(--success);">-</div><div class="stat-label">확인완료</div></div>
+  <div class="stat"><div class="stat-num" id="s-today" style="color:var(--primary);">-</div><div class="stat-label">오늘 신규</div></div>
+</div>
+
+<div class="toolbar">
+  <div class="search-row">
+    <input class="search-input" id="search" placeholder="🔍 거래처 검색..." oninput="applyFilter()">
+  </div>
+  <div class="filter-row">
+    <button class="fbtn active" onclick="setStatus('all',this)">전체</button>
+    <button class="fbtn yellow" onclick="setStatus('pending',this)">⏳ 대기중</button>
+    <button class="fbtn green" onclick="setStatus('confirmed',this)">✅ 확인완료</button>
+    <button class="fbtn red" onclick="setStatus('cancelled',this)">❌ 취소</button>
+  </div>
+</div>
+
+<div id="orders-wrap"></div>
+
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyAI5VBBXB2dUS5kk5IE--xfCe_C2r0PrIA",
+  authDomain:"bread-wms.firebaseapp.com",
+  projectId:"bread-wms",
+  storageBucket:"bread-wms.firebasestorage.app",
+  messagingSenderId:"310262595402",
+  appId:"1:310262595402:web:49e8df8647cd8258bf0bb3"
+});
+const db = firebase.firestore();
+
+let allOrders = [];
+let clients = {}; // name -> driver
+let statusFilter = 'all';
+
+// 거래처 목록 로드
+async function loadClients() {
+  try {
+    var snap = await db.collection('clients').get();
+    snap.forEach(function(d){
+      var data = d.data();
+      if(data.name) clients[data.name] = data.driver || '';
+    });
+  } catch(e) {}
+}
+
+async function loadOrders() {
+  document.getElementById('orders-wrap').innerHTML = '<div class="empty">로딩 중...</div>';
+  try {
+    await loadClients();
+    var snap = await db.collection('orders_request').orderBy('ts','desc').get();
+    allOrders = [];
+    snap.forEach(function(d){ allOrders.push(Object.assign({id:d.id}, d.data())); });
+    updateStats();
+    renderOrders();
+
+    // 헤더 업데이트
+    var now = new Date();
+    document.getElementById('header-sub').textContent =
+      '마지막 업데이트: ' + now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  } catch(e) {
+    document.getElementById('orders-wrap').innerHTML = '<div class="empty" style="color:red;">오류: '+e.message+'</div>';
+  }
+}
+
+function updateStats() {
+  var today = new Date(); today.setHours(0,0,0,0);
+  document.getElementById('s-total').textContent = allOrders.length;
+  document.getElementById('s-pending').textContent = allOrders.filter(function(o){return o.status==='pending';}).length;
+  document.getElementById('s-confirmed').textContent = allOrders.filter(function(o){return o.status==='confirmed';}).length;
+  document.getElementById('s-today').textContent = allOrders.filter(function(o){
+    var t = o.ts&&o.ts.toDate?o.ts.toDate():null;
+    return t && t >= today;
+  }).length;
+}
+
+function setStatus(s, btn) {
+  statusFilter = s;
+  document.querySelectorAll('.fbtn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderOrders();
+}
+
+function applyFilter() { renderOrders(); }
+
+function renderOrders() {
+  var keyword = (document.getElementById('search').value||'').trim();
+  var list = allOrders.filter(function(o){
+    if(statusFilter !== 'all' && o.status !== statusFilter) return false;
+    if(keyword && !(o.client||'').includes(keyword)) return false;
+    return true;
+  });
+
+  if(!list.length){
+    document.getElementById('orders-wrap').innerHTML = '<div class="empty">발주가 없어요</div>';
+    return;
+  }
+
+  // 날짜별 그룹핑
+  var groups = {};
+  list.forEach(function(o){
+    var t = o.ts&&o.ts.toDate?o.ts.toDate():new Date();
+    var dateStr = t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0');
+    // 오늘/어제 라벨
+    var today = new Date(); today.setHours(0,0,0,0);
+    var yesterday = new Date(today); yesterday.setDate(today.getDate()-1);
+    var d = new Date(t); d.setHours(0,0,0,0);
+    var label = d.getTime()===today.getTime()?'📅 오늘 ('+dateStr+')':
+                d.getTime()===yesterday.getTime()?'📅 어제 ('+dateStr+')':
+                '📅 '+dateStr;
+    if(!groups[dateStr]) groups[dateStr] = {label:label, orders:[]};
+    groups[dateStr].orders.push(o);
+  });
+
+  var html = '';
+  Object.keys(groups).sort(function(a,b){return b.localeCompare(a);}).forEach(function(dateStr){
+    var g = groups[dateStr];
+    var pendingCnt = g.orders.filter(function(o){return o.status==='pending';}).length;
+    html += '<div class="date-group">'+
+      '<div class="date-header" onclick="toggleDate(this)">'+
+        '<div class="date-header-title">'+g.label+(pendingCnt>0?'<span class="new-dot"></span>':'')+' </div>'+
+        '<div class="date-header-count">'+g.orders.length+'건'+(pendingCnt>0?' · 대기 '+pendingCnt+'건':'')+'</div>'+
+        '<span class="date-header-arrow">▼</span>'+
+      '</div>'+
+      '<div class="date-body">'+
+        g.orders.map(function(o){ return renderCard(o); }).join('')+
+      '</div>'+
+    '</div>';
+  });
+
+  document.getElementById('orders-wrap').innerHTML = html + '<div style="height:1rem;"></div>';
+}
+
+function toggleDate(el) {
+  el.classList.toggle('collapsed');
+  el.nextElementSibling.classList.toggle('hidden');
+}
+
+function toggleItems(el) {
+  var body = el.nextElementSibling;
+  if(body.classList.contains('show')){
+    body.classList.remove('show');
+    el.textContent = '▶ 품목 보기';
+  } else {
+    body.classList.add('show');
+    el.textContent = '▼ 품목 접기';
+  }
+}
+
+function renderCard(o) {
+  var t = o.ts&&o.ts.toDate?o.ts.toDate():new Date();
+  var timeStr = t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
+  var isNew = (new Date()-t) < 3600000;
+  var driver = clients[o.client] || '';
+  var statusLabel = o.status==='pending'?'⏳ 대기':o.status==='confirmed'?'✅ 완료':o.status==='exported'?'📋 등록됨':'❌ 취소';
+  var statusClass = 'status-'+(o.status==='exported'?'exported':o.status);
+  var total = (o.items||[]).reduce(function(s,i){return s+i.qty;},0);
+  var items = o.items||[];
+
+  // 2열로 나누기
+  var half = Math.ceil(items.length/2);
+  var left = items.slice(0,half);
+  var right = items.slice(half);
+
+  var itemsHtml = '<table style="width:100%;border-collapse:collapse;font-size:.78rem;margin-top:.3rem;">'+
+    '<thead><tr>'+
+      '<th style="text-align:left;padding:2px 4px;border-bottom:1px solid #eee;color:#888;font-weight:500;">품목</th>'+
+      '<th style="text-align:center;padding:2px 4px;border-bottom:1px solid #eee;color:#888;font-weight:500;width:30px;">수량</th>'+
+      '<th style="text-align:left;padding:2px 4px 2px 12px;border-bottom:1px solid #eee;color:#888;font-weight:500;">품목</th>'+
+      '<th style="text-align:center;padding:2px 4px;border-bottom:1px solid #eee;color:#888;font-weight:500;width:30px;">수량</th>'+
+    '</tr></thead><tbody>';
+
+  for(var i=0;i<left.length;i++){
+    var r=right[i];
+    itemsHtml+='<tr>'+
+      '<td style="padding:2px 4px;border-bottom:1px solid #f8f8f8;">'+left[i].pname+'</td>'+
+      '<td style="padding:2px 4px;text-align:center;font-weight:700;color:#1e3a5f;border-bottom:1px solid #f8f8f8;">'+left[i].qty+'</td>'+
+      '<td style="padding:2px 4px 2px 12px;border-bottom:1px solid #f8f8f8;">'+(r?r.pname:'')+'</td>'+
+      '<td style="padding:2px 4px;text-align:center;font-weight:700;color:#1e3a5f;border-bottom:1px solid #f8f8f8;">'+(r?r.qty:'')+'</td>'+
+    '</tr>';
+  }
+  itemsHtml+='</tbody></table>';
+
+  return '<div class="order-card">'+
+    '<div class="order-top">'+
+      '<div class="order-client">'+o.client+(isNew&&o.status==='pending'?'<span class="new-dot"></span>':'')+
+      '</div>'+
+      (driver?'<span class="order-driver">'+driver+'</span>':'')+
+      '<span class="order-time">'+timeStr+'</span>'+
+      '<span class="status-badge '+statusClass+'">'+statusLabel+'</span>'+
+    '</div>'+
+    '<span class="items-toggle" onclick="toggleItems(this)">▶ 품목 보기 ('+(o.items||[]).length+'개 품목, '+total+'개)</span>'+
+    '<div class="items-body">'+
+      itemsHtml+
+      (o.memo?'<div class="order-memo">💬 '+o.memo+'</div>':'')+
+    '</div>'+
+    '<div class="order-actions">'+
+      (o.status==='pending'?
+        '<button class="btn-sm btn-confirm" onclick="confirmOrder(\''+o.id+'\')">✅ 확인</button>'+
+        '<button class="btn-sm btn-cancel" onclick="cancelOrder(\''+o.id+'\')">❌ 취소</button>':'')+
+      (o.status==='confirmed'||o.status==='exported'?
+        '<button class="btn-sm" style="background:#8e44ad;" onclick="exportToOrder(\''+o.id+'\')">📋 출고지시서 '+(o.status==='exported'?'재등록':'등록')+'</button>':'')+
+      '<button class="btn-sm btn-print" onclick="printOrder(\''+o.id+'\')">🖨️ 출력</button>'+
+    '</div>'+
+  '</div>';
+}
+
+async function exportToOrder(id) {
+  var o = allOrders.find(function(x){return x.id===id;}); if(!o) return;
+  // 재등록 시 index에서 수정한 수량이 덮어써지므로 경고
+  if(o.status === 'exported') {
+    if(!confirm('이미 출고지시서에 등록된 발주입니다.\n재등록하면 출고관리 시스템에서 수정한 수량이 초기화될 수 있어요.\n계속할까요?')) return;
+  }
+  
+  // 날짜 결정 (발주 날짜 or 오늘)
+  var t = o.ts&&o.ts.toDate?o.ts.toDate():new Date();
+  var dateStr = t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0');
+  
+  // 거래처 담당기사 찾기
+  var driver = clients[o.client] || '';
+
+  // 출고지시서 items 형태로 변환
+  var items = (o.items||[]).map(function(item){
+    return { pid: item.pid, pname: item.pname||'', qty: item.qty, scanned: 0, done: false, driver: driver };
+  });
+
+  try {
+    // merge:true로 해당 거래처만 추가/덮어쓰기 (다른 거래처 데이터 보존)
+    var ordRef = db.collection('orders').doc(dateStr);
+    await ordRef.set({ [o.client]: { items: items, driver: driver } }, { merge: true });
+
+    // 발주 상태를 exported로 업데이트
+    await db.collection('orders_request').doc(id).update({status:'exported'});
+    var ord = allOrders.find(function(x){return x.id===id;});
+    if(ord) ord.status='exported';
+
+    updateStats(); renderOrders();
+    alert('✅ 출고지시서에 등록됐어요!\n\n거래처: '+o.client+'\n날짜: '+dateStr+'\n\n출고관리 시스템에서 확인해보세요!');
+  } catch(e) {
+    alert('오류: '+e.message);
+  }
+}
+
+async function confirmOrder(id) {
+  await db.collection('orders_request').doc(id).update({status:'confirmed'});
+  var o = allOrders.find(function(x){return x.id===id;});
+  if(o) o.status='confirmed';
+  updateStats(); renderOrders();
+}
+
+async function cancelOrder(id) {
+  if(!confirm('취소하시겠어요?')) return;
+  await db.collection('orders_request').doc(id).update({status:'cancelled'});
+  var o = allOrders.find(function(x){return x.id===id;});
+  if(o) o.status='cancelled';
+  updateStats(); renderOrders();
+}
+
+function printOrder(id) {
+  var o = allOrders.find(function(x){return x.id===id;}); if(!o) return;
+  var t = o.ts&&o.ts.toDate?o.ts.toDate():new Date();
+  var dateStr = t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0');
+  var total = (o.items||[]).reduce(function(s,i){return s+i.qty;},0);
+  var w = window.open('','_blank');
+  w.document.write('<html><head><meta charset="UTF-8"><style>body{font-family:Malgun Gothic,sans-serif;padding:20px;}h2{margin-bottom:4px;}p{color:#888;font-size:13px;margin-bottom:16px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:6px 10px;}th{background:#f0f0f0;}</style></head><body>'+
+    '<h2>🥐 발주서 — '+o.client+'</h2><p>'+dateStr+' | 총 '+(o.items||[]).length+'개 품목, '+total+'개</p>'+
+    '<table><thead><tr><th>품목명</th><th>수량</th></tr></thead><tbody>'+
+    (o.items||[]).map(function(item){return '<tr><td>'+item.pname+'</td><td style="text-align:center;">'+item.qty+'개</td></tr>';}).join('')+
+    '</tbody></table>'+(o.memo?'<p style="margin-top:12px;">요청사항: '+o.memo+'</p>':'')+
+    '</body></html>');
+  w.document.close();
+  setTimeout(function(){w.print();},500);
+}
+
+loadOrders();
+
+// 실시간 신규 발주 감지 (새 pending 건 생기면 자동 새로고침)
+let _lastSnapCount = 0;
+db.collection('orders_request').where('status','==','pending')
+  .onSnapshot(function(snap){
+    if(_lastSnapCount !== 0 && snap.size !== _lastSnapCount) {
+      loadOrders();
+    }
+    _lastSnapCount = snap.size;
+  });
+</script>
+</body>
+</html>
