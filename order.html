@@ -18,8 +18,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .header-client{font-size:.78rem;color:var(--accent);margin-top:2px;}
 .hbtn{border:none;border-radius:6px;padding:.5rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;color:#fff;}
 .hbtn-gray{background:#4a5568;margin-right:.3rem;}
-.hbtn-accent{background:var(--accent);display:flex;align-items:center;gap:.4rem;}
-.cart-count{background:#fff;color:var(--accent);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;}
+.hbtn-accent{background:#2563eb;display:flex;align-items:center;gap:.4rem;}
+.cart-count{background:#fff;color:#2563eb;border-radius:50%;min-width:22px;height:22px;padding:0 3px;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;}
 .cat-wrap{background:#fff;padding:.6rem .8rem;overflow-x:auto;white-space:nowrap;border-bottom:1px solid var(--border);position:sticky;top:60px;z-index:90;}
 .cat-wrap::-webkit-scrollbar{height:3px;}
 .cat-wrap::-webkit-scrollbar-thumb{background:var(--accent);}
@@ -35,7 +35,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .product-cat{font-size:.7rem;color:var(--sub);margin-top:2px;}
 .qty-control{display:flex;align-items:center;gap:.5rem;}
 .qty-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--primary);font-weight:700;}
-.qty-input{width:36px;text-align:center;border:1px solid var(--border);border-radius:6px;padding:.3rem;font-size:.9rem;font-family:inherit;}
+.qty-input{width:46px;text-align:center;border:1px solid var(--border);border-radius:6px;padding:.3rem;font-size:.9rem;font-family:inherit;}
 .qty-input:focus{outline:none;border-color:var(--primary);}
 .qty-has{background:#e8f4e8;border-color:var(--success);}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;}
@@ -97,7 +97,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
       <div class="header-client" id="header-client"></div>
     </div>
     <button class="hbtn hbtn-gray" onclick="openHistory()">📋 내역</button>
-    <button class="hbtn hbtn-accent" onclick="openCart()">🛒 <span class="cart-count" id="cart-count">0</span></button>
+    <button class="hbtn hbtn-accent" onclick="openCart()">🛒 발주 <span class="cart-count" id="cart-count">0</span></button>
   </div>
   <div class="cat-wrap" id="cat-wrap"></div>
   <div class="search-wrap">
