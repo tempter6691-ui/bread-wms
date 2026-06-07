@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>📋 이운영 출고지시서</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:#f0f4f8;min-height:100vh;padding:1rem;}
+
+.header{background:#2d7dd2;color:#fff;border-radius:12px;padding:1rem 1.2rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;}
+.header-left{display:flex;align-items:center;gap:.75rem;}
+.header h1{font-size:1.05rem;font-weight:700;cursor:pointer;}
+.header h1:hover{opacity:.85;}
+.edit-name-btn{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:.2rem .5rem;font-size:.72rem;cursor:pointer;}
+.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:.35rem;}
+.sync{font-size:.7rem;padding:.18rem .5rem;border-radius:20px;background:rgba(255,255,255,.2);}
+.sync.ok{background:rgba(255,255,255,.3);}
+.refresh-btn{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:.28rem .65rem;font-size:.76rem;cursor:pointer;}
+
+.date-bar{background:#fff;border-radius:10px;padding:.65rem 1rem;margin-bottom:.75rem;display:flex;align-items:center;gap:.75rem;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+.date-bar label{font-size:.85rem;font-weight:600;color:#444;}
+.date-bar input{border:1.5px solid #ddd;border-radius:6px;padding:.3rem .55rem;font-size:.85rem;}
+
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-bottom:.75rem;}
+.sum-card{background:#fff;border-radius:10px;padding:.7rem;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+.sum-num{font-size:1.4rem;font-weight:700;color:#2d7dd2;}
+.sum-lbl{font-size:.7rem;color:#888;margin-top:.15rem;}
+
+/* 2열 그리드 — 카드 높이 독립 */
+.cards-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:.65rem;
+  align-items:start;   /* ← 핵심: 각 카드가 자기 높이만큼만 */
+}
+@media(max-width:600px){.cards-grid{grid-template-columns:1fr;}}
+
+.client-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;}
+.client-card.done-card{border:1.5px solid #a8e6b0;}
+
+.client-header{background:#2d7dd2;color:#fff;padding:.6rem .85rem;font-weight:700;font-size:.88rem;display:flex;align-items:center;justify-content:space-between;gap:.3rem;}
+.client-header.done-header{background:#27ae60;}
+.badge{background:rgba(255,255,255,.25);border-radius:20px;padding:.12rem .45rem;font-size:.7rem;font-weight:500;white-space:nowrap;}
+.done-badge{background:rgba(255,255,255,.35);border-radius:20px;padding:.12rem .45rem;font-size:.7rem;white-space:nowrap;}
+.locked-badge{font-size:.68rem;margin-left:.2rem;opacity:.85;}
+
+table{width:100%;border-collapse:collapse;}
+th{background:#f8fafc;padding:.4rem .65rem;font-size:.72rem;color:#666;text-align:left;font-weight:600;border-bottom:1px solid #eee;}
+td{padding:.42rem .65rem;font-size:.8rem;border-bottom:1px solid #f0f0f0;word-break:keep-all;}
+tr:last-child td{border-bottom:none;}
+.qty{font-weight:700;color:#2d7dd2;}
+.remain{font-size:1rem;font-weight:700;}
+.remain.done{color:#27ae60;}
+.remain.pend{color:#e74c3c;}
+.status-done{background:#dcfce7;color:#166534;border-radius:20px;padding:.1rem .4rem;font-size:.67rem;font-weight:600;}
+.status-scan{background:#fef9c3;color:#854d0e;border-radius:20px;padding:.1rem .4rem;font-size:.67rem;font-weight:600;}
+.status-wait{background:#f1f5f9;color:#64748b;border-radius:20px;padding:.1rem .4rem;font-size:.67rem;}
+.total-row td{font-weight:700;background:#f0f4ff;}
+.total-row.bong td{background:#fff8ee;}
+.total-row.gea td{background:#f5f5ff;}
+.no-items{padding:.65rem .85rem;color:#aaa;font-size:.82rem;}
+.confirm-btn{background:#2d7dd2;color:#fff;border:none;border-radius:6px;padding:.18rem .5rem;font-size:.7rem;cursor:pointer;margin-left:.4rem;font-weight:600;}
+.confirm-btn:active{background:#1a5fa8;}
+.confirmed{color:#27ae60 !important;}
+
+/* wide 카드 */
+.wide-grid{display:flex;flex-direction:column;gap:.65rem;margin-bottom:.65rem;}
+.wide-card{width:100%;}
+.wide-inner{display:grid;grid-template-columns:1fr 1fr;}
+.wide-col{overflow:hidden;}
+.wide-col-right{border-left:1px solid #eee;}
+.empty{text-align:center;padding:3rem;color:#aaa;font-size:.9rem;}
+.loading{text-align:center;padding:3rem;color:#666;}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal-box{background:#fff;border-radius:14px;padding:1.5rem;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.15);}
+.modal-box h3{font-size:.95rem;font-weight:700;margin-bottom:1rem;}
+.modal-box input{width:100%;border:1.5px solid #ddd;border-radius:8px;padding:.55rem .75rem;font-size:.9rem;margin-bottom:1rem;}
+.modal-box input:focus{outline:none;border-color:#2d7dd2;}
+.modal-btns{display:flex;gap:.5rem;justify-content:flex-end;}
+.btn{padding:.45rem 1rem;border-radius:8px;border:none;cursor:pointer;font-size:.85rem;font-weight:600;}
+.btn-primary{background:#2d7dd2;color:#fff;}
+.btn-gray{background:#f1f5f9;color:#444;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div>
+      <h1 id="title-name" onclick="openNameModal()">📋 이운영 출고지시서</h1>
+      <div style="font-size:.75rem;opacity:.75;margin-top:.15rem;" id="header-date">로딩 중...</div>
+    </div>
+    <button class="edit-name-btn" onclick="openNameModal()">✏️ 이름변경</button>
+  </div>
+  <div class="header-right">
+    <span class="sync" id="sync-status">● 연결 중</span>
+    <button class="refresh-btn" onclick="loadData()">🔄 새로고침</button>
+  </div>
+</div>
+
+<div class="date-bar">
+  <label>📅 날짜:</label>
+  <input type="date" id="sel-date" onchange="loadData()">
+</div>
+
+<div class="summary">
+  <div class="sum-card"><div class="sum-num" id="sum-total">-</div><div class="sum-lbl">전체 거래처</div></div>
+  <div class="sum-card"><div class="sum-num" id="sum-done" style="color:#27ae60;">-</div><div class="sum-lbl">완료</div></div>
+  <div class="sum-card"><div class="sum-num" id="sum-pend" style="color:#e74c3c;">-</div><div class="sum-lbl">미완료</div></div>
+</div>
+
+<div id="content"><div class="loading">⏳ 데이터 불러오는 중...</div></div>
+
+<div class="modal-bg" id="name-modal">
+  <div class="modal-box">
+    <h3>✏️ 기사 이름 변경</h3>
+    <input type="text" id="name-input" placeholder="새 이름 입력..." maxlength="10">
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeNameModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveName()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script>
+var DRIVER_FULL = 'A이운영';
+var DRIVER_NAME = localStorage.getItem('driverName_A이운영') || '이운영';
+
+var fbCfg = {
+  apiKey: "AIzaSyAI5VBBXB2dUS5kk5IE--xfCe_C2r0PrIA",
+  authDomain: "bread-wms.firebaseapp.com",
+  projectId: "bread-wms",
+  storageBucket: "bread-wms.firebasestorage.app",
+  messagingSenderId: "310262595402",
+  appId: "1:310262595402:web:49e8df8647cd8258bf0bb3",
+  measurementId: "G-CXYZLFJBXS"
+};
+
+firebase.initializeApp(fbCfg);
+var db = firebase.firestore();
+
+function todayStr(){
+  var d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+document.getElementById('title-name').textContent='📋 '+DRIVER_NAME+' 출고지시서';
+document.title='📋 '+DRIVER_NAME+' 출고지시서';
+var dateEl=document.getElementById('sel-date');
+dateEl.value=todayStr();
+var prods=[];
+
+function openNameModal(){
+  document.getElementById('name-input').value=DRIVER_NAME;
+  document.getElementById('name-modal').classList.add('open');
+  setTimeout(function(){document.getElementById('name-input').focus();},100);
+}
+function closeNameModal(){document.getElementById('name-modal').classList.remove('open');}
+function saveName(){
+  var v=document.getElementById('name-input').value.trim(); if(!v) return;
+  DRIVER_NAME=v;
+  localStorage.setItem('driverName_A이운영',v);
+  document.getElementById('title-name').textContent='📋 '+v+' 출고지시서';
+  document.title='📋 '+v+' 출고지시서';
+  closeNameModal();
+}
+document.getElementById('name-input').addEventListener('keydown',function(e){if(e.key==='Enter')saveName();});
+document.getElementById('name-modal').addEventListener('click',function(e){if(e.target===this)closeNameModal();});
+
+var WIDE_THRESHOLD = 10; // 이 품목 수 이상이면 wide 카드
+var localConfirmed = {}; // {거래처명: {pid: true}} 보기용 완료 상태
+
+function confirmItem(clientName, pid) {
+  if(!localConfirmed[clientName]) localConfirmed[clientName]={};
+  localConfirmed[clientName][pid]=true;
+  // 해당 행 UI 업데이트
+  var rowId='row_'+safeid(clientName)+'_'+safeid(pid);
+  var row=document.getElementById(rowId);
+  if(row){
+    var remEl=row.querySelector('.remain');
+    if(remEl){remEl.classList.remove('pend');remEl.classList.add('done');}
+    var btnEl=row.querySelector('.confirm-btn');
+    if(btnEl){btnEl.outerHTML='<span class="status-done">✅완료</span>';}
+  }
+  // 합계 행 업데이트
+  updateCardTotals(clientName);
+  // 헤더/요약 업데이트
+  updateCardHeader(clientName);
+  updateSummary();
+}
+
+function safeid(str){ return str.replace(/[^a-zA-Z0-9가-힣]/g,'_'); }
+function esc(str){ return str.replace(/'/g,"\'"); }
+
+function updateCardTotals(clientName) {
+  var sid=safeid(clientName);
+  // 이 카드 내의 모든 item row를 찾아 남은수량 합산
+  var card=document.getElementById('card_'+sid); if(!card) return;
+  var rows=card.querySelectorAll('tr[data-client]');
+  var totals={판:{qty:0,rem:0},봉:{qty:0,rem:0},개:{qty:0,rem:0}};
+  rows.forEach(function(r){
+    var unit=r.dataset.unit||'판';
+    var qty=parseInt(r.dataset.qty)||0;
+    var pid=r.dataset.pid;
+    var confirmed=(localConfirmed[clientName]||{})[pid];
+    var fbDone=r.dataset.fbdone==='1';
+    var rem=confirmed||fbDone?0:parseInt(r.dataset.rem)||0;
+    if(totals[unit]){totals[unit].qty+=qty;totals[unit].rem+=rem;}
+  });
+  ['판','봉','개'].forEach(function(u){
+    var el=card.querySelector('.total-rem-'+u);
+    if(el){
+      el.textContent=totals[u].rem;
+      el.className='remain '+(totals[u].rem===0?'done':'pend')+' total-rem-'+u;
+    }
+  });
+}
+
+function updateCardHeader(clientName) {
+  var sid=safeid(clientName);
+  var card=document.getElementById('card_'+sid); if(!card) return;
+  var rows=card.querySelectorAll('tr[data-client]');
+  if(!rows.length) return;
+  var allDone=true;
+  rows.forEach(function(r){
+    var pid=r.dataset.pid;
+    var confirmed=(localConfirmed[clientName]||{})[pid];
+    var fbDone=r.dataset.fbdone==='1';
+    if(!confirmed&&!fbDone) allDone=false;
+  });
+  var header=card.querySelector('.client-header');
+  var badge=card.querySelector('.client-status-badge');
+  if(allDone){
+    if(header) header.style.background='#27ae60';
+    if(badge) badge.outerHTML='<span class="done-badge client-status-badge">✅ 완료</span>';
+    card.classList.add('done-card');
+  }
+}
+
+function updateSummary(){
+  var total=parseInt(document.getElementById('sum-total').textContent)||0;
+  var done=0;
+  document.querySelectorAll('.client-card').forEach(function(card){
+    var rows=card.querySelectorAll('tr[data-client]');
+    if(!rows.length) return;
+    var allDone=true;
+    rows.forEach(function(r){
+      var pid=r.dataset.pid;
+      var cname=r.dataset.client;
+      var confirmed=(localConfirmed[cname]||{})[pid];
+      var fbDone=r.dataset.fbdone==='1';
+      if(!confirmed&&!fbDone) allDone=false;
+    });
+    if(allDone) done++;
+  });
+  document.getElementById('sum-done').textContent=done;
+  document.getElementById('sum-pend').textContent=total-done;
+}
+
+function buildItemRows(items, clientName) {
+  var totalPan=0,remPan=0,totalBong=0,remBong=0,totalGea=0,remGea=0;
+  var rows='';
+  items.forEach(function(item){
+    var p=prods.find(function(x){return x.id===item.pid;});
+    var pname=p?p.name:item.pid;
+    var unit=(p&&p.unit)?p.unit:'판';
+    var scanned=item.scanned||0;
+    var remaining=item.qty-scanned;
+    var fbDone=scanned>=item.qty;
+    var localDone=(localConfirmed[clientName]||{})[item.pid];
+    var isDone=fbDone||localDone;
+    var rc=isDone?'remain done':'remain pend';
+    var displayRem=isDone?0:remaining;
+    var sb=isDone
+      ?'<span class="status-done">✅완료</span>'
+      :scanned>0?'<span class="status-scan">'+scanned+'/'+item.qty+'</span>'
+      :'<span class="status-wait">대기</span>';
+    var confirmBtn=(!isDone&&remaining>0)
+      ?'<button class="confirm-btn" onclick="confirmItem(\''+esc(clientName)+'\',\''+item.pid+'\')">확인</button>'
+      :'';
+    if(unit==='판'){totalPan+=item.qty;remPan+=(isDone?0:remaining);}
+    else if(unit==='봉'){totalBong+=item.qty;remBong+=(isDone?0:remaining);}
+    else if(unit==='개'){totalGea+=item.qty;remGea+=(isDone?0:remaining);}
+    var rowId='row_'+safeid(clientName)+'_'+safeid(item.pid);
+    rows+='<tr id="'+rowId+'" data-client="'+esc(clientName)+'" data-pid="'+item.pid+'" data-unit="'+unit+'" data-qty="'+item.qty+'" data-rem="'+remaining+'" data-fbdone="'+(fbDone?'1':'0')+'">';
+    rows+='<td>'+pname+'</td><td class="qty">'+item.qty+unit+'</td>';
+    rows+='<td><span class="'+rc+'">'+displayRem+'</span>'+confirmBtn+'</td>';
+    rows+='<td>'+sb+'</td></tr>';
+  });
+  var foot='';
+  if(totalPan>0) foot+='<tr class="total-row"><td>합계(판)</td><td class="qty">'+totalPan+'판</td><td><span class="'+(remPan===0?'remain done':'remain pend')+' total-rem-판">'+remPan+'</span></td><td></td></tr>';
+  if(totalBong>0) foot+='<tr class="total-row bong"><td>합계(봉)</td><td class="qty">'+totalBong+'봉</td><td><span class="'+(remBong===0?'remain done':'remain pend')+' total-rem-봉">'+remBong+'</span></td><td></td></tr>';
+  if(totalGea>0) foot+='<tr class="total-row gea"><td>합계(개)</td><td class="qty">'+totalGea+'개</td><td><span class="'+(remGea===0?'remain done':'remain pend')+' total-rem-개">'+remGea+'</span></td><td></td></tr>';
+  return {rows:rows, foot:foot};
+}
+
+function buildCard(name, data) {
+  var items = data.items || [];
+  var locked = data.locked || false;
+  var allDone = items.length > 0 && items.every(function(it){ return it.done; });
+  var isWide = items.length >= WIDE_THRESHOLD;
+
+  var cardCls = 'client-card' + (allDone ? ' done-card' : '') + (isWide ? ' wide-card' : '');
+  var headerCls = 'client-header' + (allDone ? ' done-header' : '');
+  var statusBadge = allDone
+    ? '<span class="done-badge client-status-badge">✅ 완료</span>'
+    : '<span class="badge client-status-badge">'+items.length+'품목</span>';
+  var lockMark = locked ? ' <span class="locked-badge">🔒</span>' : '';
+
+  var sid2=safeid(name); var html = '<div class="'+cardCls+'" id="card_'+sid2+'">';
+  html += '<div class="'+headerCls+'"><span>'+name+lockMark+'</span>'+statusBadge+'</div>';
+
+  if(!items.length) {
+    html += '<div class="no-items">품목 없음</div>';
+  } else if(isWide) {
+    // 품목 많은 카드: 내부 2열 분할
+    var half = Math.ceil(items.length/2);
+    var left = items.slice(0, half);
+    var right = items.slice(half);
+    var lResult = buildItemRows(left, name);
+    var rResult = buildItemRows(right, name);
+    // 합계는 전체 합산
+    var allResult = buildItemRows(items, name);
+    html += '<div class="wide-inner">';
+    html += '<div class="wide-col"><table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+lResult.rows+'</tbody></table></div>';
+    html += '<div class="wide-col wide-col-right"><table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+rResult.rows+'</tbody></table></div>';
+    html += '</div>';
+    if(allResult.foot) html += '<table><tfoot>'+allResult.foot+'</tfoot></table>';
+  } else {
+    // 품목 적은 카드: 단일 열
+    var result = buildItemRows(items, name);
+    html += '<table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+result.rows+'</tbody>';
+    if(result.foot) html += '<tfoot>'+result.foot+'</tfoot>';
+    html += '</table>';
+  }
+  html+='</div>';
+  return html;
+}
+
+async function loadData(){
+  var date=dateEl.value;
+  document.getElementById('header-date').textContent=date;
+  document.getElementById('content').innerHTML='<div class="loading">⏳ 불러오는 중...</div>';
+
+  try {
+    if(!prods.length){
+      var pSnap=await db.collection('products').get();
+      pSnap.forEach(function(d){prods.push(Object.assign({id:d.id},d.data()));});
+    }
+
+    var oDoc=await db.collection('orders').doc(date).get();
+    document.getElementById('sync-status').textContent='● 동기화됨';
+    document.getElementById('sync-status').className='sync ok';
+
+    if(!oDoc.exists){
+      document.getElementById('content').innerHTML='<div class="empty">📭 '+date+' 출고지시서가 없습니다</div>';
+      ['sum-total','sum-done','sum-pend'].forEach(function(id){document.getElementById(id).textContent='0';});
+      return;
+    }
+
+    var allOrders=oDoc.data();
+    var myClients=Object.keys(allOrders).filter(function(name){
+      return allOrders[name].driver===DRIVER_FULL;
+    }).sort(function(a,b){return a.localeCompare(b,"ko");});
+
+    var totalDone=0;
+    myClients.forEach(function(name){
+      var items=allOrders[name].items||[];
+      if(items.length>0&&items.every(function(it){return it.done;})) totalDone++;
+    });
+    document.getElementById('sum-total').textContent=myClients.length;
+    document.getElementById('sum-done').textContent=totalDone;
+    document.getElementById('sum-pend').textContent=myClients.length-totalDone;
+
+    if(!myClients.length){
+      document.getElementById('content').innerHTML='<div class="empty">📭 오늘 배정된 거래처가 없습니다</div>';
+      return;
+    }
+
+    // wide 카드와 일반 카드 분리
+    var wideClients=myClients.filter(function(n){ return (allOrders[n].items||[]).length>=WIDE_THRESHOLD; });
+    var normalClients=myClients.filter(function(n){ return (allOrders[n].items||[]).length<WIDE_THRESHOLD; });
+
+    var html='';
+    // wide 카드 먼저 (전체 폭)
+    if(wideClients.length){
+      html+='<div class="wide-grid">';
+      wideClients.forEach(function(name){ html+=buildCard(name, allOrders[name]||{}); });
+      html+='</div>';
+    }
+    // 일반 카드 (2열)
+    if(normalClients.length){
+      html+='<div class="cards-grid">';
+      normalClients.forEach(function(name){ html+=buildCard(name, allOrders[name]||{}); });
+      html+='</div>';
+    }
+    document.getElementById('content').innerHTML=html;
+
+  } catch(e){
+    document.getElementById('sync-status').textContent='● 오류';
+    document.getElementById('content').innerHTML='<div class="empty">❌ 오류: '+e.message+'</div>';
+  }
+}
+
+loadData();
+// 자동 새로고침 없음 — 버튼으로만 갱신
+</script>
+</body>
+</html>
