@@ -299,16 +299,16 @@ var PRODS_DEFAULT = [
   {id:'P069',qr:'F8',  name:'블루베리케익사각',       cat:'사각케익'},
   {id:'P070',qr:'F9',  name:'화이트초코케익사각',     cat:'사각케익'},
   {id:'P071',qr:'F10', name:'녹차케익사각',        cat:'사각케익'},
-  {id:'P072',qr:'G1',  name:'고구마무스사각',     cat:'사각케익'},
-  {id:'P073',qr:'G2',  name:'요거트무스사각',     cat:'사각케익'},
-  {id:'P074',qr:'G3',  name:'딸기무스사각',       cat:'사각케익'},
+  {id:'P072',qr:'G1',  name:'고구마무스사각',     cat:'사각무스케익'},
+  {id:'P073',qr:'G2',  name:'요거트무스사각',     cat:'사각무스케익'},
+  {id:'P074',qr:'G3',  name:'딸기무스사각',       cat:'사각무스케익'},
   {id:'P075',qr:'G4',  name:'치즈케익사각',           cat:'사각케익'},
-  {id:'P076',qr:'G5',  name:'모카무스사각',       cat:'사각케익'},
-  {id:'P077',qr:'G6',  name:'티라미스사각',       cat:'사각케익'},
-  {id:'P078',qr:'G7',  name:'망고무스사각',       cat:'사각케익'},
-  {id:'P079',qr:'G8',  name:'오레오무스사각',     cat:'사각케익'},
-  {id:'P080',qr:'G9',  name:'녹차무스사각',       cat:'사각케익'},
-  {id:'P081',qr:'G10', name:'브라우니사각',       cat:'사각케익'},
+  {id:'P076',qr:'G5',  name:'모카무스사각',       cat:'사각무스케익'},
+  {id:'P077',qr:'G6',  name:'티라미스사각',       cat:'사각무스케익'},
+  {id:'P078',qr:'G7',  name:'망고무스사각',       cat:'사각무스케익'},
+  {id:'P079',qr:'G8',  name:'오레오무스사각',     cat:'사각무스케익'},
+  {id:'P080',qr:'G9',  name:'녹차무스사각',       cat:'사각무스케익'},
+  {id:'P081',qr:'G10', name:'브라우니사각',       cat:'사각무스케익'},
   // 원형케익
   {id:'P082',qr:'H1',  name:'모카무스3',          cat:'원형케익'},
   {id:'P083',qr:'H2',  name:'티라미스2',          cat:'원형케익'},
@@ -2180,7 +2180,12 @@ function startIbPoll(){
 
 // ── HELPERS ──────────────────────────────────────────────────
 function findByQR(qr){return S.prods.find(function(p){return p.qr===qr||p.id===qr;});}
-function uniqueCats(){return[...new Set(S.prods.map(function(p){return p.cat;}))];}
+function uniqueCats(){
+  var fixed=['원형케익','사각케익','사각무스케익','조각케익','타르트','미니케익','롤케익','마카롱','크레이프트','머핀','파이','빵','쿠키','일반제과','기타'];
+  var fromProds=[...new Set(S.prods.map(function(p){return p.cat;}))];
+  var extra=fromProds.filter(function(c){return fixed.indexOf(c)<0;});
+  return fixed.concat(extra);
+}
 function safeid(s){var r='';for(var i=0;i<(s||'').length;i++)r+=s.charCodeAt(i).toString(36);return 'n'+r;}
 function esc(s){return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 function toast(msg,type){
