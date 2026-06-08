@@ -1512,7 +1512,7 @@ function printOrders() {
     'th{background:#eee;border:1px solid #ccc;padding:2px 4px;text-align:center;}'+
     'td{border:1px solid #ccc;padding:2px 4px;}'+
     'td.qty{text-align:center;width:30px;color:#cc0000;font-weight:bold;}'+
-    '@media print{@page{margin:8mm;size:A4;}body{margin:0;}}'+
+    '@media print{@page{margin:8mm;size:A4;}body{margin:0;}.driver-section{page-break-before:always;}.driver-section:first-of-type{page-break-before:avoid;}}'+
   '</style></head><body>'+
   '<h1>📋 출고지시서 — '+S.ordDate+'</h1>';
 
@@ -1526,7 +1526,7 @@ function printOrders() {
     });
     if(!clientNames.length) return;
 
-    html += '<div class="driver-header">🚚 '+drv+'</div><div class="grid">';
+    html += '<div class="driver-section"><div class="driver-header">🚚 '+drv+'</div><div class="grid">';
     clientNames.forEach(function(name){
       var items = (todayOrd[name].items||[]);
       html += '<div class="client-block"><div class="client-name">■ '+name+'</div>';
@@ -1573,7 +1573,7 @@ function printOrders() {
       }
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div></div>';
   });
 
   html += '</body></html>';
