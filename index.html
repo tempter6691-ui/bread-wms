@@ -1208,18 +1208,36 @@ function drawOrdCard(name, data) {
     '</div>'+
     (!locked?'<input type="text" placeholder="품목 검색 후 추가..." style="width:100%;padding:.4rem;margin-bottom:.3rem;" oninput="searchProd(\''+en+'\',\''+sid+'\',this.value)">':'')+
     '<div id="psres_'+sid+'" style="margin-bottom:.5rem;"></div>'+
-    (items.length?'<table style="font-size:.82rem;"><thead><tr><th style="width:30px;">#</th><th>제품명</th><th>수량</th><th></th>'+ (!locked?'<th style="width:28px;"></th>':'')+  '</tr></thead><tbody id="dtbody_'+sid+'" ondragover="ordDragOver(event)" ondrop="ordDrop(event,\''+en+'\')">'+
-      items.map(function(item,i){
-        var p=S.prods.find(function(x){return x.id===item.pid;});
-        var origQty=item.origQty;
-        var changed=locked&&origQty!==undefined&&origQty!==item.qty;
-        var qtyShow=changed?'<span style="color:#aaa;text-decoration:line-through;">'+origQty+'</span> &rarr; <span style="color:#e67e22;font-weight:bold;">'+item.qty+'</span>':item.qty+'';
-        return '<tr draggable="'+ (!locked?'true':'false') +'" data-pid="'+item.pid+'" data-client="'+en+'" ondragstart="ordDragStart(event)" style="cursor:'+ (!locked?'grab':'default') +';"><td style="color:#888;font-weight:600;">'+(i+1)+'.</td><td>'+(p?p.name:item.pid)+'</td>'+
-          '<td><button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',-1)">-</button> '+qtyShow+' <button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',1)">+</button></td>'+
-          (!locked?'<td><button class="btn btn-danger btn-sm" onclick="rmItem(\''+en+'\',\''+item.pid+'\')">X</button></td>':'<td></td>')+
-          (!locked?'<td style="color:#bbb;font-size:1rem;cursor:grab;user-select:none;text-align:center;">⠿</td>':'')+
-          '</tr>';
-      }).join('')+'</tbody></table>':'<p style="color:#aaa;font-size:.83rem;">품목을 검색해서 추가하세요</p>')+
+    (items.length?(function(){
+      // 6개 이상이면 2열로 나누기
+      var useTwo = items.length >= 6;
+      var half = useTwo ? Math.ceil(items.length/2) : items.length;
+      var col1 = items.slice(0, half);
+      var col2 = useTwo ? items.slice(half) : [];
+      function makeRows(colItems, offset) {
+        return colItems.map(function(item,i){
+          var p=S.prods.find(function(x){return x.id===item.pid;});
+          var origQty=item.origQty;
+          var changed=locked&&origQty!==undefined&&origQty!==item.qty;
+          var qtyShow=changed?'<span style="color:#aaa;text-decoration:line-through;">'+origQty+'</span> &rarr; <span style="color:#e67e22;font-weight:bold;">'+item.qty+'</span>':item.qty+'';
+          return '<tr draggable="'+ (!locked?'true':'false') +'" data-pid="'+item.pid+'" data-client="'+en+'" ondragstart="ordDragStart(event)" style="cursor:'+ (!locked?'grab':'default') +';">'+
+            '<td style="color:#888;font-weight:600;">'+(offset+i+1)+'.</td>'+
+            '<td>'+(p?p.name:item.pid)+'</td>'+
+            '<td><button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',-1)">-</button> '+qtyShow+' <button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',1)">+</button></td>'+
+            (!locked?'<td><button class="btn btn-danger btn-sm" onclick="rmItem(\''+en+'\',\''+item.pid+'\')">X</button></td>':'<td></td>')+
+            (!locked?'<td style="color:#bbb;font-size:1rem;cursor:grab;user-select:none;text-align:center;">⠿</td>':'')+
+            '</tr>';
+        }).join('');
+      }
+      var thHtml = '<th style="width:30px;">#</th><th>제품명</th><th>수량</th><th></th>'+ (!locked?'<th style="width:28px;"></th>':'');
+      if(!useTwo) {
+        return '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody id="dtbody_'+sid+'" ondragover="ordDragOver(event)" ondrop="ordDrop(event,\''+en+'\')">'+ makeRows(col1,0) +'</tbody></table>';
+      }
+      return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">'+
+        '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody>'+ makeRows(col1,0) +'</tbody></table>'+
+        '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody>'+ makeRows(col2,half) +'</tbody></table>'+
+      '</div>';
+    })():'<p style="color:#aaa;font-size:.83rem;">품목을 검색해서 추가하세요</p>')+
   '</div>';
 }
 
@@ -1806,7 +1824,32 @@ async function updClientName(cid, newName) {
   var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
   var oldName=c.name;
   c.name=newName;
-  try { await db.collection('clients').doc(cid).update({name:newName}); toast(oldName+' → '+newName+' 수정됨','ok'); }
+  try {
+    // 1. clients 컬렉션 이름 업데이트
+    await db.collection('clients').doc(cid).update({name:newName});
+
+    // 2. orders 컬렉션에서 oldName 키를 newName으로 이전
+    var ordSnap = await db.collection('orders').get();
+    var batch = db.batch();
+    var changed = 0;
+    ordSnap.forEach(function(doc) {
+      var data = doc.data();
+      if(data[oldName] !== undefined) {
+        var newData = {};
+        newData[newName] = data[oldName];
+        newData[oldName] = firebase.firestore.FieldValue.delete();
+        batch.set(db.collection('orders').doc(doc.id), newData, {merge:true});
+        // 메모리도 업데이트
+        if(S.orders[doc.id]) {
+          S.orders[doc.id][newName] = S.orders[doc.id][oldName];
+          delete S.orders[doc.id][oldName];
+        }
+        changed++;
+      }
+    });
+    if(changed > 0) await batch.commit();
+    toast(oldName+' → '+newName+' 수정됨 ('+changed+'일치 주문 이전)','ok');
+  }
   catch(e){toast('오류:'+e.message,'err');}
 }
 
