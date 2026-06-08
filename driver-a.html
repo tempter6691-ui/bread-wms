@@ -296,7 +296,8 @@ function buildItemRows(items, clientName) {
     else if(unit==='개'){totalGea+=item.qty;remGea+=(isDone?0:remaining);}
     var rowId='row_'+safeid(clientName)+'_'+safeid(item.pid);
     rows+='<tr id="'+rowId+'" data-client="'+esc(clientName)+'" data-pid="'+item.pid+'" data-unit="'+unit+'" data-qty="'+item.qty+'" data-rem="'+remaining+'" data-fbdone="'+(fbDone?'1':'0')+'">';
-    rows+='<td>'+pname+'</td><td class="qty">'+item.qty+unit+'</td>';
+    var uc=unit==='봉'?'#9b59b6':unit==='개'?'#e67e22':unit==='박스'?'#2980b9':'#222222';
+    rows+='<td style="color:'+uc+';font-weight:600;">'+pname+'</td><td class="qty" style="color:'+uc+';font-weight:700;">'+item.qty+unit+'</td>';
     rows+='<td><span class="'+rc+'">'+displayRem+'</span>'+confirmBtn+'</td>';
     rows+='<td>'+sb+'</td></tr>';
   });
