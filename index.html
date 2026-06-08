@@ -1547,7 +1547,21 @@ function printOrders() {
             '<td class="qty">'+(rItem?rItem.qty:'')+'</td>'+
           '</tr>';
         }
+        // 합계 계산
+        var totPan=0, totBong=0, totGea=0;
+        items.forEach(function(it){
+          var pp=S.prods.find(function(x){return x.id===it.pid;});
+          var u=pp&&pp.unit?pp.unit:'판';
+          if(u==='봉') totBong+=it.qty;
+          else if(u==='개') totGea+=it.qty;
+          else totPan+=it.qty;
+        });
+        var totParts=[];
+        if(totPan>0)  totParts.push('<span style="color:#1e3a5f;font-weight:bold;">판 '+totPan+'</span>');
+        if(totBong>0) totParts.push('<span style="color:#9b59b6;font-weight:bold;">봉 '+totBong+'</span>');
+        if(totGea>0)  totParts.push('<span style="color:#e67e22;font-weight:bold;">개 '+totGea+'</span>');
         html += '</tbody></table>';
+        if(totParts.length) html += '<div style="text-align:right;font-size:10px;padding:2px 2px 0;border-top:1px solid #ccc;margin-top:2px;">합계: '+totParts.join(' / ')+'</div>';
       } else {
         html += '<div style="color:#aaa;font-size:10px;padding:2px;">품목 없음</div>';
       }
