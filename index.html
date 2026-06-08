@@ -1179,12 +1179,13 @@ function drawOrdCard(name, data) {
   var en = esc(name);
   var driverBadge = drv ? '<span class="badge bg-blue" style="margin-left:.4rem;font-size:.7rem;">'+drv+'</span>' : '<span class="badge" style="margin-left:.4rem;font-size:.7rem;background:#eee;color:#888;">미배정</span>';
   var lockBadge = locked ? ' <span style="font-size:.7rem;color:#27ae60;font-weight:600;">[잠김]</span>' : '';
+  var codeBadge = cl&&cl.code ? ' <span style="font-size:.7rem;color:#888;font-weight:400;">('+cl.code+')</span>' : '';
   var lockBtn = locked
     ? '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">수정</button>'
     : '<button class="btn btn-success btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">입력완료</button>';
   return '<div class="card" id="ocard_'+sid+'"'+(locked?' style="background:#f8fff8;border:1px solid #a8e6b0;"':'')+'>'+
     '<div style="display:flex;align-items:center;margin-bottom:.6rem;">'+
-      '<div style="flex:1;font-weight:bold;">'+name+driverBadge+lockBadge+'</div>'+
+      '<div style="flex:1;font-weight:bold;">'+name+codeBadge+driverBadge+lockBadge+'</div>'+
       lockBtn+
       '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="moveOrdClient(\''+en+'\')">이동</button>'+
       '<button class="btn btn-danger btn-sm" onclick="removeOrdClient(\''+en+'\')">삭제</button>'+
@@ -1530,7 +1531,9 @@ function printOrders() {
     html += '<div class="driver-section"><div class="driver-header">🚚 '+drv+'</div><div class="grid">';
     clientNames.forEach(function(name){
       var items = (todayOrd[name].items||[]);
-      html += '<div class="client-block"><div class="client-name">■ '+name+'</div>';
+      var pCl = S.clients.find(function(c){return c.name===name;});
+      var pCode = pCl&&pCl.code ? ' ('+pCl.code+')' : '';
+      html += '<div class="client-block"><div class="client-name">■ '+name+pCode+'</div>';
       if(items.length){
         // 품목을 2열로 나눠서 표시
         var half = Math.ceil(items.length/2);
