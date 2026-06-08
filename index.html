@@ -1060,7 +1060,9 @@ async function doScanOut() {
     item.scanned=scanned;
     item.done=scanned>=item.qty;
   } else {
-    items.push({pid:p.id,qty:1,scanned:1,done:true});
+    // 출고지시서에 없는 제품 스캔 시 추가하지 않고 경고
+    resEl.innerHTML='<div class="res-err">⚠️ <strong>'+p.name+'</strong> 은(는) 출고지시서에 없는 제품이에요!</div>';
+    return;
   }
   var newQ=curQ-1; S.inv[p.id]=newQ;
   await safeWrite(async function() {
