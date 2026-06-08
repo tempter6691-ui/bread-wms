@@ -590,12 +590,12 @@ function startApp(cfg) {
 async function loadAll() {
   try {
     var ps = await db.collection('products').get();
-    if (!ps.empty) { S.prods = []; ps.forEach(function(d){ S.prods.push(Object.assign({id:d.id},d.data())); }); }
-    else { S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat}); }); await b.commit(); }
+    if (!ps.empty) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit) pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
+    else { S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); }); await b.commit(); }
 
     var cs = await db.collection('clients').get();
     if (!cs.empty) { S.clients = []; cs.forEach(function(d){ S.clients.push(Object.assign({id:d.id},d.data())); }); }
-    else { S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT)); var b2=db.batch(); S.clients.forEach(function(c){ b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||''}); }); await b2.commit(); }
+    else { S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT)); var b2=db.batch(); S.clients.forEach(function(c){ b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||'',code:c.code||'',day:c.day||''}); }); await b2.commit(); }
 
     var iv = await db.collection('inventory').get();
     S.inv = {}; iv.forEach(function(d){ S.inv[d.id] = d.data().qty || 0; });
@@ -1835,6 +1835,7 @@ function showAddProd() {
     '<div><label>분류 *</label><br><select id="ap-cat" style="width:100%;margin-top:.2rem;padding:.45rem;">'+cats.map(function(c){return '<option>'+c+'</option>';}).join('')+'<option value="__new">직접입력...</option></select></div>'+
     '<div id="ap-newwrap" style="display:none;"><label>새 분류명</label><br><input id="ap-newcat" type="text" style="width:100%;margin-top:.2rem;"></div>'+
     '<div><label>QR코드 *</label><br><input id="ap-qr" type="text" placeholder="예: M1" style="width:100%;margin-top:.2rem;"></div>'+
+    '<div><label>단위</label><br><select id="ap-unit" style="width:100%;margin-top:.2rem;padding:.45rem;"><option>판</option><option>봉</option><option>개</option><option>박스</option></select></div>'+
     '<button class="btn btn-primary" onclick="doAddProd()">추가하기</button></div>');
   document.getElementById('ap-cat').onchange=function(){document.getElementById('ap-newwrap').style.display=this.value==='__new'?'block':'none';};
 }
@@ -1846,9 +1847,10 @@ async function doAddProd() {
   var qr=(document.getElementById('ap-qr')||{value:''}).value.trim();
   if(!name||!cat||!qr){toast('모두 입력해주세요','err');return;}
   if(S.prods.some(function(p){return p.qr===qr;})){toast('이미 사용중인 QR코드','err');return;}
+  var unit=(document.getElementById('ap-unit')||{value:'판'}).value;
   var id='P'+Date.now().toString().slice(-6);
-  S.prods.push({id:id,qr:qr,name:name,cat:cat});
-  try { await db.collection('products').doc(id).set({qr:qr,name:name,cat:cat}); closeModal(); toast(name+' 추가됨','ok'); drawProducts(); }
+  S.prods.push({id:id,qr:qr,name:name,cat:cat,unit:unit});
+  try { await db.collection('products').doc(id).set({qr:qr,name:name,cat:cat,unit:unit}); closeModal(); toast(name+' 추가됨','ok'); drawProducts(); }
   catch(e){toast('오류:'+e.message,'err');}
 }
 
@@ -2024,7 +2026,7 @@ async function doRestore(input) {
   try {
     var data=JSON.parse(text);
     if(!confirm('복원할까요? 현재 데이터가 덮어씌워집니다.')) return;
-    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat});});await b.commit();}
+    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'});});await b.commit();}
     if(data.clients){S.clients=data.clients;var b2=db.batch();S.clients.forEach(function(c){b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||''});});await b2.commit();}
     if(data.inv){S.inv=data.inv;var b3=db.batch();Object.keys(data.inv).forEach(function(id){b3.set(db.collection('inventory').doc(id),{qty:data.inv[id]});});await b3.commit();}
     if(data.orders){S.orders=data.orders;var b4=db.batch();Object.keys(data.orders).forEach(function(d){b4.set(db.collection('orders').doc(d),data.orders[d]);});await b4.commit();}
