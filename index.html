@@ -1715,10 +1715,11 @@ function drawClients() {
   var f=S.clients.filter(function(c){ return (!q||c.name.toLowerCase().indexOf(q)>=0)&&(drv===''||(drv==='_none'?!c.driver:c.driver===drv)); });
   var el=document.getElementById('cl-list'); if(!el) return;
   el.innerHTML='<div style="color:#888;font-size:.82rem;margin-bottom:.5rem;">총 '+f.length+'개 거래처</div>'+
-    '<table><thead><tr><th>거래처명</th><th>담당기사</th><th>요일</th><th></th></tr></thead><tbody>'+
+    '<table><thead><tr><th>거래처명</th><th style="width:70px;">코드</th><th>담당기사</th><th>요일</th><th></th></tr></thead><tbody>'+
     f.map(function(c){
-      return '<tr><td>'+c.name+'</td><td>'+
-        '<select onchange="updDriver(\''+c.id+'\',this.value)" style="padding:.3rem;">'+
+      return '<tr><td>'+c.name+'</td>'+
+        '<td><input type="text" value="'+(c.code||'')+'" style="width:60px;padding:.25rem;border:1px solid #ddd;border-radius:4px;font-size:.8rem;" onchange="updCode(\''+c.id+'\',this.value)"></td>'+
+        '<td><select onchange="updDriver(\''+c.id+'\',this.value)" style="padding:.3rem;">'+
           '<option value="">미배정</option>'+DRIVERS.map(function(d){return '<option'+(c.driver===d?' selected':'')+'>'+d+'</option>';}).join('')+
         '</select></td>'+
         '<td><select onchange="updDay(\''+c.id+'\',this.value)" style="padding:.3rem;">'+
@@ -1732,6 +1733,7 @@ function drawClients() {
 function showAddClient() {
   openModal('거래처 추가','<div style="display:flex;flex-direction:column;gap:.7rem;">'+
     '<div><label>거래처명 *</label><br><input id="nc-name" type="text" style="width:100%;margin-top:.2rem;" placeholder="예: 새거래처웨딩홀"></div>'+
+    '<div><label>고유코드</label><br><input id="nc-code" type="text" style="width:100%;margin-top:.2rem;" placeholder="예: 665"></div>'+
     '<div><label>담당기사</label><br><select id="nc-drv" style="width:100%;margin-top:.2rem;padding:.45rem;">'+
       '<option value="">미배정</option>'+DRIVERS.map(function(d){return '<option>'+d+'</option>';}).join('')+
     '</select></div>'+
@@ -1741,13 +1743,14 @@ function showAddClient() {
 
 async function doAddClient() {
   var name=(document.getElementById('nc-name')||{value:''}).value.trim();
+  var code=(document.getElementById('nc-code')||{value:''}).value.trim();
   var drv=(document.getElementById('nc-drv')||{value:''}).value;
   if(!name){toast('거래처명을 입력해주세요','err');return;}
   if(S.clients.some(function(c){return c.name===name;})){toast('이미 있는 거래처예요','err');return;}
   var id='CL'+Date.now().toString().slice(-8);
-  S.clients.push({id:id,name:name,driver:drv});
+  S.clients.push({id:id,name:name,driver:drv,code:code});
   try {
-    await db.collection('clients').doc(id).set({name:name,driver:drv});
+    await db.collection('clients').doc(id).set({name:name,driver:drv,code:code});
     closeModal(); toast(name+' 추가됨','ok'); drawClients();
   } catch(e){toast('오류:'+e.message,'err');}
 }
@@ -1773,6 +1776,13 @@ async function updDay(cid, day) {
   var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
   c.day=day;
   try { await db.collection('clients').doc(cid).update({day:day}); toast(c.name+' 요일 업데이트됨','ok'); }
+  catch(e){toast('오류:'+e.message,'err');}
+}
+
+async function updCode(cid, code) {
+  var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
+  c.code=code;
+  try { await db.collection('clients').doc(cid).update({code:code}); toast(c.name+' 코드 업데이트됨','ok'); }
   catch(e){toast('오류:'+e.message,'err');}
 }
 
