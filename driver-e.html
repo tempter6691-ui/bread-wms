@@ -302,9 +302,9 @@ function buildItemRows(items, clientName) {
     rows+='<td>'+sb+'</td></tr>';
   });
   var foot='';
-  if(totalPan>0) foot+='<tr class="total-row"><td>합계(판)</td><td class="qty">'+totalPan+'판</td><td><span class="'+(remPan===0?'remain done':'remain pend')+' total-rem-판">'+remPan+'</span></td><td></td></tr>';
-  if(totalBong>0) foot+='<tr class="total-row bong"><td>합계(봉)</td><td class="qty">'+totalBong+'봉</td><td><span class="'+(remBong===0?'remain done':'remain pend')+' total-rem-봉">'+remBong+'</span></td><td></td></tr>';
-  if(totalGea>0) foot+='<tr class="total-row gea"><td>합계(개)</td><td class="qty">'+totalGea+'개</td><td><span class="'+(remGea===0?'remain done':'remain pend')+' total-rem-개">'+remGea+'</span></td><td></td></tr>';
+  if(totalPan>0) foot+='<tr class="total-row"><td style="color:#222222;">합계(판)</td><td class="qty" style="color:#222222;">'+totalPan+'판</td><td><span class="'+(remPan===0?'remain done':'remain pend')+' total-rem-판">'+remPan+'</span></td><td></td></tr>';
+  if(totalBong>0) foot+='<tr class="total-row bong"><td style="color:#9b59b6;">합계(봉)</td><td class="qty" style="color:#9b59b6;">'+totalBong+'봉</td><td><span class="'+(remBong===0?'remain done':'remain pend')+' total-rem-봉">'+remBong+'</span></td><td></td></tr>';
+  if(totalGea>0) foot+='<tr class="total-row gea"><td style="color:#e67e22;">합계(개)</td><td class="qty" style="color:#e67e22;">'+totalGea+'개</td><td><span class="'+(remGea===0?'remain done':'remain pend')+' total-rem-개">'+remGea+'</span></td><td></td></tr>';
   return {rows:rows, foot:foot};
 }
 
