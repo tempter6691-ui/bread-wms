@@ -1129,7 +1129,7 @@ function pgOrders() {
   });
   return '<div class="card">'+
     '<div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">'+
-      '<label>날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;autoAddByDay();render();" style="padding:.45rem;"></label>'+
+      '<label>날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;render();" style="padding:.45rem;"></label>'+
       '<button class="btn btn-gray btn-sm" onclick="clearOrders()">초기화</button>'+
       '<button class="btn btn-success btn-sm" onclick="exportExcel()">📊 엑셀 다운로드</button>'+
       '<button class="btn btn-primary btn-sm" onclick="printOrders()">🖨️ 인쇄</button>'+
