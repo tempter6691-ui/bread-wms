@@ -210,7 +210,7 @@ function updateCardTotals(clientName) {
   // 이 카드 내의 모든 item row를 찾아 남은수량 합산
   var card=document.getElementById('card_'+sid); if(!card) return;
   var rows=card.querySelectorAll('tr[data-client]');
-  var totals={판:{qty:0,rem:0},봉:{qty:0,rem:0},개:{qty:0,rem:0}};
+  var totals={판:{qty:0,rem:0},봉:{qty:0,rem:0},개:{qty:0,rem:0},박스:{qty:0,rem:0}};
   rows.forEach(function(r){
     var unit=r.dataset.unit||'판';
     var qty=parseInt(r.dataset.qty)||0;
@@ -220,7 +220,7 @@ function updateCardTotals(clientName) {
     var rem=confirmed||fbDone?0:parseInt(r.dataset.rem)||0;
     if(totals[unit]){totals[unit].qty+=qty;totals[unit].rem+=rem;}
   });
-  ['판','봉','개'].forEach(function(u){
+  ['판','봉','개','박스'].forEach(function(u){
     var el=card.querySelector('.total-rem-'+u);
     if(el){
       el.textContent=totals[u].rem;

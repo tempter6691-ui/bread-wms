@@ -762,17 +762,18 @@ function pgDash() {
         var items=(todayOrd[n]||{}).items||[];
         var totalKinds=items.length;
         var doneKinds=items.filter(function(i){return i.done;}).length;
-        var panItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return !p2||!p2.unit||p2.unit==='판'||p2.unit==='박스';});
+        var panItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return !p2||!p2.unit||p2.unit==='판';});
         var bongItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return p2&&p2.unit==='봉';});
         var geaItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return p2&&p2.unit==='개';});
-
-
+        var boxItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return p2&&p2.unit==='박스';});
         var totalPan=panItems.reduce(function(s,i){return s+i.qty;},0);
         var scannedPan=panItems.reduce(function(s,i){return s+(i.scanned||0);},0);
         var totalBong=bongItems.reduce(function(s,i){return s+i.qty;},0);
         var scannedBong=bongItems.reduce(function(s,i){return s+(i.scanned||0);},0);
         var totalGea=geaItems.reduce(function(s,i){return s+i.qty;},0);
         var scannedGea=geaItems.reduce(function(s,i){return s+(i.scanned||0);},0);
+        var totalBox=boxItems.reduce(function(s,i){return s+i.qty;},0);
+        var scannedBox=boxItems.reduce(function(s,i){return s+(i.scanned||0);},0);
         var allDone=totalKinds>0&&doneKinds===totalKinds;
         var badges='';
         if(allDone){
@@ -781,6 +782,7 @@ function pgDash() {
           if(totalPan>0) badges+='<span class="badge '+(scannedPan>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedPan+'/'+totalPan+'판</span>';
           if(totalBong>0) badges+='<span class="badge '+(scannedBong>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedBong+'/'+totalBong+'봉</span>';
           if(totalGea>0) badges+='<span class="badge '+(scannedGea>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedGea+'/'+totalGea+'개</span>';
+          if(totalBox>0) badges+='<span class="badge '+(scannedBox>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedBox+'/'+totalBox+'박스</span>';
         }
         return '<div style="display:flex;align-items:center;padding:.35rem 0;border-bottom:1px solid #f0f0f0;">'+
           '<span style="flex:1">'+n+'</span>'+
@@ -951,6 +953,7 @@ function drawObItems() {
   var totalPanQty=0, totalPanRemaining=0;
   var totalBongQty=0, totalBongRemaining=0;
   var totalGeaQty=0, totalGeaRemaining=0;
+  var totalBoxQty=0, totalBoxRemaining=0;
   // 단위는 제품 unit 필드 사용
 
   var rows=order.items.map(function(item,i){
@@ -965,6 +968,7 @@ function drawObItems() {
     if(unit==='판'){totalPanQty+=item.qty; totalPanRemaining+=remaining;}
     else if(unit==='봉'){totalBongQty+=item.qty; totalBongRemaining+=remaining;}
     else if(unit==='개'){totalGeaQty+=item.qty; totalGeaRemaining+=remaining;}
+    else if(unit==='박스'){totalBoxQty+=item.qty; totalBoxRemaining+=remaining;}
     var unitColor=unit==='봉'?'color:#9b59b6;':unit==='개'?'color:#e67e22;':unit==='박스'?'color:#2980b9;':'color:#333;';
     return '<tr style="'+(complete?'background:#f0fff4;':unit==='봉'?'background:#fdf6ff;':unit==='개'?'background:#fff8f0;':unit==='박스'?'background:#f0f8ff;':'')+'">'+
       '<td>'+pname+'</td>'+
@@ -988,6 +992,10 @@ function drawObItems() {
     '<td>합계(개)</td><td>'+totalGeaQty+'개</td>'+
     '<td><span style="font-size:1.1rem;font-weight:bold;color:'+geaColor+';">'+totalGeaRemaining+'</span></td>'+
     '<td colspan="2"></td></tr>';
+  if(totalBoxQty>0) { var boxColor=totalBoxRemaining===0?'#27ae60':'#2980b9'; tfoot+='<tr style="background:#f0f8ff;font-weight:bold;">'+
+    '<td>합계(박스)</td><td>'+totalBoxQty+'박스</td>'+
+    '<td><span style="font-size:1.1rem;font-weight:bold;color:'+boxColor+';">'+totalBoxRemaining+'</span></td>'+
+    '<td colspan="2"></td></tr>'; }
   return '<table><thead><tr><th>제품명</th><th>출고수량</th><th>남은수량</th><th>상태</th><th></th></tr></thead><tbody>'+rows+
     '</tbody><tfoot>'+tfoot+'</tfoot></table>';
 }
