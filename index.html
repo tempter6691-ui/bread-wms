@@ -1432,7 +1432,9 @@ async function toggleOrdClient(name) {
     if(!confirm(name+' 제거할까요?')) return;
     delete S.orders[d][name];
     try {
-      await db.collection('orders').doc(d).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+      await safeWrite(async function() {
+        await db.collection('orders').doc(d).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+      });
       render();
     } catch(e){toast('오류:'+e.message,'err');}
   } else {
@@ -1462,7 +1464,9 @@ async function removeOrdClient(name) {
   if(!confirm('"'+name+'" 거래처를 정말 삭제하시겠습니까?')) return;
   delete (S.orders[S.ordDate]||{})[name];
   try {
-    await db.collection('orders').doc(S.ordDate).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+    await safeWrite(async function() {
+      await db.collection('orders').doc(S.ordDate).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+    });
     toast(name+' 삭제됨','ok');
     render();
   } catch(e){toast('오류:'+e.message,'err');}
