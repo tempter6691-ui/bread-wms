@@ -1717,7 +1717,7 @@ function drawClients() {
   el.innerHTML='<div style="color:#888;font-size:.82rem;margin-bottom:.5rem;">총 '+f.length+'개 거래처</div>'+
     '<table><thead><tr><th>거래처명</th><th style="width:70px;">코드</th><th>담당기사</th><th>요일</th><th></th></tr></thead><tbody>'+
     f.map(function(c){
-      return '<tr><td>'+c.name+'</td>'+
+      return '<tr><td><input type="text" value="'+c.name+'" style="width:100%;padding:.25rem;border:1px solid #ddd;border-radius:4px;font-size:.85rem;" onchange="updClientName(\''+c.id+'\',this.value)"></td>'+
         '<td><input type="text" value="'+(c.code||'')+'" style="width:60px;padding:.25rem;border:1px solid #ddd;border-radius:4px;font-size:.8rem;" onchange="updCode(\''+c.id+'\',this.value)"></td>'+
         '<td><select onchange="updDriver(\''+c.id+'\',this.value)" style="padding:.3rem;">'+
           '<option value="">미배정</option>'+DRIVERS.map(function(d){return '<option'+(c.driver===d?' selected':'')+'>'+d+'</option>';}).join('')+
@@ -1776,6 +1776,17 @@ async function updDay(cid, day) {
   var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
   c.day=day;
   try { await db.collection('clients').doc(cid).update({day:day}); toast(c.name+' 요일 업데이트됨','ok'); }
+  catch(e){toast('오류:'+e.message,'err');}
+}
+
+async function updClientName(cid, newName) {
+  newName = newName.trim();
+  if(!newName) { toast('거래처명을 입력해주세요','err'); drawClients(); return; }
+  if(S.clients.some(function(c){return c.name===newName && c.id!==cid;})){toast('이미 있는 거래처명이에요','err'); drawClients(); return;}
+  var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
+  var oldName=c.name;
+  c.name=newName;
+  try { await db.collection('clients').doc(cid).update({name:newName}); toast(oldName+' → '+newName+' 수정됨','ok'); }
   catch(e){toast('오류:'+e.message,'err');}
 }
 
