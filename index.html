@@ -1144,16 +1144,22 @@ function pgOrders() {
     '</div>'+
     '<input id="ord-q" type="text" style="width:100%;padding:.45rem;margin-bottom:.6rem;" placeholder="거래처 검색..." oninput="filterOrdClients()">'+
     '<div id="ord-clients" style="display:flex;flex-wrap:wrap;gap:.3rem;max-height:180px;overflow-y:auto;margin-bottom:.75rem;">'+
-      allC.map(function(c){
-        if(todayOrd[c.name]){
+      (function(){
+        // 입력된 거래처는 필터 무관하게 항상 파란색으로 표시
+        var orderedNames = Object.keys(todayOrd);
+        var orderedBtns = orderedNames.map(function(n){
           return '<div style="display:inline-flex;align-items:center;background:#2d7dd2;color:#fff;border-radius:4px;margin:.15rem;">'+
-            '<span style="padding:.35rem .6rem;font-size:.78rem;">'+c.name+'</span>'+
-            '<button onclick="removeOrdClient(\''+esc(c.name)+'\')" style="background:none;border:none;color:#fff;cursor:pointer;padding:.35rem .5rem;font-size:.85rem;border-left:1px solid rgba(255,255,255,.3);">✕</button>'+
+            '<span style="padding:.35rem .6rem;font-size:.78rem;">'+n+'</span>'+
+            '<button onclick="removeOrdClient(\''+esc(n)+'\')" style="background:none;border:none;color:#fff;cursor:pointer;padding:.35rem .5rem;font-size:.85rem;border-left:1px solid rgba(255,255,255,.3);">✕</button>'+
           '</div>';
-        }
-        var lbl2=c.code?'<span style="font-size:.65rem;color:#aaa;margin-left:.2rem;">('+c.code+')</span>':'';
-        return '<button class="client-btn" onclick="toggleOrdClient(\''+esc(c.name)+'\')">'+c.name+lbl2+'</button>';
-      }).join('')+
+        });
+        // 필터된 미입력 거래처 표시
+        var unorderedBtns = allC.filter(function(c){ return !todayOrd[c.name]; }).map(function(c){
+          var lbl2=c.code?'<span style="font-size:.65rem;color:#aaa;margin-left:.2rem;">('+c.code+')</span>':'';
+          return '<button class="client-btn" onclick="toggleOrdClient(\''+esc(c.name)+'\')">'+c.name+lbl2+'</button>';
+        });
+        return orderedBtns.concat(unorderedBtns).join('');
+      })()+
     '</div></div>'+
     '<div id="ord-cards">'+
       Object.keys(todayOrd).filter(function(n){
