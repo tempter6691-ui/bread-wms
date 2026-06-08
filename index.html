@@ -293,16 +293,16 @@ var PRODS_DEFAULT = [
   // 기타
   {id:'P065',qr:'F4',  name:'오믈렛',             cat:'기타'},
   // 사각케익
-  {id:'P066',qr:'F5',  name:'초코가나슈사각',     cat:'사각케익'},
-  {id:'P067',qr:'F6',  name:'바나나사각',         cat:'사각케익'},
-  {id:'P068',qr:'F7',  name:'모카사각',           cat:'사각케익'},
-  {id:'P069',qr:'F8',  name:'블루베리사각',       cat:'사각케익'},
-  {id:'P070',qr:'F9',  name:'화이트초코사각',     cat:'사각케익'},
-  {id:'P071',qr:'F10', name:'녹차사각',           cat:'사각케익'},
+  {id:'P066',qr:'F5',  name:'초코가나슈케익사각',     cat:'사각케익'},
+  {id:'P067',qr:'F6',  name:'바나나케익사각',         cat:'사각케익'},
+  {id:'P068',qr:'F7',  name:'모카케익사각',           cat:'사각케익'},
+  {id:'P069',qr:'F8',  name:'블루베리케익사각',       cat:'사각케익'},
+  {id:'P070',qr:'F9',  name:'화이트초코케익사각',     cat:'사각케익'},
+  {id:'P071',qr:'F10', name:'녹차케익사각',        cat:'사각케익'},
   {id:'P072',qr:'G1',  name:'고구마무스사각',     cat:'사각케익'},
   {id:'P073',qr:'G2',  name:'요거트무스사각',     cat:'사각케익'},
   {id:'P074',qr:'G3',  name:'딸기무스사각',       cat:'사각케익'},
-  {id:'P075',qr:'G4',  name:'치즈사각',           cat:'사각케익'},
+  {id:'P075',qr:'G4',  name:'치즈케익사각',           cat:'사각케익'},
   {id:'P076',qr:'G5',  name:'모카무스사각',       cat:'사각케익'},
   {id:'P077',qr:'G6',  name:'티라미스사각',       cat:'사각케익'},
   {id:'P078',qr:'G7',  name:'망고무스사각',       cat:'사각케익'},
@@ -590,8 +590,9 @@ function startApp(cfg) {
 async function loadAll() {
   try {
     var ps = await db.collection('products').get();
-    if (!ps.empty) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit) pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
-    else { S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); }); await b.commit(); }
+    if (!ps.empty && ps.size >= 5) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit) pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
+    else if(ps.empty) { S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); }); await b.commit(); }
+    else { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit) pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
 
     var cs = await db.collection('clients').get();
     if (!cs.empty) { S.clients = []; cs.forEach(function(d){ S.clients.push(Object.assign({id:d.id},d.data())); }); }
@@ -626,8 +627,7 @@ async function loadAll() {
     go('dashboard');
   } catch(e) {
     toast('로드 오류: '+e.message,'err');
-    S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT));
-    S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT));
+    // 오류 시 기존 데이터 유지 (PRODS_DEFAULT로 덮어쓰지 않음)
     go('dashboard');
   }
 }
@@ -2040,7 +2040,7 @@ async function resetProducts() {
     if(!existing.empty) await b0.commit();
     // Upload new products
     var b = db.batch();
-    S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat}); });
+    S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); });
     await b.commit();
     toast('제품 목록 초기화 완료! (135개)','ok');
     go('products');
