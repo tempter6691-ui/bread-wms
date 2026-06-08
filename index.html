@@ -1141,7 +1141,8 @@ function pgOrders() {
             '<button onclick="removeOrdClient(\''+esc(c.name)+'\')" style="background:none;border:none;color:#fff;cursor:pointer;padding:.35rem .5rem;font-size:.85rem;border-left:1px solid rgba(255,255,255,.3);">✕</button>'+
           '</div>';
         }
-        return '<button class="client-btn" onclick="toggleOrdClient(\''+esc(c.name)+'\')">'+c.name+'</button>';
+        var lbl2=c.code?'<span style="font-size:.65rem;color:#aaa;margin-left:.2rem;">('+c.code+')</span>':'';
+        return '<button class="client-btn" onclick="toggleOrdClient(\''+esc(c.name)+'\')">'+c.name+lbl2+'</button>';
       }).join('')+
     '</div></div>'+
     '<div id="ord-cards">'+
