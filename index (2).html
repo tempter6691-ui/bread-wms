@@ -293,16 +293,16 @@ var PRODS_DEFAULT = [
   // 기타
   {id:'P065',qr:'F4',  name:'오믈렛',             cat:'기타'},
   // 사각케익
-  {id:'P066',qr:'F5',  name:'초코가나슈사각',     cat:'사각케익'},
-  {id:'P067',qr:'F6',  name:'바나나사각',         cat:'사각케익'},
-  {id:'P068',qr:'F7',  name:'모카사각',           cat:'사각케익'},
-  {id:'P069',qr:'F8',  name:'블루베리사각',       cat:'사각케익'},
-  {id:'P070',qr:'F9',  name:'화이트초코사각',     cat:'사각케익'},
-  {id:'P071',qr:'F10', name:'녹차사각',           cat:'사각케익'},
+  {id:'P066',qr:'F5',  name:'초코가나슈케익사각',     cat:'사각케익'},
+  {id:'P067',qr:'F6',  name:'바나나케익사각',         cat:'사각케익'},
+  {id:'P068',qr:'F7',  name:'모카케익사각',           cat:'사각케익'},
+  {id:'P069',qr:'F8',  name:'블루베리케익사각',       cat:'사각케익'},
+  {id:'P070',qr:'F9',  name:'화이트초코케익사각',     cat:'사각케익'},
+  {id:'P071',qr:'F10', name:'녹차케익사각',        cat:'사각케익'},
   {id:'P072',qr:'G1',  name:'고구마무스사각',     cat:'사각케익'},
   {id:'P073',qr:'G2',  name:'요거트무스사각',     cat:'사각케익'},
   {id:'P074',qr:'G3',  name:'딸기무스사각',       cat:'사각케익'},
-  {id:'P075',qr:'G4',  name:'치즈사각',           cat:'사각케익'},
+  {id:'P075',qr:'G4',  name:'치즈케익사각',           cat:'사각케익'},
   {id:'P076',qr:'G5',  name:'모카무스사각',       cat:'사각케익'},
   {id:'P077',qr:'G6',  name:'티라미스사각',       cat:'사각케익'},
   {id:'P078',qr:'G7',  name:'망고무스사각',       cat:'사각케익'},
@@ -371,169 +371,172 @@ var PRODS_DEFAULT = [
 ];
 
 var CLIENTS_DEFAULT = [
-  {id:'C001',name:'중앙출장부페',driver:''},
-  {id:'C002',name:'아시아드파크',driver:''},
-  {id:'C003',name:'호서웨딩프라자',driver:'',day:'화'},
-  {id:'C004',name:'본향',driver:'',day:'금'},
-  {id:'C005',name:'빅베어8',driver:''},
-  {id:'C006',name:'하나멜라민',driver:'',day:'화'},
-  {id:'C007',name:'천년부페',driver:''},
-  {id:'C008',name:'주안평택교회',driver:''},
-  {id:'C009',name:'이화학식',driver:'',day:'목'},
-  {id:'C010',name:'파티하우스 더엘라',driver:''},
-  {id:'C011',name:'페니체부평',driver:''},
-  {id:'C012',name:'경기교총웨딩하우스',driver:'',day:'수'},
-  {id:'C013',name:'디팰리스웨딩',driver:'',day:'목'},
-  {id:'C014',name:'더낙원',driver:'',day:'금'},
-  {id:'C015',name:'SW',driver:'',day:'목'},
-  {id:'C016',name:'DMC보타닉',driver:'',day:'화'},
-  {id:'C017',name:'라비에벨',driver:'',day:'목'},
-  {id:'C018',name:'웨스턴빌리프',driver:'',day:'목'},
-  {id:'C019',name:'게스트하우스',driver:'',day:'수'},
-  {id:'C020',name:'센트리움',driver:'',day:'화'},
-  {id:'C021',name:'경복궁컨벤션',driver:''},
-  {id:'C022',name:'하늘정원',driver:''},
-  {id:'C023',name:'더파티',driver:''},
-  {id:'C024',name:'행복한웨딩홀',driver:''},
-  {id:'C025',name:'더테라스',driver:'',day:'화'},
-  {id:'C026',name:'더헤윰',driver:'',day:'화'},
-  {id:'C027',name:'위더스영등포',driver:'',day:'화'},
-  {id:'C028',name:'호수에프앤비',driver:'',day:'화'},
-  {id:'C029',name:'서울대연구공원',driver:'',day:'수'},
-  {id:'C030',name:'쎄쎄쎄부천',driver:'',day:'목'},
-  {id:'C031',name:'더휴컨벤션',driver:'',day:'금'},
-  {id:'C032',name:'오페라베이커리',driver:''},
-  {id:'C033',name:'경민',driver:'',day:'금'},
-  {id:'C034',name:'오산하늘빛',driver:''},
-  {id:'C035',name:'빌라드마리',driver:'',day:'목'},
-  {id:'C036',name:'공군빌라드',driver:'',day:'수'},
-  {id:'C037',name:'지디광명역사',driver:'',day:'수'},
-  {id:'C038',name:'블루미파티하우스',driver:'',day:'목'},
-  {id:'C039',name:'에스와이컨벤션',driver:'',day:'수'},
-  {id:'C040',name:'더청담',driver:'',day:'금'},
-  {id:'C041',name:'프리마루체',driver:''},
-  {id:'C042',name:'아모르하우스',driver:'',day:'금'},
-  {id:'C043',name:'AW컨벤션',driver:'',day:'화'},
-  {id:'C044',name:'건대금하',driver:''},
-  {id:'C045',name:'웨딩팰리스',driver:''},
-  {id:'C046',name:'웨스턴신도림',driver:'',day:'금'},
-  {id:'C047',name:'웨스턴영등포',driver:'',day:'목'},
-  {id:'C048',name:'더컨잠실',driver:'',day:'금'},
-  {id:'C049',name:'더컨송파',driver:''},
-  {id:'C050',name:'문정더컨',driver:''},
-  {id:'C051',name:'영등포더컨',driver:''},
-  {id:'C052',name:'더컨반포',driver:'',day:'수'},
-  {id:'C053',name:'더컨신사',driver:'',day:'수'},
-  {id:'C054',name:'더컨강변',driver:'',day:'화'},
-  {id:'C055',name:'디에스컨벤션',driver:'',day:'수'},
-  {id:'C056',name:'루클라비광명',driver:'',day:'화'},
-  {id:'C057',name:'무역센터루나',driver:'',day:'수'},
-  {id:'C058',name:'미엘레베네치아',driver:'',day:'금'},
-  {id:'C059',name:'웨딩라온제나',driver:'',day:'금'},
-  {id:'C060',name:'분당하림각',driver:''},
-  {id:'C061',name:'오펠리스웨딩',driver:'',day:'목'},
-  {id:'C062',name:'광화문두메라',driver:'',day:'화'},
-  {id:'C063',name:'아산터미널웨딩',driver:''},
-  {id:'C064',name:'호텔베르누이',driver:'',day:'화'},
-  {id:'C065',name:'아레나파크웨딩',driver:'',day:'목'},
-  {id:'C066',name:'월드아이',driver:'',day:'수'},
-  {id:'C067',name:'더베네치아',driver:'',day:'금'},
-  {id:'C068',name:'푸드포레',driver:'',day:'금'},
-  {id:'C069',name:'위더스안양',driver:'',day:'수'},
-  {id:'C070',name:'라온몽드하우스',driver:'',day:'수'},
-  {id:'C071',name:'웨딩규수당문래',driver:''},
-  {id:'C072',name:'파티웨딩유',driver:'',day:'수'},
-  {id:'C073',name:'웨스턴팰리스부평',driver:'',day:'목'},
-  {id:'C074',name:'채림웨딩홀',driver:''},
-  {id:'C075',name:'부천제이케이',driver:'',day:'목'},
-  {id:'C076',name:'아트천년컨벤션',driver:''},
-  {id:'C077',name:'웨딩일산',driver:'',day:'목'},
-  {id:'C078',name:'더링크호텔',driver:''},
-  {id:'C079',name:'라오웨딩홀',driver:'',day:'화'},
-  {id:'C080',name:'국방컨벤션',driver:''},
-  {id:'C081',name:'도유컨벤션',driver:'',day:'금'},
-  {id:'C082',name:'더힐파티움',driver:'',day:'화'},
-  {id:'C083',name:'하우스엘비젼',driver:'',day:'수'},
-  {id:'C084',name:'더메이드',driver:''},
-  {id:'C085',name:'메종드아나하',driver:'',day:'수'},
-  {id:'C086',name:'역삼파로스',driver:'',day:'금'},
-  {id:'C087',name:'세인트메리얼',driver:'',day:'수'},
-  {id:'C088',name:'고메스퀘어별내',driver:'',day:'금'},
-  {id:'C089',name:'양재컨벤션',driver:'',day:'수'},
-  {id:'C090',name:'벨라루체웨딩',driver:'',day:'수'},
-  {id:'C091',name:'더비앙',driver:'',day:'목'},
-  {id:'C092',name:'송도아르비아웨딩',driver:'',day:'목'},
-  {id:'C093',name:'세카이스',driver:'',day:'화'},
-  {id:'C094',name:'시스카이컨벤션',driver:''},
-  {id:'C095',name:'와이엠컨벤션',driver:''},
-  {id:'C096',name:'솔스퀘어',driver:'',day:'수'},
-  {id:'C097',name:'루클라비더화이트',driver:'',day:'화'},
-  {id:'C098',name:'강남더퀸',driver:''},
-  {id:'C099',name:'마이어스',driver:''},
-  {id:'C100',name:'벨라스타웨딩',driver:''},
-  {id:'C101',name:'고메스퀘어부천',driver:'',day:'목'},
-  {id:'C102',name:'에이치앤디푸드',driver:'',day:'금'},
-  {id:'C103',name:'문성',driver:''},
-  {id:'C104',name:'지엔씨',driver:''},
-  {id:'C105',name:'조앤푸드',driver:'',day:'화'},
-  {id:'C106',name:'고메순천',driver:''},
-  {id:'C107',name:'에스에이치웨딩',driver:'',day:'목'},
-  {id:'C108',name:'더시그너스웨딩',driver:'',day:'수'},
-  {id:'C109',name:'라플레이스선릉',driver:'',day:'금'},
-  {id:'C110',name:'더블룸',driver:''},
-  {id:'C111',name:'하우스웨딩',driver:''},
-  {id:'C112',name:'스시1988',driver:'',day:'수'},
-  {id:'C113',name:'다봄푸드',driver:'',day:'화'},
-  {id:'C114',name:'아이벡스컨벤션',driver:'',day:'수'},
-  {id:'C115',name:'규수당운정',driver:'',day:'수'},
-  {id:'C116',name:'W힐스더부페',driver:'',day:'금'},
-  {id:'C117',name:'본사해군호텔',driver:'',day:'수'},
-  {id:'C118',name:'만나하우스',driver:''},
-  {id:'C119',name:'파티하우스더엘',driver:'',day:'수'},
-  {id:'C120',name:'희연푸드',driver:''},
-  {id:'C121',name:'DMC',driver:'B남재만',day:'화'},
-  {id:'C122',name:'보타닉',driver:'',day:'화'},
-  {id:'C123',name:'오산컨벤션',driver:'C서영덕',day:'화'},
-  {id:'C124',name:'천년주안',driver:'D장재혁',day:'목'},
-  {id:'C125',name:'평택교회',driver:''},
-  {id:'C126',name:'파티하우스(안양)',driver:'C서영덕',day:'수'},
-  {id:'C127',name:'라페니체부평',driver:'A이운영'},
-  {id:'C128',name:'공군',driver:'A이운영',day:'수'},
-  {id:'C129',name:'빌라드지디',driver:'',day:'목'},
-  {id:'C130',name:'광명역사',driver:'B남재만',day:'수'},
-  {id:'C131',name:'더마리포사(구웨딩펠리스)',driver:'',day:'화'},
-  {id:'C132',name:'더컨송파문정',driver:''},
-  {id:'C133',name:'더컨영등포',driver:'C서영덕',day:'목'},
-  {id:'C134',name:'강변',driver:'E정일혁',day:'화'},
-  {id:'C135',name:'루클라비',driver:'D장재혁',day:'화'},
-  {id:'C136',name:'광명무역',driver:'B남재만'},
-  {id:'C137',name:'루나미엘레',driver:'C서영덕',day:'금'},
-  {id:'C138',name:'라온제나분당',driver:'C서영덕',day:'금'},
-  {id:'C139',name:'하림각',driver:''},
-  {id:'C140',name:'규수당(문래)',driver:'A이운영'},
-  {id:'C141',name:'제이케이(문래)',driver:'C서영덕',day:'목'},
-  {id:'C142',name:'천년일산',driver:'B남재만',day:'목'},
-  {id:'C143',name:'컨벤션 더 힐',driver:'',day:'화'},
-  {id:'C144',name:'파티움하우스',driver:'D장재혁',day:'수'},
-  {id:'C145',name:'엘비전',driver:'B남재만',day:'수'},
-  {id:'C146',name:'메종드(역삼)',driver:'A이운영',day:'금'},
-  {id:'C147',name:'파로스(다산동)',driver:'',day:'금'},
-  {id:'C148',name:'더비앙(송도)',driver:'D장재혁',day:'목'},
-  {id:'C149',name:'아르비아(지음웨딩)',driver:'A이운영'},
-  {id:'C150',name:'세카이스시',driver:'',day:'화'},
-  {id:'C151',name:'스카이컨벤션(춘천)',driver:'',day:'화'},
-  {id:'C152',name:'더퀸',driver:''},
-  {id:'C153',name:'문성지앤씨',driver:''},
-  {id:'C154',name:'더블룸 하우스웨딩(구 트리니트)',driver:''},
-  {id:'C155',name:'W힐스',driver:'C서영덕',day:'금'},
-  {id:'C156',name:'더부페(본사)',driver:'',day:'금'},
-  {id:'C157',name:'해군호텔',driver:'A이운영',day:'수'},
-  {id:'C158',name:'올웨이즈',driver:'C서영덕',day:'화'},
-  {id:'C159',name:'파티인하우스(시흥)',driver:'C서영덕'},
-  {id:'C160',name:'옐로우9',driver:'C서영덕'},
-  {id:'C161',name:'엘마리노',driver:'D장재혁',day:'목'},
-  {id:'C162',name:'더혜움',driver:'A이운영',day:'화'},
-  {id:'C163',name:'하늘빛',driver:''},
+  {id:'C001',name:'중앙출장부페',driver:'',code:'202'},
+  {id:'C002',name:'아시아드파크',driver:'',code:'247'},
+  {id:'C003',name:'호서웨딩프라자',driver:'',day:'화',code:'3'},
+  {id:'C004',name:'본향',driver:'',day:'금',code:'386'},
+  {id:'C005',name:'빅베어8',driver:'',code:'413'},
+  {id:'C006',name:'하나멜라민',driver:'',day:'화',code:'484'},
+  {id:'C007',name:'천년부페',driver:'',code:'523'},
+  {id:'C008',name:'주안평택교회',driver:'',code:''},
+  {id:'C009',name:'이화학식',driver:'',day:'목',code:'564'},
+  {id:'C010',name:'파티하우스 더엘라',driver:'',code:''},
+  {id:'C011',name:'페니체부평',driver:'',code:'95'},
+  {id:'C012',name:'경기교총웨딩하우스',driver:'',day:'수',code:'11'},
+  {id:'C013',name:'디팰리스웨딩',driver:'',day:'목',code:'110'},
+  {id:'C014',name:'더낙원',driver:'',day:'금',code:'15'},
+  {id:'C015',name:'SW',driver:'',day:'목',code:'159'},
+  {id:'C016',name:'DMC보타닉',driver:'',day:'화',code:''},
+  {id:'C017',name:'라비에벨',driver:'',day:'목',code:'19'},
+  {id:'C018',name:'웨스턴빌리프',driver:'',day:'목',code:'205'},
+  {id:'C019',name:'게스트하우스',driver:'',day:'수',code:'213'},
+  {id:'C020',name:'센트리움',driver:'',day:'화',code:'262'},
+  {id:'C021',name:'경복궁컨벤션',driver:'',code:'269'},
+  {id:'C022',name:'하늘정원',driver:'',code:''},
+  {id:'C023',name:'더파티',driver:'',code:''},
+  {id:'C024',name:'행복한웨딩홀',driver:'',code:'278'},
+  {id:'C025',name:'더테라스',driver:'',day:'화',code:'280'},
+  {id:'C026',name:'더헤윰',driver:'',day:'화',code:'286'},
+  {id:'C027',name:'위더스영등포',driver:'',day:'화',code:'74'},
+  {id:'C028',name:'호수에프앤비',driver:'',day:'화',code:'319'},
+  {id:'C029',name:'서울대연구공원',driver:'',day:'수',code:'323'},
+  {id:'C030',name:'쎄쎄쎄부천',driver:'',day:'목',code:'329'},
+  {id:'C031',name:'더휴컨벤션',driver:'',day:'금',code:'33'},
+  {id:'C032',name:'오페라베이커리',driver:'',code:'344'},
+  {id:'C033',name:'경민',driver:'',day:'금',code:'369'},
+  {id:'C034',name:'오산하늘빛',driver:'',code:''},
+  {id:'C035',name:'빌라드마리',driver:'',day:'목',code:'405'},
+  {id:'C036',name:'공군빌라드',driver:'',day:'수',code:''},
+  {id:'C037',name:'지디광명역사',driver:'',day:'수',code:''},
+  {id:'C038',name:'블루미파티하우스',driver:'',day:'목',code:'453'},
+  {id:'C039',name:'에스와이컨벤션',driver:'',day:'수',code:'463'},
+  {id:'C040',name:'더청담',driver:'',day:'금',code:'465'},
+  {id:'C041',name:'프리마루체',driver:'',code:'466'},
+  {id:'C042',name:'아모르하우스',driver:'',day:'금',code:'467'},
+  {id:'C043',name:'AW컨벤션',driver:'',day:'화',code:'489'},
+  {id:'C044',name:'건대금하',driver:'',code:''},
+  {id:'C045',name:'웨딩팰리스',driver:'',code:''},
+  {id:'C046',name:'웨스턴신도림',driver:'',day:'금',code:'500'},
+  {id:'C047',name:'웨스턴영등포',driver:'',day:'목',code:'501'},
+  {id:'C048',name:'더컨잠실',driver:'',day:'금',code:'502'},
+  {id:'C049',name:'더컨송파',driver:'',code:''},
+  {id:'C050',name:'문정더컨',driver:'',code:''},
+  {id:'C051',name:'영등포더컨',driver:'',code:''},
+  {id:'C052',name:'더컨반포',driver:'',day:'수',code:'505'},
+  {id:'C053',name:'더컨신사',driver:'',day:'수',code:'506'},
+  {id:'C054',name:'더컨강변',driver:'',day:'화',code:'509'},
+  {id:'C055',name:'디에스컨벤션',driver:'',day:'수',code:'513'},
+  {id:'C056',name:'루클라비광명',driver:'',day:'화',code:''},
+  {id:'C057',name:'무역센터루나',driver:'',day:'수',code:'519'},
+  {id:'C058',name:'미엘레베네치아',driver:'',day:'금',code:'520'},
+  {id:'C059',name:'웨딩라온제나',driver:'',day:'금',code:''},
+  {id:'C060',name:'분당하림각',driver:'',code:''},
+  {id:'C061',name:'오펠리스웨딩',driver:'',day:'목',code:'541'},
+  {id:'C062',name:'광화문두메라',driver:'',day:'화',code:'548'},
+  {id:'C063',name:'아산터미널웨딩',driver:'',code:'555'},
+  {id:'C064',name:'호텔베르누이',driver:'',day:'화',code:'557'},
+  {id:'C065',name:'아레나파크웨딩',driver:'',day:'목',code:'571'},
+  {id:'C066',name:'월드아이',driver:'',day:'수',code:'579'},
+  {id:'C067',name:'더베네치아',driver:'',day:'금',code:'580'},
+  {id:'C068',name:'푸드포레',driver:'',day:'금',code:'587'},
+  {id:'C069',name:'위더스안양',driver:'',day:'수',code:'594'},
+  {id:'C070',name:'라온몽드하우스',driver:'',day:'수',code:'595'},
+  {id:'C071',name:'웨딩규수당문래',driver:'',code:'596'},
+  {id:'C072',name:'파티웨딩유',driver:'',day:'수',code:'6'},
+  {id:'C073',name:'웨스턴팰리스부평',driver:'',day:'목',code:'664'},
+  {id:'C074',name:'채림웨딩홀',driver:'',code:'601'},
+  {id:'C075',name:'부천제이케이',driver:'',day:'목',code:'602'},
+  {id:'C076',name:'아트천년컨벤션',driver:'',code:'607'},
+  {id:'C077',name:'웨딩일산',driver:'',day:'목',code:''},
+  {id:'C078',name:'더링크호텔',driver:'',code:'609'},
+  {id:'C079',name:'라오웨딩홀',driver:'',day:'화',code:'610'},
+  {id:'C080',name:'국방컨벤션',driver:'',code:'612'},
+  {id:'C081',name:'도유컨벤션',driver:'',day:'금',code:'614'},
+  {id:'C082',name:'더힐파티움',driver:'',day:'화',code:'616'},
+  {id:'C083',name:'하우스엘비젼',driver:'',day:'수',code:'619'},
+  {id:'C084',name:'더메이드',driver:'',code:'621'},
+  {id:'C085',name:'메종드아나하',driver:'',day:'수',code:'623'},
+  {id:'C086',name:'역삼파로스',driver:'',day:'금',code:'624'},
+  {id:'C087',name:'세인트메리얼',driver:'',day:'수',code:'626'},
+  {id:'C088',name:'고메스퀘어별내',driver:'',day:'금',code:'629'},
+  {id:'C089',name:'양재컨벤션',driver:'',day:'수',code:'630'},
+  {id:'C090',name:'벨라루체웨딩',driver:'',day:'수',code:'631'},
+  {id:'C091',name:'더비앙',driver:'',day:'목',code:''},
+  {id:'C092',name:'송도아르비아웨딩',driver:'',day:'목',code:'638'},
+  {id:'C093',name:'세카이스',driver:'',day:'화',code:'642'},
+  {id:'C094',name:'시스카이컨벤션',driver:'',code:''},
+  {id:'C095',name:'와이엠컨벤션',driver:'',code:''},
+  {id:'C096',name:'솔스퀘어',driver:'',day:'수',code:'642'},
+  {id:'C097',name:'루클라비더화이트',driver:'',day:'화',code:'643'},
+  {id:'C098',name:'강남더퀸',driver:'',code:''},
+  {id:'C099',name:'마이어스',driver:'',code:'646'},
+  {id:'C100',name:'벨라스타웨딩',driver:'',code:'647'},
+  {id:'C101',name:'고메스퀘어부천',driver:'',day:'목',code:'648'},
+  {id:'C102',name:'에이치앤디푸드',driver:'',day:'금',code:'649'},
+  {id:'C103',name:'문성',driver:'',code:''},
+  {id:'C104',name:'지엔씨',driver:'',code:''},
+  {id:'C105',name:'조앤푸드',driver:'',day:'화',code:''},
+  {id:'C106',name:'고메순천',driver:'',code:'651'},
+  {id:'C107',name:'에스에이치웨딩',driver:'',day:'목',code:'652'},
+  {id:'C108',name:'더시그너스웨딩',driver:'',day:'수',code:'653'},
+  {id:'C109',name:'라플레이스선릉',driver:'',day:'금',code:'654'},
+  {id:'C110',name:'더블룸',driver:'',code:''},
+  {id:'C111',name:'하우스웨딩',driver:'',code:''},
+  {id:'C112',name:'스시1988',driver:'',day:'수',code:'657'},
+  {id:'C113',name:'다봄푸드',driver:'',day:'화',code:'658'},
+  {id:'C114',name:'아이벡스컨벤션',driver:'',day:'수',code:'659'},
+  {id:'C115',name:'규수당운정',driver:'',day:'수',code:'69'},
+  {id:'C116',name:'W힐스더부페',driver:'',day:'금',code:'8'},
+  {id:'C117',name:'본사해군호텔',driver:'',day:'수',code:'90'},
+  {id:'C118',name:'만나하우스',driver:'',code:'271'},
+  {id:'C119',name:'파티하우스더엘',driver:'',day:'수',code:'636'},
+  {id:'C120',name:'희연푸드',driver:'',code:''},
+  {id:'C121',name:'DMC',driver:'B남재만',day:'화',code:'175'},
+  {id:'C122',name:'보타닉',driver:'',day:'화',code:'178'},
+  {id:'C123',name:'오산컨벤션',driver:'C서영덕',day:'화',code:'383'},
+  {id:'C124',name:'천년주안',driver:'D장재혁',day:'목',code:'124'},
+  {id:'C125',name:'평택교회',driver:'',code:'559'},
+  {id:'C126',name:'파티하우스(안양)',driver:'C서영덕',day:'수',code:''},
+  {id:'C127',name:'라페니체부평',driver:'A이운영',code:'95'},
+  {id:'C128',name:'공군',driver:'A이운영',day:'수',code:'409'},
+  {id:'C129',name:'빌라드지디',driver:'',day:'목',code:'447'},
+  {id:'C130',name:'광명역사',driver:'B남재만',day:'수',code:'448'},
+  {id:'C131',name:'더마리포사(구웨딩펠리스)',driver:'',day:'화',code:'496'},
+  {id:'C132',name:'더컨송파문정',driver:'',code:'503'},
+  {id:'C133',name:'더컨영등포',driver:'C서영덕',day:'목',code:'504'},
+  {id:'C134',name:'강변',driver:'E정일혁',day:'화',code:'509'},
+  {id:'C135',name:'루클라비',driver:'D장재혁',day:'화',code:'516'},
+  {id:'C136',name:'광명무역',driver:'B남재만',code:'519'},
+  {id:'C137',name:'루나미엘레',driver:'C서영덕',day:'금',code:'520'},
+  {id:'C138',name:'라온제나분당',driver:'C서영덕',day:'금',code:'527'},
+  {id:'C139',name:'하림각',driver:'',code:'539'},
+  {id:'C140',name:'규수당(문래)',driver:'A이운영',code:'596'},
+  {id:'C141',name:'제이케이(문래)',driver:'C서영덕',day:'목',code:'602'},
+  {id:'C142',name:'천년일산',driver:'B남재만',day:'목',code:''},
+  {id:'C143',name:'컨벤션 더 힐',driver:'',day:'화',code:'616'},
+  {id:'C144',name:'파티움하우스',driver:'D장재혁',day:'수',code:'618'},
+  {id:'C145',name:'엘비전',driver:'B남재만',day:'수',code:'619'},
+  {id:'C146',name:'메종드(역삼)',driver:'A이운영',day:'금',code:''},
+  {id:'C147',name:'파로스(다산동)',driver:'',day:'금',code:'624'},
+  {id:'C148',name:'더비앙(송도)',driver:'D장재혁',day:'목',code:'632'},
+  {id:'C149',name:'아르비아(지음웨딩)',driver:'A이운영',code:'638'},
+  {id:'C150',name:'세카이스시',driver:'',day:'화',code:'640'},
+  {id:'C151',name:'스카이컨벤션(춘천)',driver:'',day:'화',code:'641'},
+  {id:'C152',name:'더퀸',driver:'',code:'644'},
+  {id:'C153',name:'문성지앤씨',driver:'',code:''},
+  {id:'C154',name:'더블룸 하우스웨딩(구 트리니트)',driver:'',code:'563'},
+  {id:'C155',name:'W힐스',driver:'C서영덕',day:'금',code:''},
+  {id:'C156',name:'더부페(본사)',driver:'',day:'금',code:'84'},
+  {id:'C157',name:'해군호텔',driver:'A이운영',day:'수',code:'90'},
+  {id:'C158',name:'올웨이즈',driver:'C서영덕',day:'화',code:'650'},
+  {id:'C159',name:'파티인하우스(시흥)',driver:'C서영덕',code:''},
+  {id:'C160',name:'옐로우9',driver:'C서영덕',code:'532'},
+  {id:'C161',name:'엘마리노',driver:'D장재혁',day:'목',code:'661'},
+  {id:'C162',name:'더혜움',driver:'A이운영',day:'화',code:''},
+  {id:'C163',name:'하늘빛',driver:'',code:'163'},
+  {id:'C164',name:'그레이스파티',driver:'',code:'634'},
+  {id:'C165',name:'에프앤에스글로벌',driver:'',code:'599'},
+  {id:'C166',name:'제이에스앤에이치(구파티엘하우스)',driver:'',code:'522'},
 ];
 
 var DRIVERS = ['A이운영','B남재만','C서영덕','D장재혁','E정일혁'];
@@ -587,12 +590,13 @@ function startApp(cfg) {
 async function loadAll() {
   try {
     var ps = await db.collection('products').get();
-    if (!ps.empty) { S.prods = []; ps.forEach(function(d){ S.prods.push(Object.assign({id:d.id},d.data())); }); }
-    else { S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat}); }); await b.commit(); }
+    if (!ps.empty && ps.size >= 5) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit) pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
+    else if(ps.empty) { S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); }); await b.commit(); }
+    else { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit) pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
 
     var cs = await db.collection('clients').get();
     if (!cs.empty) { S.clients = []; cs.forEach(function(d){ S.clients.push(Object.assign({id:d.id},d.data())); }); }
-    else { S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT)); var b2=db.batch(); S.clients.forEach(function(c){ b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||''}); }); await b2.commit(); }
+    else { S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT)); var b2=db.batch(); S.clients.forEach(function(c){ b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||'',code:c.code||'',day:c.day||''}); }); await b2.commit(); }
 
     var iv = await db.collection('inventory').get();
     S.inv = {}; iv.forEach(function(d){ S.inv[d.id] = d.data().qty || 0; });
@@ -623,8 +627,7 @@ async function loadAll() {
     go('dashboard');
   } catch(e) {
     toast('로드 오류: '+e.message,'err');
-    S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT));
-    S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT));
+    // 오류 시 기존 데이터 유지 (PRODS_DEFAULT로 덮어쓰지 않음)
     go('dashboard');
   }
 }
@@ -759,17 +762,18 @@ function pgDash() {
         var items=(todayOrd[n]||{}).items||[];
         var totalKinds=items.length;
         var doneKinds=items.filter(function(i){return i.done;}).length;
-        var panItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return !p2||!p2.unit||p2.unit==='판'||p2.unit==='박스';});
+        var panItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return !p2||!p2.unit||p2.unit==='판';});
         var bongItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return p2&&p2.unit==='봉';});
         var geaItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return p2&&p2.unit==='개';});
-
-
+        var boxItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return p2&&p2.unit==='박스';});
         var totalPan=panItems.reduce(function(s,i){return s+i.qty;},0);
         var scannedPan=panItems.reduce(function(s,i){return s+(i.scanned||0);},0);
         var totalBong=bongItems.reduce(function(s,i){return s+i.qty;},0);
         var scannedBong=bongItems.reduce(function(s,i){return s+(i.scanned||0);},0);
         var totalGea=geaItems.reduce(function(s,i){return s+i.qty;},0);
         var scannedGea=geaItems.reduce(function(s,i){return s+(i.scanned||0);},0);
+        var totalBox=boxItems.reduce(function(s,i){return s+i.qty;},0);
+        var scannedBox=boxItems.reduce(function(s,i){return s+(i.scanned||0);},0);
         var allDone=totalKinds>0&&doneKinds===totalKinds;
         var badges='';
         if(allDone){
@@ -778,6 +782,7 @@ function pgDash() {
           if(totalPan>0) badges+='<span class="badge '+(scannedPan>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedPan+'/'+totalPan+'판</span>';
           if(totalBong>0) badges+='<span class="badge '+(scannedBong>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedBong+'/'+totalBong+'봉</span>';
           if(totalGea>0) badges+='<span class="badge '+(scannedGea>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedGea+'/'+totalGea+'개</span>';
+          if(totalBox>0) badges+='<span class="badge '+(scannedBox>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedBox+'/'+totalBox+'박스</span>';
         }
         return '<div style="display:flex;align-items:center;padding:.35rem 0;border-bottom:1px solid #f0f0f0;">'+
           '<span style="flex:1">'+n+'</span>'+
@@ -948,6 +953,7 @@ function drawObItems() {
   var totalPanQty=0, totalPanRemaining=0;
   var totalBongQty=0, totalBongRemaining=0;
   var totalGeaQty=0, totalGeaRemaining=0;
+  var totalBoxQty=0, totalBoxRemaining=0;
   // 단위는 제품 unit 필드 사용
 
   var rows=order.items.map(function(item,i){
@@ -962,6 +968,7 @@ function drawObItems() {
     if(unit==='판'){totalPanQty+=item.qty; totalPanRemaining+=remaining;}
     else if(unit==='봉'){totalBongQty+=item.qty; totalBongRemaining+=remaining;}
     else if(unit==='개'){totalGeaQty+=item.qty; totalGeaRemaining+=remaining;}
+    else if(unit==='박스'){totalBoxQty+=item.qty; totalBoxRemaining+=remaining;}
     var unitColor=unit==='봉'?'color:#9b59b6;':unit==='개'?'color:#e67e22;':unit==='박스'?'color:#2980b9;':'color:#333;';
     return '<tr style="'+(complete?'background:#f0fff4;':unit==='봉'?'background:#fdf6ff;':unit==='개'?'background:#fff8f0;':unit==='박스'?'background:#f0f8ff;':'')+'">'+
       '<td>'+pname+'</td>'+
@@ -985,6 +992,10 @@ function drawObItems() {
     '<td>합계(개)</td><td>'+totalGeaQty+'개</td>'+
     '<td><span style="font-size:1.1rem;font-weight:bold;color:'+geaColor+';">'+totalGeaRemaining+'</span></td>'+
     '<td colspan="2"></td></tr>';
+  if(totalBoxQty>0) { var boxColor=totalBoxRemaining===0?'#27ae60':'#2980b9'; tfoot+='<tr style="background:#f0f8ff;font-weight:bold;">'+
+    '<td>합계(박스)</td><td>'+totalBoxQty+'박스</td>'+
+    '<td><span style="font-size:1.1rem;font-weight:bold;color:'+boxColor+';">'+totalBoxRemaining+'</span></td>'+
+    '<td colspan="2"></td></tr>'; }
   return '<table><thead><tr><th>제품명</th><th>출고수량</th><th>남은수량</th><th>상태</th><th></th></tr></thead><tbody>'+rows+
     '</tbody><tfoot>'+tfoot+'</tfoot></table>';
 }
@@ -994,17 +1005,25 @@ function afterOutbound() {
 }
 
 function filterObClients() {
-  var q=(document.getElementById('ob-q')||{value:''}).value.toLowerCase();
+  var q=(document.getElementById('ob-q')||{value:''}).value.toLowerCase().trim();
   var todayOrd=S.orders[S.ordDate]||{};
   var names=Object.keys(todayOrd).filter(function(n){
     var orderDriver=(todayOrd[n]||{}).driver;
     var cl=S.clients.find(function(c){return c.name===n;});
     var effectiveDrv=orderDriver||(cl?cl.driver:'');
     var drvOk=S.outDriver==='전체'||effectiveDrv===S.outDriver;
-    return drvOk&&(!q||n.toLowerCase().indexOf(q)>=0);
+    if(!drvOk) return false;
+    if(!q) return true;
+    if(n.toLowerCase().indexOf(q)>=0) return true;
+    if(cl&&cl.code&&cl.code===q) return true;
+    return false;
   });
   var el=document.getElementById('ob-clients'); if(!el) return;
-  el.innerHTML=names.map(function(n){return '<button class="client-btn'+(S.outClient===n?' sel':'')+'" onclick="selObClient(\''+esc(n)+'\')">'+n+'</button>';}).join('');
+  el.innerHTML=names.map(function(n){
+    var cl=S.clients.find(function(c){return c.name===n;});
+    var lbl=cl&&cl.code?'<span style="font-size:.65rem;color:rgba(255,255,255,.6);margin-left:.2rem;">('+cl.code+')</span>':'';
+    return '<button class="client-btn'+(S.outClient===n?' sel':'')+'" onclick="selObClient(\''+esc(n)+'\')">'+n+lbl+'</button>';
+  }).join('');
 }
 
 function selObClient(name){ S.outClient=name; go('outbound'); }
@@ -1041,7 +1060,9 @@ async function doScanOut() {
     item.scanned=scanned;
     item.done=scanned>=item.qty;
   } else {
-    items.push({pid:p.id,qty:1,scanned:1,done:true});
+    // 출고지시서에 없는 제품 스캔 시 추가하지 않고 경고
+    resEl.innerHTML='<div class="res-err">⚠️ <strong>'+p.name+'</strong> 은(는) 출고지시서에 없는 제품이에요!</div>';
+    return;
   }
   var newQ=curQ-1; S.inv[p.id]=newQ;
   await safeWrite(async function() {
@@ -1123,15 +1144,22 @@ function pgOrders() {
     '</div>'+
     '<input id="ord-q" type="text" style="width:100%;padding:.45rem;margin-bottom:.6rem;" placeholder="거래처 검색..." oninput="filterOrdClients()">'+
     '<div id="ord-clients" style="display:flex;flex-wrap:wrap;gap:.3rem;max-height:180px;overflow-y:auto;margin-bottom:.75rem;">'+
-      allC.map(function(c){
-        if(todayOrd[c.name]){
+      (function(){
+        // 입력된 거래처는 필터 무관하게 항상 파란색으로 표시
+        var orderedNames = Object.keys(todayOrd);
+        var orderedBtns = orderedNames.map(function(n){
           return '<div style="display:inline-flex;align-items:center;background:#2d7dd2;color:#fff;border-radius:4px;margin:.15rem;">'+
-            '<span style="padding:.35rem .6rem;font-size:.78rem;">'+c.name+'</span>'+
-            '<button onclick="removeOrdClient(\''+esc(c.name)+'\')" style="background:none;border:none;color:#fff;cursor:pointer;padding:.35rem .5rem;font-size:.85rem;border-left:1px solid rgba(255,255,255,.3);">✕</button>'+
+            '<span style="padding:.35rem .6rem;font-size:.78rem;">'+n+'</span>'+
+            '<button onclick="removeOrdClient(\''+esc(n)+'\')" style="background:none;border:none;color:#fff;cursor:pointer;padding:.35rem .5rem;font-size:.85rem;border-left:1px solid rgba(255,255,255,.3);">✕</button>'+
           '</div>';
-        }
-        return '<button class="client-btn" onclick="toggleOrdClient(\''+esc(c.name)+'\')">'+c.name+'</button>';
-      }).join('')+
+        });
+        // 필터된 미입력 거래처 표시
+        var unorderedBtns = allC.filter(function(c){ return !todayOrd[c.name]; }).map(function(c){
+          var lbl2=c.code?'<span style="font-size:.65rem;color:#aaa;margin-left:.2rem;">('+c.code+')</span>':'';
+          return '<button class="client-btn" onclick="toggleOrdClient(\''+esc(c.name)+'\')">'+c.name+lbl2+'</button>';
+        });
+        return orderedBtns.concat(unorderedBtns).join('');
+      })()+
     '</div></div>'+
     '<div id="ord-cards">'+
       Object.keys(todayOrd).filter(function(n){
@@ -1147,13 +1175,17 @@ function pgOrders() {
 }
 
 function filterOrdClients() {
-  var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase();
+  var q=(document.getElementById('ord-q')||{value:''}).value.toLowerCase().trim();
   var todayOrd=S.orders[S.ordDate]||{};
-  // 검색할 때는 전체 거래처에서 찾기, 검색어 없을 때만 기사 필터 적용
   var allC = q ? S.clients : (S.ordDriver==='전체'?S.clients:S.clients.filter(function(c){return c.driver===S.ordDriver;}));
-  var f=q?allC.filter(function(c){return c.name.toLowerCase().indexOf(q)>=0;}):allC;
+  var f=q?allC.filter(function(c){
+    return c.name.toLowerCase().indexOf(q)>=0 || (c.code&&c.code===q);
+  }):allC;
   var el=document.getElementById('ord-clients'); if(!el) return;
-  el.innerHTML=f.map(function(c){return '<button class="client-btn'+(todayOrd[c.name]?' sel':'')+'" onclick="toggleOrdClient(\''+esc(c.name)+'\')">'+c.name+'</button>';}).join('');
+  el.innerHTML=f.map(function(c){
+    var lbl=c.code?'<span style="font-size:.65rem;color:#aaa;margin-left:.2rem;">('+c.code+')</span>':'';
+    return '<button class="client-btn'+(todayOrd[c.name]?' sel':'')+'" onclick="toggleOrdClient(\''+esc(c.name)+'\')">'+c.name+lbl+'</button>';
+  }).join('');
 }
 
 function drawOrdCard(name, data) {
@@ -1163,29 +1195,109 @@ function drawOrdCard(name, data) {
   var en = esc(name);
   var driverBadge = drv ? '<span class="badge bg-blue" style="margin-left:.4rem;font-size:.7rem;">'+drv+'</span>' : '<span class="badge" style="margin-left:.4rem;font-size:.7rem;background:#eee;color:#888;">미배정</span>';
   var lockBadge = locked ? ' <span style="font-size:.7rem;color:#27ae60;font-weight:600;">[잠김]</span>' : '';
+  var codeBadge = cl&&cl.code ? ' <span style="font-size:.7rem;color:#888;font-weight:400;">('+cl.code+')</span>' : '';
   var lockBtn = locked
     ? '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">수정</button>'
     : '<button class="btn btn-success btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">입력완료</button>';
   return '<div class="card" id="ocard_'+sid+'"'+(locked?' style="background:#f8fff8;border:1px solid #a8e6b0;"':'')+'>'+
     '<div style="display:flex;align-items:center;margin-bottom:.6rem;">'+
-      '<div style="flex:1;font-weight:bold;">'+name+driverBadge+lockBadge+'</div>'+
+      '<div style="flex:1;font-weight:bold;">'+name+codeBadge+driverBadge+lockBadge+'</div>'+
       lockBtn+
       '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="moveOrdClient(\''+en+'\')">이동</button>'+
       '<button class="btn btn-danger btn-sm" onclick="removeOrdClient(\''+en+'\')">삭제</button>'+
     '</div>'+
     (!locked?'<input type="text" placeholder="품목 검색 후 추가..." style="width:100%;padding:.4rem;margin-bottom:.3rem;" oninput="searchProd(\''+en+'\',\''+sid+'\',this.value)">':'')+
     '<div id="psres_'+sid+'" style="margin-bottom:.5rem;"></div>'+
-    (items.length?'<table style="font-size:.82rem;"><thead><tr><th style="width:30px;">#</th><th>제품명</th><th>수량</th><th></th></tr></thead><tbody>'+
-      items.map(function(item,i){
-        var p=S.prods.find(function(x){return x.id===item.pid;});
-        var origQty=item.origQty;
-        var changed=locked&&origQty!==undefined&&origQty!==item.qty;
-        var qtyShow=changed?'<span style="color:#aaa;text-decoration:line-through;">'+origQty+'</span> &rarr; <span style="color:#e67e22;font-weight:bold;">'+item.qty+'</span>':item.qty+'';
-        return '<tr><td style="color:#888;font-weight:600;">'+(i+1)+'.</td><td>'+(p?p.name:item.pid)+'</td>'+
-          '<td><button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',-1)">-</button> '+qtyShow+' <button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',1)">+</button></td>'+
-          (!locked?'<td><button class="btn btn-danger btn-sm" onclick="rmItem(\''+en+'\',\''+item.pid+'\')">X</button></td>':'<td></td>')+'</tr>';
-      }).join('')+'</tbody></table>':'<p style="color:#aaa;font-size:.83rem;">품목을 검색해서 추가하세요</p>')+
+    (items.length?(function(){
+      // 6개 이상이면 2열로 나누기
+      var useTwo = items.length >= 6;
+      var half = useTwo ? Math.ceil(items.length/2) : items.length;
+      var col1 = items.slice(0, half);
+      var col2 = useTwo ? items.slice(half) : [];
+      function makeRows(colItems, offset) {
+        return colItems.map(function(item,i){
+          var p=S.prods.find(function(x){return x.id===item.pid;});
+          var origQty=item.origQty;
+          var changed=locked&&origQty!==undefined&&origQty!==item.qty;
+          var qtyShow=changed?'<span style="color:#aaa;text-decoration:line-through;">'+origQty+'</span> &rarr; <span style="color:#e67e22;font-weight:bold;">'+item.qty+'</span>':item.qty+'';
+          return '<tr draggable="'+ (!locked?'true':'false') +'" data-pid="'+item.pid+'" data-client="'+en+'" ondragstart="ordDragStart(event)" style="cursor:'+ (!locked?'grab':'default') +';">'+
+            '<td style="color:#888;font-weight:600;">'+(offset+i+1)+'.</td>'+
+            '<td>'+(p?p.name:item.pid)+'</td>'+
+            '<td><button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',-1)">-</button> '+qtyShow+' <button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',1)">+</button></td>'+
+            (!locked?'<td><button class="btn btn-danger btn-sm" onclick="rmItem(\''+en+'\',\''+item.pid+'\')">X</button></td>':'<td></td>')+
+            (!locked?'<td style="color:#bbb;font-size:1rem;cursor:grab;user-select:none;text-align:center;">⠿</td>':'')+
+            '</tr>';
+        }).join('');
+      }
+      var thHtml = '<th style="width:30px;">#</th><th>제품명</th><th>수량</th><th></th>'+ (!locked?'<th style="width:28px;"></th>':'');
+      if(!useTwo) {
+        return '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody id="dtbody_'+sid+'" ondragover="ordDragOver(event)" ondrop="ordDrop(event,\''+en+'\')">'+ makeRows(col1,0) +'</tbody></table>';
+      }
+      return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">'+
+        '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody>'+ makeRows(col1,0) +'</tbody></table>'+
+        '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody>'+ makeRows(col2,half) +'</tbody></table>'+
+      '</div>';
+    })():'<p style="color:#aaa;font-size:.83rem;">품목을 검색해서 추가하세요</p>')+
   '</div>';
+}
+
+
+// ── 출고지시서 아이템 드래그 순서 변경 ──
+var _dragPid = null;
+var _dragClient = null;
+
+function ordDragStart(e) {
+  _dragPid = e.currentTarget.dataset.pid;
+  _dragClient = e.currentTarget.dataset.client;
+  e.currentTarget.style.opacity = '0.4';
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function ordDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var tr = e.target.closest('tr');
+  if (!tr) return;
+  var tbody = tr.parentNode;
+  var rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.forEach(function(r){ r.style.borderTop = ''; });
+  tr.style.borderTop = '2px solid #2d7dd2';
+}
+
+function ordDrop(e, clientName) {
+  e.preventDefault();
+  var tbody = e.currentTarget;
+  var rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.forEach(function(r){ r.style.borderTop = ''; r.style.opacity = '1'; });
+
+  var targetTr = e.target.closest('tr');
+  if (!targetTr || !_dragPid) return;
+
+  var targetPid = targetTr.dataset.pid;
+  if (targetPid === _dragPid) return;
+
+  // 실제 이름 디코딩
+  var realClient = clientName.replace(/&#39;/g,"'").replace(/&amp;/g,'&');
+  var d = S.ordDate;
+  var items = ((S.orders[d]||{})[realClient]||{}).items;
+  if (!items) return;
+
+  var fromIdx = items.findIndex(function(i){ return i.pid === _dragPid; });
+  var toIdx   = items.findIndex(function(i){ return i.pid === targetPid; });
+  if (fromIdx < 0 || toIdx < 0) return;
+
+  var moved = items.splice(fromIdx, 1)[0];
+  items.splice(toIdx, 0, moved);
+
+  db.collection('orders').doc(d).set({[realClient]: S.orders[d][realClient]}, {merge:true})
+    .then(function(){ toast('순서 변경됨','ok'); })
+    .catch(function(err){ toast('오류: '+err.message,'err'); });
+
+  var sid = safeid(realClient);
+  var el = document.getElementById('ocard_'+sid);
+  if (el) { var tmp=document.createElement('div'); tmp.innerHTML=drawOrdCard(realClient,S.orders[d][realClient]); el.parentNode.replaceChild(tmp.firstChild,el); }
+
+  _dragPid = null; _dragClient = null;
 }
 
 function searchProd(clientName, sid, q) {
@@ -1346,7 +1458,9 @@ async function toggleOrdClient(name) {
     if(!confirm(name+' 제거할까요?')) return;
     delete S.orders[d][name];
     try {
-      await db.collection('orders').doc(d).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+      await safeWrite(async function() {
+        await db.collection('orders').doc(d).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+      });
       render();
     } catch(e){toast('오류:'+e.message,'err');}
   } else {
@@ -1376,7 +1490,9 @@ async function removeOrdClient(name) {
   if(!confirm('"'+name+'" 거래처를 정말 삭제하시겠습니까?')) return;
   delete (S.orders[S.ordDate]||{})[name];
   try {
-    await db.collection('orders').doc(S.ordDate).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+    await safeWrite(async function() {
+      await db.collection('orders').doc(S.ordDate).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+    });
     toast(name+' 삭제됨','ok');
     render();
   } catch(e){toast('오류:'+e.message,'err');}
@@ -1435,8 +1551,8 @@ function printOrders() {
     'table{width:100%;border-collapse:collapse;font-size:10px;}'+
     'th{background:#eee;border:1px solid #ccc;padding:2px 4px;text-align:center;}'+
     'td{border:1px solid #ccc;padding:2px 4px;}'+
-    'td.qty{text-align:center;width:30px;}'+
-    '@media print{@page{margin:8mm;size:A4;}body{margin:0;}}'+
+    'td.qty{text-align:center;width:30px;color:#cc0000;font-weight:bold;}'+
+    '@media print{@page{margin:8mm;size:A4;}body{margin:0;}.driver-section{page-break-before:always;}.driver-section:first-of-type{page-break-before:avoid;}}'+
   '</style></head><body>'+
   '<h1>📋 출고지시서 — '+S.ordDate+'</h1>';
 
@@ -1450,10 +1566,12 @@ function printOrders() {
     });
     if(!clientNames.length) return;
 
-    html += '<div class="driver-header">🚚 '+drv+'</div><div class="grid">';
+    html += '<div class="driver-section"><div class="driver-header">🚚 '+drv+'</div><div class="grid">';
     clientNames.forEach(function(name){
       var items = (todayOrd[name].items||[]);
-      html += '<div class="client-block"><div class="client-name">■ '+name+'</div>';
+      var pCl = S.clients.find(function(c){return c.name===name;});
+      var pCode = pCl&&pCl.code ? ' ('+pCl.code+')' : '';
+      html += '<div class="client-block"><div class="client-name">■ '+name+pCode+'</div>';
       if(items.length){
         // 품목을 2열로 나눠서 표시
         var half = Math.ceil(items.length/2);
@@ -1464,20 +1582,42 @@ function printOrders() {
           var lp = S.prods.find(function(x){return x.id===left[i].pid;});
           var rItem = right[i];
           var rp = rItem ? S.prods.find(function(x){return x.id===rItem.pid;}) : null;
+          var lu = lp&&lp.unit?lp.unit:'판';
+          var ru = rp&&rp.unit?rp.unit:'판';
+          var lc = lu==='봉'?'#9b59b6':lu==='개'?'#e67e22':lu==='박스'?'#2980b9':'#cc0000';
+          var rc = ru==='봉'?'#9b59b6':ru==='개'?'#e67e22':ru==='박스'?'#2980b9':'#cc0000';
+          var lnc = lu==='판'?'#222222':lc;
+          var rnc = ru==='판'?'#222222':rc;
           html += '<tr>'+
-            '<td>'+(lp?lp.name:left[i].pid)+'</td>'+
-            '<td class="qty">'+left[i].qty+'</td>'+
-            '<td>'+(rItem?(rp?rp.name:rItem.pid):'')+'</td>'+
-            '<td class="qty">'+(rItem?rItem.qty:'')+'</td>'+
+            '<td style="color:'+lnc+';">'+(lp?lp.name:left[i].pid)+'</td>'+
+            '<td class="qty" style="color:'+lc+';">'+(left[i].qty)+'</td>'+
+            '<td style="color:'+rnc+';">'+(rItem?(rp?rp.name:rItem.pid):'')+'</td>'+
+            '<td class="qty" style="color:'+rc+';">'+(rItem?rItem.qty:'')+'</td>'+
           '</tr>';
         }
+        // 합계 계산
+        var totPan=0, totBong=0, totGea=0, totBox=0;
+        items.forEach(function(it){
+          var pp=S.prods.find(function(x){return x.id===it.pid;});
+          var u=pp&&pp.unit?pp.unit:'판';
+          if(u==='봉') totBong+=it.qty;
+          else if(u==='개') totGea+=it.qty;
+          else if(u==='박스') totBox+=it.qty;
+          else totPan+=it.qty;
+        });
+        var totParts=[];
+        if(totPan>0)  totParts.push('<span style="color:#cc0000;font-weight:bold;">판 '+totPan+'</span>');
+        if(totBong>0) totParts.push('<span style="color:#9b59b6;font-weight:bold;">봉 '+totBong+'</span>');
+        if(totGea>0)  totParts.push('<span style="color:#e67e22;font-weight:bold;">개 '+totGea+'</span>');
+        if(totBox>0)  totParts.push('<span style="color:#2980b9;font-weight:bold;">박스 '+totBox+'</span>');
         html += '</tbody></table>';
+        if(totParts.length) html += '<div style="text-align:right;font-size:10px;padding:2px 2px 0;border-top:1px solid #ccc;margin-top:2px;">합계: '+totParts.join(' / ')+'</div>';
       } else {
         html += '<div style="color:#aaa;font-size:10px;padding:2px;">품목 없음</div>';
       }
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div></div>';
   });
 
   html += '</body></html>';
@@ -1613,10 +1753,11 @@ function drawClients() {
   var f=S.clients.filter(function(c){ return (!q||c.name.toLowerCase().indexOf(q)>=0)&&(drv===''||(drv==='_none'?!c.driver:c.driver===drv)); });
   var el=document.getElementById('cl-list'); if(!el) return;
   el.innerHTML='<div style="color:#888;font-size:.82rem;margin-bottom:.5rem;">총 '+f.length+'개 거래처</div>'+
-    '<table><thead><tr><th>거래처명</th><th>담당기사</th><th>요일</th><th></th></tr></thead><tbody>'+
+    '<table><thead><tr><th>거래처명</th><th style="width:70px;">코드</th><th>담당기사</th><th>요일</th><th></th></tr></thead><tbody>'+
     f.map(function(c){
-      return '<tr><td>'+c.name+'</td><td>'+
-        '<select onchange="updDriver(\''+c.id+'\',this.value)" style="padding:.3rem;">'+
+      return '<tr><td><input type="text" value="'+c.name+'" style="width:100%;padding:.25rem;border:1px solid #ddd;border-radius:4px;font-size:.85rem;" onchange="updClientName(\''+c.id+'\',this.value)"></td>'+
+        '<td><input type="text" value="'+(c.code||'')+'" style="width:60px;padding:.25rem;border:1px solid #ddd;border-radius:4px;font-size:.8rem;" onchange="updCode(\''+c.id+'\',this.value)"></td>'+
+        '<td><select onchange="updDriver(\''+c.id+'\',this.value)" style="padding:.3rem;">'+
           '<option value="">미배정</option>'+DRIVERS.map(function(d){return '<option'+(c.driver===d?' selected':'')+'>'+d+'</option>';}).join('')+
         '</select></td>'+
         '<td><select onchange="updDay(\''+c.id+'\',this.value)" style="padding:.3rem;">'+
@@ -1630,6 +1771,7 @@ function drawClients() {
 function showAddClient() {
   openModal('거래처 추가','<div style="display:flex;flex-direction:column;gap:.7rem;">'+
     '<div><label>거래처명 *</label><br><input id="nc-name" type="text" style="width:100%;margin-top:.2rem;" placeholder="예: 새거래처웨딩홀"></div>'+
+    '<div><label>고유코드</label><br><input id="nc-code" type="text" style="width:100%;margin-top:.2rem;" placeholder="예: 665"></div>'+
     '<div><label>담당기사</label><br><select id="nc-drv" style="width:100%;margin-top:.2rem;padding:.45rem;">'+
       '<option value="">미배정</option>'+DRIVERS.map(function(d){return '<option>'+d+'</option>';}).join('')+
     '</select></div>'+
@@ -1639,13 +1781,14 @@ function showAddClient() {
 
 async function doAddClient() {
   var name=(document.getElementById('nc-name')||{value:''}).value.trim();
+  var code=(document.getElementById('nc-code')||{value:''}).value.trim();
   var drv=(document.getElementById('nc-drv')||{value:''}).value;
   if(!name){toast('거래처명을 입력해주세요','err');return;}
   if(S.clients.some(function(c){return c.name===name;})){toast('이미 있는 거래처예요','err');return;}
   var id='CL'+Date.now().toString().slice(-8);
-  S.clients.push({id:id,name:name,driver:drv});
+  S.clients.push({id:id,name:name,driver:drv,code:code});
   try {
-    await db.collection('clients').doc(id).set({name:name,driver:drv});
+    await db.collection('clients').doc(id).set({name:name,driver:drv,code:code});
     closeModal(); toast(name+' 추가됨','ok'); drawClients();
   } catch(e){toast('오류:'+e.message,'err');}
 }
@@ -1671,6 +1814,49 @@ async function updDay(cid, day) {
   var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
   c.day=day;
   try { await db.collection('clients').doc(cid).update({day:day}); toast(c.name+' 요일 업데이트됨','ok'); }
+  catch(e){toast('오류:'+e.message,'err');}
+}
+
+async function updClientName(cid, newName) {
+  newName = newName.trim();
+  if(!newName) { toast('거래처명을 입력해주세요','err'); drawClients(); return; }
+  if(S.clients.some(function(c){return c.name===newName && c.id!==cid;})){toast('이미 있는 거래처명이에요','err'); drawClients(); return;}
+  var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
+  var oldName=c.name;
+  c.name=newName;
+  try {
+    // 1. clients 컬렉션 이름 업데이트
+    await db.collection('clients').doc(cid).update({name:newName});
+
+    // 2. orders 컬렉션에서 oldName 키를 newName으로 이전
+    var ordSnap = await db.collection('orders').get();
+    var batch = db.batch();
+    var changed = 0;
+    ordSnap.forEach(function(doc) {
+      var data = doc.data();
+      if(data[oldName] !== undefined) {
+        var newData = {};
+        newData[newName] = data[oldName];
+        newData[oldName] = firebase.firestore.FieldValue.delete();
+        batch.set(db.collection('orders').doc(doc.id), newData, {merge:true});
+        // 메모리도 업데이트
+        if(S.orders[doc.id]) {
+          S.orders[doc.id][newName] = S.orders[doc.id][oldName];
+          delete S.orders[doc.id][oldName];
+        }
+        changed++;
+      }
+    });
+    if(changed > 0) await batch.commit();
+    toast(oldName+' → '+newName+' 수정됨 ('+changed+'일치 주문 이전)','ok');
+  }
+  catch(e){toast('오류:'+e.message,'err');}
+}
+
+async function updCode(cid, code) {
+  var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
+  c.code=code;
+  try { await db.collection('clients').doc(cid).update({code:code}); toast(c.name+' 코드 업데이트됨','ok'); }
   catch(e){toast('오류:'+e.message,'err');}
 }
 
@@ -1739,6 +1925,7 @@ function showAddProd() {
     '<div><label>분류 *</label><br><select id="ap-cat" style="width:100%;margin-top:.2rem;padding:.45rem;">'+cats.map(function(c){return '<option>'+c+'</option>';}).join('')+'<option value="__new">직접입력...</option></select></div>'+
     '<div id="ap-newwrap" style="display:none;"><label>새 분류명</label><br><input id="ap-newcat" type="text" style="width:100%;margin-top:.2rem;"></div>'+
     '<div><label>QR코드 *</label><br><input id="ap-qr" type="text" placeholder="예: M1" style="width:100%;margin-top:.2rem;"></div>'+
+    '<div><label>단위</label><br><select id="ap-unit" style="width:100%;margin-top:.2rem;padding:.45rem;"><option>판</option><option>봉</option><option>개</option><option>박스</option></select></div>'+
     '<button class="btn btn-primary" onclick="doAddProd()">추가하기</button></div>');
   document.getElementById('ap-cat').onchange=function(){document.getElementById('ap-newwrap').style.display=this.value==='__new'?'block':'none';};
 }
@@ -1750,9 +1937,10 @@ async function doAddProd() {
   var qr=(document.getElementById('ap-qr')||{value:''}).value.trim();
   if(!name||!cat||!qr){toast('모두 입력해주세요','err');return;}
   if(S.prods.some(function(p){return p.qr===qr;})){toast('이미 사용중인 QR코드','err');return;}
+  var unit=(document.getElementById('ap-unit')||{value:'판'}).value;
   var id='P'+Date.now().toString().slice(-6);
-  S.prods.push({id:id,qr:qr,name:name,cat:cat});
-  try { await db.collection('products').doc(id).set({qr:qr,name:name,cat:cat}); closeModal(); toast(name+' 추가됨','ok'); drawProducts(); }
+  S.prods.push({id:id,qr:qr,name:name,cat:cat,unit:unit});
+  try { await db.collection('products').doc(id).set({qr:qr,name:name,cat:cat,unit:unit}); closeModal(); toast(name+' 추가됨','ok'); drawProducts(); }
   catch(e){toast('오류:'+e.message,'err');}
 }
 
@@ -1907,7 +2095,7 @@ async function resetProducts() {
     if(!existing.empty) await b0.commit();
     // Upload new products
     var b = db.batch();
-    S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat}); });
+    S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); });
     await b.commit();
     toast('제품 목록 초기화 완료! (135개)','ok');
     go('products');
@@ -1928,7 +2116,7 @@ async function doRestore(input) {
   try {
     var data=JSON.parse(text);
     if(!confirm('복원할까요? 현재 데이터가 덮어씌워집니다.')) return;
-    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat});});await b.commit();}
+    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'});});await b.commit();}
     if(data.clients){S.clients=data.clients;var b2=db.batch();S.clients.forEach(function(c){b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||''});});await b2.commit();}
     if(data.inv){S.inv=data.inv;var b3=db.batch();Object.keys(data.inv).forEach(function(id){b3.set(db.collection('inventory').doc(id),{qty:data.inv[id]});});await b3.commit();}
     if(data.orders){S.orders=data.orders;var b4=db.batch();Object.keys(data.orders).forEach(function(d){b4.set(db.collection('orders').doc(d),data.orders[d]);});await b4.commit();}
