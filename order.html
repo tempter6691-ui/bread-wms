@@ -308,12 +308,43 @@ async function submitOrder(){
     return {pid:pid,pname:p.name,qty:S.cart[pid]};
   });
   try {
-    await db.collection('orders_request').add({
-      client:S.client, items:items,
-      memo:document.getElementById('order-memo').value,
-      status:'pending',
-      ts:firebase.firestore.FieldValue.serverTimestamp()
-    });
+    // 오늘 날짜 같은 거래처 발주 있는지 확인
+    var today = new Date();
+    var todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    var todayEnd = new Date(todayStart.getTime() + 86400000);
+    var existing = await db.collection('orders_request')
+      .where('client','==',S.client)
+      .where('ts','>=',todayStart)
+      .where('ts','<',todayEnd)
+      .orderBy('ts','desc')
+      .limit(1)
+      .get();
+
+    var memo = document.getElementById('order-memo').value;
+
+    if(!existing.empty) {
+      // 기존 발주에 품목 합산
+      var doc = existing.docs[0];
+      var prevItems = doc.data().items || [];
+      items.forEach(function(newItem){
+        var ex = prevItems.find(function(i){return i.pid===newItem.pid;});
+        if(ex) ex.qty += newItem.qty;
+        else prevItems.push(newItem);
+      });
+      await doc.ref.update({
+        items: prevItems,
+        memo: memo || doc.data().memo || '',
+        ts: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } else {
+      // 새 발주 생성
+      await db.collection('orders_request').add({
+        client:S.client, items:items,
+        memo:memo,
+        status:'pending',
+        ts:firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
     closeCart();
     var total=items.reduce(function(s,i){return s+i.qty;},0);
     document.getElementById('done-sub').innerHTML='<strong>'+S.client+'</strong> 발주 접수 완료<br>'+items.length+'개 품목, '+total+'개<br><br>브레드뱅크에서 확인 후 처리해 드릴게요!';
