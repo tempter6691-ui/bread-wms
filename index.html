@@ -1281,8 +1281,8 @@ function drawOrdCard(name, data) {
       var sumBar = sumParts.length ? '<div style="text-align:right;font-size:.78rem;padding:.3rem .2rem 0;border-top:1px solid #eee;margin-top:.3rem;">합계: '+sumParts.join(' / ')+'</div>' : '';
 
       return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">'+
-        '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody>'+ makeRows(col1,0) +'</tbody></table>'+
-        '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody>'+ makeRows(col2,half) +'</tbody></table>'+
+        '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody ondragover="ordDragOver(event)" ondrop="ordDrop(event,\''+en+'\')">'+ makeRows(col1,0) +'</tbody></table>'+
+        '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody ondragover="ordDragOver(event)" ondrop="ordDrop(event,\''+en+'\')">'+ makeRows(col2,half) +'</tbody></table>'+
       '</div>'+sumBar;
     })():'<p style="color:#aaa;font-size:.83rem;">품목을 검색해서 추가하세요</p>')+
   '</div>';
@@ -1336,13 +1336,22 @@ function ordDrop(e, clientName) {
   var moved = items.splice(fromIdx, 1)[0];
   items.splice(toIdx, 0, moved);
 
-  db.collection('orders').doc(d).set({[realClient]: S.orders[d][realClient]}, {merge:true})
-    .then(function(){ toast('순서 변경됨','ok'); })
-    .catch(function(err){ toast('오류: '+err.message,'err'); });
+  // 스크롤 위치 저장
+  var scrollY = window.scrollY;
 
   var sid = safeid(realClient);
   var el = document.getElementById('ocard_'+sid);
-  if (el) { var tmp=document.createElement('div'); tmp.innerHTML=drawOrdCard(realClient,S.orders[d][realClient]); el.parentNode.replaceChild(tmp.firstChild,el); }
+  if (el) {
+    var tmp=document.createElement('div');
+    tmp.innerHTML=drawOrdCard(realClient,S.orders[d][realClient]);
+    el.parentNode.replaceChild(tmp.firstChild, el);
+    // 스크롤 위치 복원
+    window.scrollTo(0, scrollY);
+  }
+
+  db.collection('orders').doc(d).set({[realClient]: S.orders[d][realClient]}, {merge:true})
+    .then(function(){ toast('순서 변경됨','ok'); })
+    .catch(function(err){ toast('오류: '+err.message,'err'); });
 
   _dragPid = null; _dragClient = null;
 }
