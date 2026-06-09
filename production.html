@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>생산수불대장 — 더브레드뱅크</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #F5F3EE; --surface: #FFFFFF; --border: #E2DDD6;
+    --text: #1A1816; --text-muted: #7A7570;
+    --accent: #2C5F2E; --accent-light: #EAF3DE;
+    --accent2: #B45309; --accent2-light: #FEF3C7;
+    --blue: #1E40AF; --blue-light: #DBEAFE;
+    --red: #991B1B; --red-light: #FEE2E2;
+    --purple: #6B21A8; --purple-light: #F3E8FF;
+    --radius: 10px; --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo-badge { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.05em; }
+  header h1 { font-size: 15px; font-weight: 700; }
+  .header-date { font-size: 13px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .date-bar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px; display: flex; align-items: center; gap: 16px; margin-bottom: 20px; box-shadow: var(--shadow); }
+  .date-bar label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+  .date-bar input[type="date"] { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); background: var(--bg); outline: none; cursor: pointer; }
+  .date-bar input[type="date"]:focus { border-color: var(--accent); }
+  .btn { padding: 7px 16px; border-radius: 6px; border: none; font-family: 'Noto Sans KR', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #234e25; }
+  .btn-secondary { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  .dashboard-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+  .dash-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .dash-card-title { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+  .dash-chart-wrap { position: relative; width: 130px; height: 130px; }
+  .dash-center-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+  .dash-center-label .pct { font-size: 22px; font-weight: 700; color: var(--text); font-family: 'DM Mono', monospace; }
+  .dash-center-label .sub { font-size: 10px; color: var(--text-muted); }
+  .dash-legend { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .dash-legend span { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+  /* 로스율 카드 */
+  .loss-summary { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 20px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 24px; }
+  .loss-item { text-align: center; }
+  .loss-item .val { font-size: 20px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .loss-item .lbl { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .loss-divider { width: 1px; height: 40px; background: var(--border); }
+  .loss-title { font-size: 13px; font-weight: 700; color: var(--text-muted); margin-right: 8px; }
+
+  .tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; margin-bottom: 16px; box-shadow: var(--shadow); width: fit-content; }
+  .tab { padding: 7px 20px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: transparent; color: var(--text-muted); transition: all 0.15s; }
+  .tab.active { background: var(--accent); color: #fff; }
+  .tab:hover:not(.active) { background: var(--bg); color: var(--text); }
+
+  .section-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 16px; }
+  .section-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg); }
+  .section-title { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .section-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 4px; }
+  .badge-green { background: var(--accent-light); color: var(--accent); }
+  .badge-amber { background: var(--accent2-light); color: var(--accent2); }
+  .badge-blue { background: var(--blue-light); color: var(--blue); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--border); background: var(--bg); white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #FAFAF8; }
+  tbody td { padding: 10px 12px; font-size: 13px; color: var(--text); }
+  tbody td.num { text-align: right; font-family: 'DM Mono', monospace; font-size: 12px; }
+  tbody td.name { font-weight: 500; }
+  .stock-ok { color: var(--accent); font-weight: 500; }
+  .stock-warn { color: var(--accent2); font-weight: 500; }
+  .stock-low { color: var(--red); font-weight: 500; }
+  .badge-yield { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; font-family: 'DM Mono', monospace; }
+  .badge-loss { background: var(--red-light); color: var(--red); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; font-family: 'DM Mono', monospace; }
+
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; padding: 16px 20px; align-items: end; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 11px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .form-group input, .form-group select { border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-family: 'Noto Sans KR', sans-serif; font-size: 13px; color: var(--text); background: var(--bg); outline: none; transition: border-color 0.15s; }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); background: #fff; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; opacity: 0; transform: translateY(8px); transition: all 0.2s; z-index: 999; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { background: var(--accent); }
+  .toast.error { background: var(--red); }
+
+  .loading { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
+  .empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
+  .btn-del { background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
+  .btn-del:hover { color: var(--red); background: var(--red-light); }
+
+  .form-section-title { font-size: 11px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; padding: 12px 20px 0; border-top: 1px dashed var(--border); margin-top: 4px; }
+
+  @media (max-width: 900px) { .dashboard-row { grid-template-columns: 1fr; } .container { padding: 16px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="logo-badge">BreadBank</span>
+    <h1>생산수불대장</h1>
+  </div>
+  <span class="header-date" id="headerDate"></span>
+</header>
+
+<div class="container">
+
+  <div class="date-bar">
+    <label>조회 날짜</label>
+    <input type="date" id="selectedDate">
+    <button class="btn btn-primary" onclick="loadAll()">조회</button>
+    <button class="btn btn-secondary" onclick="goToday()">오늘</button>
+    <span style="margin-left:auto;font-size:12px;color:var(--text-muted);" id="syncStatus">대기 중...</span>
+  </div>
+
+  <!-- 도넛 대시보드 -->
+  <div class="dashboard-row">
+    <div class="dash-card">
+      <div class="dash-card-title">원재료 소진율</div>
+      <div class="dash-chart-wrap">
+        <canvas id="chartRaw" role="img" aria-label="원재료 소진율"></canvas>
+        <div class="dash-center-label"><div class="pct" id="pctRaw">0%</div><div class="sub">소진</div></div>
+      </div>
+      <div class="dash-legend">
+        <span><span class="legend-dot" style="background:#2C5F2E"></span>투입량</span>
+        <span><span class="legend-dot" style="background:#E2DDD6"></span>잔여</span>
+      </div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-card-title">완제품 생산 달성률</div>
+      <div class="dash-chart-wrap">
+        <canvas id="chartProd" role="img" aria-label="완제품 생산 달성률"></canvas>
+        <div class="dash-center-label"><div class="pct" id="pctProd">0%</div><div class="sub">달성</div></div>
+      </div>
+      <div class="dash-legend">
+        <span><span class="legend-dot" style="background:#1E40AF"></span>생산완료</span>
+        <span><span class="legend-dot" style="background:#E2DDD6"></span>미달성</span>
+      </div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-card-title">출하율</div>
+      <div class="dash-chart-wrap">
+        <canvas id="chartShip" role="img" aria-label="출하율"></canvas>
+        <div class="dash-center-label"><div class="pct" id="pctShip">0%</div><div class="sub">출하</div></div>
+      </div>
+      <div class="dash-legend">
+        <span><span class="legend-dot" style="background:#B45309"></span>출하량</span>
+        <span><span class="legend-dot" style="background:#E2DDD6"></span>재고</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 트리밍 로스 요약 -->
+  <div class="loss-summary" id="lossSummary" style="display:none;">
+    <span class="loss-title">✂️ 오늘 트리밍 로스</span>
+    <div class="loss-item">
+      <div class="val stock-low" id="lossTotal">0</div>
+      <div class="lbl">총 로스량</div>
+    </div>
+    <div class="loss-divider"></div>
+    <div class="loss-item">
+      <div class="val stock-warn" id="lossRate">0%</div>
+      <div class="lbl">평균 로스율</div>
+    </div>
+    <div class="loss-divider"></div>
+    <div class="loss-item">
+      <div class="val stock-ok" id="yieldRate">0%</div>
+      <div class="lbl">평균 수율</div>
+    </div>
+  </div>
+
+  <!-- 탭 -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('raw')">① 원재료 수불</button>
+    <button class="tab" onclick="switchTab('semi')">② 반제품 수불</button>
+    <button class="tab" onclick="switchTab('finished')">③ 완제품 수불</button>
+  </div>
+
+  <!-- ① 원재료 -->
+  <div id="tab-raw">
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title"><span class="section-badge badge-green">원재료</span>원재료 입고 / 투입 내역</div>
+        <button class="btn btn-primary btn-sm" onclick="openForm('raw')">+ 입력</button>
+      </div>
+      <div id="form-raw" style="display:none;border-bottom:1px solid var(--border);background:#FAFAF8;">
+        <div class="form-grid">
+          <div class="form-group"><label>품목명</label><input type="text" id="raw-name" placeholder="예: 밀가루"></div>
+          <div class="form-group"><label>단위</label>
+            <select id="raw-unit"><option>kg</option><option>g</option><option>L</option><option>개</option><option>봉</option><option>박스</option></select>
+          </div>
+          <div class="form-group"><label>배치번호</label><input type="text" id="raw-batch" placeholder="예: B2026-001"></div>
+          <div class="form-group"><label>작업자</label><input type="text" id="raw-worker" placeholder="이름"></div>
+          <div class="form-group"><label>전일재고</label><input type="number" id="raw-prev" placeholder="0" min="0"></div>
+          <div class="form-group"><label>입고량</label><input type="number" id="raw-in" placeholder="0" min="0"></div>
+          <div class="form-group"><label>생산투입량</label><input type="number" id="raw-used" placeholder="0" min="0"></div>
+          <div class="form-group"><label>비고</label><input type="text" id="raw-note" placeholder="메모 (선택)"></div>
+          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveRaw()">저장</button></div>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th>
+          <th class="num">전일재고</th><th class="num">입고량</th><th class="num">투입량</th><th class="num">잔량</th>
+          <th>비고</th><th></th>
+        </tr></thead>
+        <tbody id="tbody-raw"><tr><td colspan="10" class="loading">불러오는 중...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ② 반제품 -->
+  <div id="tab-semi" style="display:none;">
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title"><span class="section-badge badge-blue">반제품</span>반제품 생산 / 소비 내역</div>
+        <button class="btn btn-primary btn-sm" onclick="openForm('semi')">+ 입력</button>
+      </div>
+      <div id="form-semi" style="display:none;border-bottom:1px solid var(--border);background:#FAFAF8;">
+        <div class="form-grid">
+          <div class="form-group"><label>품목명</label><input type="text" id="semi-name" placeholder="예: 크림치즈무스"></div>
+          <div class="form-group"><label>단위</label>
+            <select id="semi-unit"><option>kg</option><option>g</option><option>개</option><option>판</option><option>배치</option></select>
+          </div>
+          <div class="form-group"><label>배치번호</label><input type="text" id="semi-batch" placeholder="예: B2026-001"></div>
+          <div class="form-group"><label>작업자</label><input type="text" id="semi-worker" placeholder="이름"></div>
+          <div class="form-group"><label>전일재고</label><input type="number" id="semi-prev" placeholder="0" min="0"></div>
+          <div class="form-group"><label>생산량</label><input type="number" id="semi-prod" placeholder="0" min="0"></div>
+          <div class="form-group"><label>완제품투입량</label><input type="number" id="semi-used" placeholder="0" min="0"></div>
+          <div class="form-group"><label>비고</label><input type="text" id="semi-note" placeholder="메모 (선택)"></div>
+          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveSemi()">저장</button></div>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th>
+          <th class="num">전일재고</th><th class="num">생산량</th><th class="num">투입량</th><th class="num">잔량</th>
+          <th>비고</th><th></th>
+        </tr></thead>
+        <tbody id="tbody-semi"><tr><td colspan="10" class="loading">불러오는 중...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ③ 완제품 -->
+  <div id="tab-finished" style="display:none;">
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title"><span class="section-badge badge-amber">완제품</span>완제품 생산 / 출하 내역</div>
+        <button class="btn btn-primary btn-sm" onclick="openForm('finished')">+ 입력</button>
+      </div>
+      <div id="form-finished" style="display:none;border-bottom:1px solid var(--border);background:#FAFAF8;">
+        <div class="form-grid">
+          <div class="form-group"><label>품목명</label><input type="text" id="fin-name" placeholder="예: 크림치즈케이크"></div>
+          <div class="form-group"><label>단위</label>
+            <select id="fin-unit"><option>개</option><option>박스</option><option>판</option><option>kg</option></select>
+          </div>
+          <div class="form-group"><label>배치번호</label><input type="text" id="fin-batch" placeholder="예: B2026-001"></div>
+          <div class="form-group"><label>작업자</label><input type="text" id="fin-worker" placeholder="이름"></div>
+          <div class="form-group"><label>전일재고</label><input type="number" id="fin-prev" placeholder="0" min="0"></div>
+          <div class="form-group"><label>목표생산량</label><input type="number" id="fin-target" placeholder="0" min="0"></div>
+          <div class="form-group"><label>실제생산량</label><input type="number" id="fin-prod" placeholder="0" min="0" oninput="calcLoss()"></div>
+          <div class="form-group"><label>투입량(시트 등)</label><input type="number" id="fin-input" placeholder="0" min="0" oninput="calcLoss()"></div>
+        </div>
+        <!-- 트리밍 로스 섹션 -->
+        <div class="form-section-title">✂️ 트리밍 로스 (사각 커팅)</div>
+        <div class="form-grid">
+          <div class="form-group"><label>사각시트 무게 (g)</label><input type="number" id="fin-weight-sheet" placeholder="0" min="0" oninput="calcLoss()"></div>
+          <div class="form-group"><label>재료 총무게 (g)</label><input type="text" id="fin-weight-material" placeholder="0" min="0" oninput="calcLoss()"></div>
+          <div class="form-group"><label>트리밍 로스 무게 (g)</label><input type="number" id="fin-trim" placeholder="0" min="0" oninput="calcLoss()"></div>
+          <div class="form-group"><label>로스 활용</label>
+            <select id="fin-trim-use"><option>폐기</option><option>재활용(조각판매)</option><option>직원간식</option><option>기타</option></select>
+          </div>
+          <div class="form-group"><label>투입 총무게 (자동, g)</label><input type="text" id="fin-weight-total" readonly style="background:#f0f0ee;font-weight:700;font-family:'DM Mono',monospace;" placeholder="자동계산"></div>
+          <div class="form-group"><label>수율 % (자동)</label><input type="text" id="fin-yield-display" readonly style="background:#f0f0ee;color:var(--accent);font-weight:700;font-family:'DM Mono',monospace;" placeholder="자동계산"></div>
+          <div class="form-group"><label>로스율 % (자동)</label><input type="text" id="fin-loss-display" readonly style="background:#f0f0ee;color:var(--red);font-weight:700;font-family:'DM Mono',monospace;" placeholder="자동계산"></div>
+          <div class="form-group"><label>출하량</label><input type="number" id="fin-ship" placeholder="0" min="0"></div>
+          <div class="form-group"><label>폐기량(불량)</label><input type="number" id="fin-waste" placeholder="0" min="0"></div>
+          <div class="form-group"><label>비고</label><input type="text" id="fin-note" placeholder="메모 (선택)"></div>
+          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveFinished()">저장</button></div>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th>
+          <th class="num">전일재고</th><th class="num">생산량</th><th class="num">목표량</th>
+          <th class="num">트리밍로스</th><th class="num">수율</th><th class="num">로스율</th>
+          <th class="num">출하량</th><th class="num">폐기량</th><th class="num">잔량</th>
+          <th>비고</th><th></th>
+        </tr></thead>
+        <tbody id="tbody-finished"><tr><td colspan="15" class="loading">불러오는 중...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAI5VBBXB2dUS5kk5IE--xfCe_C2r0PrIA",
+  authDomain: "bread-wms.firebaseapp.com",
+  projectId: "bread-wms",
+  storageBucket: "bread-wms.firebasestorage.app",
+  messagingSenderId: "310262595402",
+  appId: "1:310262595402:web:49e8df8647cd8258bf0bb3",
+  measurementId: "G-CXYZLFJBXS"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let selectedDate = '';
+
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function goToday() { document.getElementById('selectedDate').value = todayStr(); loadAll(); }
+function updateHeaderDate() {
+  const d = new Date();
+  document.getElementById('headerDate').textContent = d.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+}
+
+function switchTab(tab) {
+  ['raw','semi','finished'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
+  });
+  document.querySelectorAll('.tab').forEach((el,i) => {
+    el.classList.toggle('active', ['raw','semi','finished'][i]===tab);
+  });
+}
+
+function openForm(type) {
+  const el = document.getElementById('form-'+type);
+  el.style.display = el.style.display==='none'?'block':'none';
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast '+type+' show';
+  setTimeout(()=>t.className='toast', 2500);
+}
+
+function stockClass(val) {
+  if(val<=0) return 'stock-low';
+  if(val<10) return 'stock-warn';
+  return 'stock-ok';
+}
+
+// 트리밍 로스 자동계산 (무게 기반)
+function calcLoss() {
+  const sheetW    = parseFloat(document.getElementById('fin-weight-sheet').value) || 0;
+  const materialW = parseFloat(document.getElementById('fin-weight-material').value) || 0;
+  const trimW     = parseFloat(document.getElementById('fin-trim').value) || 0;
+
+  const totalW = sheetW + materialW;
+  const el_total = document.getElementById('fin-weight-total');
+  if(el_total) el_total.value = totalW > 0 ? totalW + ' g' : '';
+
+  if(totalW > 0) {
+    const usable   = totalW - trimW;
+    const yieldPct = Math.round((usable / totalW) * 100);
+    const lossPct  = Math.round((trimW  / totalW) * 100);
+    document.getElementById('fin-yield-display').value = yieldPct + '%';
+    document.getElementById('fin-loss-display').value  = lossPct  + '%';
+  } else {
+    document.getElementById('fin-yield-display').value = '';
+    document.getElementById('fin-loss-display').value  = '';
+  }
+}
+
+// 도넛 차트
+const donutOpts = (colors) => ({
+  type:'doughnut',
+  data:{ datasets:[{ data:[0,100], backgroundColor:colors, borderWidth:0, hoverOffset:4 }] },
+  options:{ responsive:true, maintainAspectRatio:true, cutout:'75%',
+    plugins:{ legend:{display:false}, tooltip:{enabled:false} }, animation:{duration:600} }
+});
+const chartRaw  = new Chart(document.getElementById('chartRaw'),  donutOpts(['#2C5F2E','#E2DDD6']));
+const chartProd = new Chart(document.getElementById('chartProd'), donutOpts(['#1E40AF','#E2DDD6']));
+const chartShip = new Chart(document.getElementById('chartShip'), donutOpts(['#B45309','#E2DDD6']));
+
+function updateDonut(chart, pctEl, value) {
+  const v = Math.min(100, Math.max(0, Math.round(value)));
+  chart.data.datasets[0].data = [v, 100-v];
+  chart.update();
+  document.getElementById(pctEl).textContent = v+'%';
+}
+
+function loadAll() {
+  selectedDate = document.getElementById('selectedDate').value;
+  if(!selectedDate){ showToast('날짜를 선택해주세요','error'); return; }
+  document.getElementById('syncStatus').textContent = '불러오는 중...';
+  loadRaw(); loadSemi(); loadFinished();
+}
+
+// ── 원재료 ──
+async function loadRaw() {
+  const tbody = document.getElementById('tbody-raw');
+  tbody.innerHTML = '<tr><td colspan="10" class="loading">불러오는 중...</td></tr>';
+  try {
+    const snap = await db.collection('production_raw').where('date','==',selectedDate).orderBy('createdAt','asc').get();
+    if(snap.empty){ tbody.innerHTML='<tr><td colspan="10" class="empty">등록된 내역이 없습니다</td></tr>'; updateDonut(chartRaw,'pctRaw',0); return; }
+    let totalIn=0, totalUsed=0;
+    tbody.innerHTML='';
+    snap.forEach(doc=>{
+      const d=doc.data();
+      const remain=(d.prev||0)+(d.inQty||0)-(d.used||0);
+      totalIn+=(d.prev||0)+(d.inQty||0); totalUsed+=(d.used||0);
+      tbody.innerHTML+=`<tr>
+        <td class="name">${d.name}</td>
+        <td>${d.unit}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${d.batch||'-'}</td>
+        <td>${d.worker||'-'}</td>
+        <td class="num">${(d.prev||0).toLocaleString()}</td>
+        <td class="num">${(d.inQty||0).toLocaleString()}</td>
+        <td class="num">${(d.used||0).toLocaleString()}</td>
+        <td class="num ${stockClass(remain)}">${remain.toLocaleString()}</td>
+        <td style="color:var(--text-muted);font-size:12px">${d.note||''}</td>
+        <td><button class="btn-del" onclick="deleteDoc('production_raw','${doc.id}',loadRaw)">×</button></td>
+      </tr>`;
+    });
+    updateDonut(chartRaw,'pctRaw', totalIn>0?(totalUsed/totalIn)*100:0);
+    document.getElementById('syncStatus').textContent='동기화 완료 ✓';
+  } catch(e){ tbody.innerHTML=`<tr><td colspan="10" class="empty">오류: ${e.message}</td></tr>`; }
+}
+
+async function saveRaw() {
+  const name=document.getElementById('raw-name').value.trim();
+  if(!name){ showToast('품목명을 입력하세요','error'); return; }
+  try {
+    await db.collection('production_raw').add({
+      date:selectedDate, name,
+      unit:document.getElementById('raw-unit').value,
+      batch:document.getElementById('raw-batch').value.trim(),
+      worker:document.getElementById('raw-worker').value.trim(),
+      prev:parseFloat(document.getElementById('raw-prev').value)||0,
+      inQty:parseFloat(document.getElementById('raw-in').value)||0,
+      used:parseFloat(document.getElementById('raw-used').value)||0,
+      note:document.getElementById('raw-note').value.trim(),
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('원재료 내역 저장 완료');
+    ['raw-name','raw-batch','raw-worker','raw-prev','raw-in','raw-used','raw-note'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('form-raw').style.display='none';
+    loadRaw();
+  } catch(e){ showToast('저장 실패: '+e.message,'error'); }
+}
+
+// ── 반제품 ──
+async function loadSemi() {
+  const tbody=document.getElementById('tbody-semi');
+  tbody.innerHTML='<tr><td colspan="10" class="loading">불러오는 중...</td></tr>';
+  try {
+    const snap=await db.collection('production_semi').where('date','==',selectedDate).orderBy('createdAt','asc').get();
+    if(snap.empty){ tbody.innerHTML='<tr><td colspan="10" class="empty">등록된 내역이 없습니다</td></tr>'; return; }
+    tbody.innerHTML='';
+    snap.forEach(doc=>{
+      const d=doc.data();
+      const remain=(d.prev||0)+(d.prod||0)-(d.used||0);
+      tbody.innerHTML+=`<tr>
+        <td class="name">${d.name}</td>
+        <td>${d.unit}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${d.batch||'-'}</td>
+        <td>${d.worker||'-'}</td>
+        <td class="num">${(d.prev||0).toLocaleString()}</td>
+        <td class="num">${(d.prod||0).toLocaleString()}</td>
+        <td class="num">${(d.used||0).toLocaleString()}</td>
+        <td class="num ${stockClass(remain)}">${remain.toLocaleString()}</td>
+        <td style="color:var(--text-muted);font-size:12px">${d.note||''}</td>
+        <td><button class="btn-del" onclick="deleteDoc('production_semi','${doc.id}',loadSemi)">×</button></td>
+      </tr>`;
+    });
+  } catch(e){ tbody.innerHTML=`<tr><td colspan="10" class="empty">오류: ${e.message}</td></tr>`; }
+}
+
+async function saveSemi() {
+  const name=document.getElementById('semi-name').value.trim();
+  if(!name){ showToast('품목명을 입력하세요','error'); return; }
+  try {
+    await db.collection('production_semi').add({
+      date:selectedDate, name,
+      unit:document.getElementById('semi-unit').value,
+      batch:document.getElementById('semi-batch').value.trim(),
+      worker:document.getElementById('semi-worker').value.trim(),
+      prev:parseFloat(document.getElementById('semi-prev').value)||0,
+      prod:parseFloat(document.getElementById('semi-prod').value)||0,
+      used:parseFloat(document.getElementById('semi-used').value)||0,
+      note:document.getElementById('semi-note').value.trim(),
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('반제품 내역 저장 완료');
+    ['semi-name','semi-batch','semi-worker','semi-prev','semi-prod','semi-used','semi-note'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('form-semi').style.display='none';
+    loadSemi();
+  } catch(e){ showToast('저장 실패: '+e.message,'error'); }
+}
+
+// ── 완제품 ──
+async function loadFinished() {
+  const tbody=document.getElementById('tbody-finished');
+  tbody.innerHTML='<tr><td colspan="15" class="loading">불러오는 중...</td></tr>';
+  try {
+    const snap=await db.collection('production_finished').where('date','==',selectedDate).orderBy('createdAt','asc').get();
+    if(snap.empty){
+      tbody.innerHTML='<tr><td colspan="15" class="empty">등록된 내역이 없습니다</td></tr>';
+      updateDonut(chartProd,'pctProd',0); updateDonut(chartShip,'pctShip',0);
+      document.getElementById('lossSummary').style.display='none';
+      return;
+    }
+    let totalProd=0,totalTarget=0,totalShip=0,totalStock=0,totalTrim=0,totalInput=0;
+    tbody.innerHTML='';
+    snap.forEach(doc=>{
+      const d=doc.data();
+      const remain=(d.prev||0)+(d.prod||0)-(d.ship||0)-(d.waste||0);
+      totalProd+=(d.prod||0); totalTarget+=(d.target||0);
+      totalShip+=(d.ship||0); totalStock+=remain;
+      totalTrim+=(d.trim||0); totalInput+=(d.inputQty||0);
+
+      const achRate=d.target>0?Math.round((d.prod/d.target)*100):0;
+      const achColor=achRate>=90?'stock-ok':achRate>=70?'stock-warn':'stock-low';
+      const yieldPct=d.inputQty>0?Math.round((d.prod/d.inputQty)*100):null;
+      const lossPct=d.inputQty>0?Math.round(((d.trim||0)/d.inputQty)*100):null;
+
+      const yieldBadge=yieldPct!==null?`<span class="badge-yield" style="background:${yieldPct>=80?'var(--accent-light)':'var(--red-light)'};color:${yieldPct>=80?'var(--accent)':'var(--red)'}">${yieldPct}%</span>`:`<span style="color:var(--text-muted)">-</span>`;
+      const lossBadge=lossPct!==null&&lossPct>0?`<span class="badge-loss">${lossPct}%</span>`:`<span style="color:var(--text-muted)">-</span>`;
+
+      tbody.innerHTML+=`<tr>
+        <td class="name">${d.name}</td>
+        <td>${d.unit}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${d.batch||'-'}</td>
+        <td>${d.worker||'-'}</td>
+        <td class="num">${(d.prev||0).toLocaleString()}</td>
+        <td class="num"><span class="${achColor}">${(d.prod||0).toLocaleString()}</span></td>
+        <td class="num" style="color:var(--text-muted)">${(d.target||0).toLocaleString()}</td>
+        <td class="num" style="color:var(--red)">${(d.trim||0)>0?(d.trim).toLocaleString()+' <small style="color:var(--text-muted);font-size:10px">('+d.trimUse+')</small>':'-'}</td>
+        <td class="num">${yieldBadge}</td>
+        <td class="num">${lossBadge}</td>
+        <td class="num">${(d.ship||0).toLocaleString()}</td>
+        <td class="num" style="color:var(--red)">${(d.waste||0)>0?(d.waste).toLocaleString():'-'}</td>
+        <td class="num ${stockClass(remain)}">${remain.toLocaleString()}</td>
+        <td style="color:var(--text-muted);font-size:12px">${d.note||''}</td>
+        <td><button class="btn-del" onclick="deleteDoc('production_finished','${doc.id}',loadFinished)">×</button></td>
+      </tr>`;
+    });
+
+    // 도넛 업데이트
+    updateDonut(chartProd,'pctProd',totalTarget>0?(totalProd/totalTarget)*100:0);
+    updateDonut(chartShip,'pctShip',(totalProd+totalStock)>0?(totalShip/(totalProd+totalStock))*100:0);
+
+    // 트리밍 로스 요약 바
+    if(totalTrim>0 && totalInput>0){
+      const avgLoss=Math.round((totalTrim/totalInput)*100);
+      const avgYield=100-avgLoss;
+      document.getElementById('lossSummary').style.display='flex';
+      document.getElementById('lossTotal').textContent=totalTrim.toLocaleString();
+      document.getElementById('lossRate').textContent=avgLoss+'%';
+      document.getElementById('yieldRate').textContent=avgYield+'%';
+    } else {
+      document.getElementById('lossSummary').style.display='none';
+    }
+
+  } catch(e){ tbody.innerHTML=`<tr><td colspan="15" class="empty">오류: ${e.message}</td></tr>`; }
+}
+
+async function saveFinished() {
+  const name=document.getElementById('fin-name').value.trim();
+  if(!name){ showToast('품목명을 입력하세요','error'); return; }
+  const prod=parseFloat(document.getElementById('fin-prod').value)||0;
+  const inputQty=parseFloat(document.getElementById('fin-input').value)||0;
+  const trim=parseFloat(document.getElementById('fin-trim').value)||0;
+  const sheetW=parseFloat(document.getElementById('fin-weight-sheet').value)||0;
+  const materialW=parseFloat(document.getElementById('fin-weight-material').value)||0;
+  const totalW=sheetW+materialW;
+  const yieldPct=totalW>0?Math.round(((totalW-trim)/totalW)*100):(inputQty>0?Math.round((prod/inputQty)*100):null);
+  const lossPct=totalW>0?Math.round((trim/totalW)*100):(inputQty>0?Math.round((trim/inputQty)*100):null);
+  try {
+    await db.collection('production_finished').add({
+      date:selectedDate, name,
+      unit:document.getElementById('fin-unit').value,
+      batch:document.getElementById('fin-batch').value.trim(),
+      worker:document.getElementById('fin-worker').value.trim(),
+      prev:parseFloat(document.getElementById('fin-prev').value)||0,
+      target:parseFloat(document.getElementById('fin-target').value)||0,
+      prod, inputQty, trim,
+      sheetWeight:sheetW, materialWeight:materialW, totalWeight:totalW,
+      trimUse:document.getElementById('fin-trim-use').value,
+      yieldPct, lossPct,
+      ship:parseFloat(document.getElementById('fin-ship').value)||0,
+      waste:parseFloat(document.getElementById('fin-waste').value)||0,
+      note:document.getElementById('fin-note').value.trim(),
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('완제품 내역 저장 완료');
+    ['fin-name','fin-batch','fin-worker','fin-prev','fin-target','fin-prod','fin-input','fin-trim','fin-weight-sheet','fin-weight-material','fin-ship','fin-waste','fin-note'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fin-yield-display').value='';
+    document.getElementById('fin-loss-display').value='';
+    document.getElementById('fin-weight-total').value='';
+    document.getElementById('form-finished').style.display='none';
+    loadFinished();
+  } catch(e){ showToast('저장 실패: '+e.message,'error'); }
+}
+
+async function deleteDoc(collection, id, reloadFn) {
+  if(!confirm('이 항목을 삭제하시겠습니까?')) return;
+  try { await db.collection(collection).doc(id).delete(); showToast('삭제 완료'); reloadFn(); }
+  catch(e){ showToast('삭제 실패: '+e.message,'error'); }
+}
+
+updateHeaderDate();
+document.getElementById('selectedDate').value = todayStr();
+selectedDate = todayStr();
+loadAll();
+</script>
+</body>
+</html>
