@@ -163,7 +163,7 @@ async function init() {
     var snap = await db.collection('products').get();
     S.prods=[];
     snap.forEach(function(d){S.prods.push(Object.assign({id:d.id},d.data()));});
-    S.prods.sort(function(a,b){return (a.qr||'').localeCompare(b.qr||'');});
+    S.prods.sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');});
     var catSet={};
     S.prods.forEach(function(p){if(p.cat)catSet[p.cat]=true;});
     S.cats=['전체'].concat(Object.keys(catSet).sort());
