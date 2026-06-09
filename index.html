@@ -1246,12 +1246,44 @@ function drawOrdCard(name, data) {
       }
       var thHtml = '<th style="width:30px;">#</th><th>제품명</th><th>수량</th><th></th>'+ (!locked?'<th style="width:28px;"></th>':'');
       if(!useTwo) {
-        return '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody id="dtbody_'+sid+'" ondragover="ordDragOver(event)" ondrop="ordDrop(event,\''+en+'\')">'+ makeRows(col1,0) +'</tbody></table>';
+        var sumParts1=[];
+        var s1pan=0,s1bong=0,s1gea=0,s1box=0;
+        items.forEach(function(it){
+          var pp=S.prods.find(function(x){return x.id===it.pid;});
+          var u=pp&&pp.unit?pp.unit:'판';
+          if(u==='봉') s1bong+=it.qty;
+          else if(u==='개') s1gea+=it.qty;
+          else if(u==='박스') s1box+=it.qty;
+          else s1pan+=it.qty;
+        });
+        if(s1pan>0)  sumParts1.push('<span style="color:#cc0000;font-weight:600;">판 '+s1pan+'</span>');
+        if(s1bong>0) sumParts1.push('<span style="color:#9b59b6;font-weight:600;">봉 '+s1bong+'</span>');
+        if(s1gea>0)  sumParts1.push('<span style="color:#e67e22;font-weight:600;">개 '+s1gea+'</span>');
+        if(s1box>0)  sumParts1.push('<span style="color:#2980b9;font-weight:600;">박스 '+s1box+'</span>');
+        var sumBar1 = sumParts1.length ? '<div style="text-align:right;font-size:.78rem;padding:.3rem .2rem 0;border-top:1px solid #eee;margin-top:.3rem;">합계: '+sumParts1.join(' / ')+'</div>' : '';
+        return '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody id="dtbody_'+sid+'" ondragover="ordDragOver(event)" ondrop="ordDrop(event,\''+en+'\')">'+ makeRows(col1,0) +'</tbody></table>'+sumBar1;
       }
+      // 합계 계산
+      var sumPan=0, sumBong=0, sumGea=0, sumBox=0;
+      items.forEach(function(it){
+        var pp=S.prods.find(function(x){return x.id===it.pid;});
+        var u=pp&&pp.unit?pp.unit:'판';
+        if(u==='봉') sumBong+=it.qty;
+        else if(u==='개') sumGea+=it.qty;
+        else if(u==='박스') sumBox+=it.qty;
+        else sumPan+=it.qty;
+      });
+      var sumParts=[];
+      if(sumPan>0)  sumParts.push('<span style="color:#cc0000;font-weight:600;">판 '+sumPan+'</span>');
+      if(sumBong>0) sumParts.push('<span style="color:#9b59b6;font-weight:600;">봉 '+sumBong+'</span>');
+      if(sumGea>0)  sumParts.push('<span style="color:#e67e22;font-weight:600;">개 '+sumGea+'</span>');
+      if(sumBox>0)  sumParts.push('<span style="color:#2980b9;font-weight:600;">박스 '+sumBox+'</span>');
+      var sumBar = sumParts.length ? '<div style="text-align:right;font-size:.78rem;padding:.3rem .2rem 0;border-top:1px solid #eee;margin-top:.3rem;">합계: '+sumParts.join(' / ')+'</div>' : '';
+
       return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">'+
         '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody>'+ makeRows(col1,0) +'</tbody></table>'+
         '<table style="font-size:.82rem;"><thead><tr>'+thHtml+'</tr></thead><tbody>'+ makeRows(col2,half) +'</tbody></table>'+
-      '</div>';
+      '</div>'+sumBar;
     })():'<p style="color:#aaa;font-size:.83rem;">품목을 검색해서 추가하세요</p>')+
   '</div>';
 }
