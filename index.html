@@ -1351,8 +1351,9 @@ function ordDrop(e, clientName) {
     window.scrollTo(0, scrollY);
   }
 
-  db.collection('orders').doc(d).set({[realClient]: S.orders[d][realClient]}, {merge:true})
-    .then(function(){ toast('순서 변경됨','ok'); })
+  safeWrite(async function() {
+    await db.collection('orders').doc(d).set({[realClient]: S.orders[d][realClient]}, {merge:true});
+  }).then(function(){ toast('순서 변경됨','ok'); })
     .catch(function(err){ toast('오류: '+err.message,'err'); });
 
   _dragPid = null; _dragClient = null;
@@ -1438,7 +1439,9 @@ async function autoAddByDay() {
     newEntries[c.name] = {items:[], driver: c.driver||''};
   });
   try {
-    await db.collection('orders').doc(S.ordDate).set(newEntries, {merge:true});
+    await safeWrite(async function() {
+      await db.collection('orders').doc(S.ordDate).set(newEntries, {merge:true});
+    });
     toast(dayName+'요일 거래처 '+toAdd.length+'개 자동 추가됨','ok');
   } catch(e){ toast('오류: '+e.message,'err'); }
 }
@@ -1446,9 +1449,11 @@ async function autoAddByDay() {
 async function saveMemo(name, val) {
   var d = S.ordDate;
   if(!S.orders[d]||!S.orders[d][name]) return;
-  S.orders[d][name].memo = val;
   try {
-    await db.collection('orders').doc(d).set({[name]: {memo: val}}, {merge:true});
+    await safeWrite(async function() {
+      await db.collection('orders').doc(d).set({[name]: {memo: val}}, {merge:true});
+    });
+    S.orders[d][name].memo = val;
   } catch(e){ toast('메모 저장 오류','err'); }
 }
 
@@ -1464,7 +1469,9 @@ async function toggleLock(name) {
   }
   data.locked = locked;
   try {
-    await db.collection('orders').doc(S.ordDate).set({[name]: data}, {merge: true});
+    await safeWrite(async function() {
+      await db.collection('orders').doc(S.ordDate).set({[name]: data}, {merge: true});
+    });
     if(!S.orders[S.ordDate]) S.orders[S.ordDate] = {};
     S.orders[S.ordDate][name] = data;
     toast(locked ? name+' 입력완료 잠김 🔒' : name+' 수정 가능 🔓', 'ok');
@@ -1504,7 +1511,9 @@ async function moveOrdClientConfirm() {
 
     if(targetDate === fromDate) {
       // 날짜 동일 → 기사만 변경
-      await db.collection('orders').doc(fromDate).set({[name]: data}, {merge:true});
+      await safeWrite(async function() {
+        await db.collection('orders').doc(fromDate).set({[name]: data}, {merge:true});
+      });
       S.orders[fromDate][name] = data;
       toast(name+' → '+targetDriver+' 이동 완료!', 'ok');
     } else {
@@ -1527,11 +1536,11 @@ async function toggleOrdClient(name) {
   var d=S.ordDate; if(!S.orders[d]) S.orders[d]={};
   if(S.orders[d][name]){
     if(!confirm(name+' 제거할까요?')) return;
-    delete S.orders[d][name];
     try {
       await safeWrite(async function() {
         await db.collection('orders').doc(d).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
       });
+      delete S.orders[d][name];
       render();
     } catch(e){toast('오류:'+e.message,'err');}
   } else {
@@ -1551,7 +1560,9 @@ async function toggleOrdClient(name) {
       }
     }
     try {
-      await db.collection('orders').doc(d).set({[name]: S.orders[d][name]}, {merge:true});
+      await safeWrite(async function() {
+        await db.collection('orders').doc(d).set({[name]: S.orders[d][name]}, {merge:true});
+      });
       render();
     } catch(e){toast('오류:'+e.message,'err');}
   }
@@ -1559,11 +1570,11 @@ async function toggleOrdClient(name) {
 
 async function removeOrdClient(name) {
   if(!confirm('"'+name+'" 거래처를 정말 삭제하시겠습니까?')) return;
-  delete (S.orders[S.ordDate]||{})[name];
   try {
     await safeWrite(async function() {
       await db.collection('orders').doc(S.ordDate).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
     });
+    delete (S.orders[S.ordDate]||{})[name];
     toast(name+' 삭제됨','ok');
     render();
   } catch(e){toast('오류:'+e.message,'err');}
@@ -1996,7 +2007,7 @@ function showAddProd() {
     '<div><label>분류 *</label><br><select id="ap-cat" style="width:100%;margin-top:.2rem;padding:.45rem;">'+cats.map(function(c){return '<option>'+c+'</option>';}).join('')+'<option value="__new">직접입력...</option></select></div>'+
     '<div id="ap-newwrap" style="display:none;"><label>새 분류명</label><br><input id="ap-newcat" type="text" style="width:100%;margin-top:.2rem;"></div>'+
     '<div><label>QR코드 *</label><br><input id="ap-qr" type="text" placeholder="예: M1" style="width:100%;margin-top:.2rem;"></div>'+
-    '<div><label>단위</label><br><select id="ap-unit" style="width:100%;margin-top:.2rem;padding:.45rem;"><option>판</option><option>봉</option><option>개</option><option>박스</option></select></div>'+
+    '<div><label>단위</label><br><select id="ap-unit" style="width:100%;margin-top:.2rem;padding:.45rem;"><option value="판">판</option><option value="봉">봉</option><option value="개">개</option><option value="박스">박스</option></select></div>'+
     '<button class="btn btn-primary" onclick="doAddProd()">추가하기</button></div>');
   document.getElementById('ap-cat').onchange=function(){document.getElementById('ap-newwrap').style.display=this.value==='__new'?'block':'none';};
 }
@@ -2010,9 +2021,13 @@ async function doAddProd() {
   if(S.prods.some(function(p){return p.qr===qr;})){toast('이미 사용중인 QR코드','err');return;}
   var unit=(document.getElementById('ap-unit')||{value:'판'}).value;
   var id='P'+Date.now().toString().slice(-6);
-  S.prods.push({id:id,qr:qr,name:name,cat:cat,unit:unit});
-  try { await db.collection('products').doc(id).set({qr:qr,name:name,cat:cat,unit:unit}); closeModal(); toast(name+' 추가됨','ok'); drawProducts(); }
-  catch(e){toast('오류:'+e.message,'err');}
+  try {
+    await safeWrite(async function() {
+      await db.collection('products').doc(id).set({qr:qr,name:name,cat:cat,unit:unit});
+    });
+    S.prods.push({id:id,qr:qr,name:name,cat:cat,unit:unit});
+    closeModal(); toast(name+' 추가됨','ok'); drawProducts();
+  } catch(e){toast('오류:'+e.message,'err');}
 }
 
 function editProd(pid) {
@@ -2023,7 +2038,7 @@ function editProd(pid) {
     '<div><label>분류</label><br><select id="ep-cat" style="width:100%;margin-top:.2rem;padding:.45rem;">'+cats.map(function(c){return '<option'+(c===p.cat?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>'+
     '<div><label>QR코드</label><br><input id="ep-qr" type="text" value="'+(p.qr||'')+'" style="width:100%;margin-top:.2rem;"></div>'+
     '<div><label>단위</label><br><select id="ep-unit" style="width:100%;margin-top:.2rem;padding:.45rem;">'+
-      ['판','봉','개','박스'].map(function(u){return '<option'+(u===(p.unit||'판')?' selected':'')+'>'+u+'</option>';}).join('')+
+      ['판','봉','개','박스'].map(function(u){return '<option value="'+u+'"'+(u===(p.unit?p.unit:'판')?' selected':'')+'>'+u+'</option>';}).join('')+
     '</select></div>'+
     '<div><label>재고</label><br><input id="ep-inv" type="number" value="'+(S.inv[p.id]||0)+'" style="width:100%;margin-top:.2rem;"></div>'+
     '<button class="btn btn-primary" onclick="doEditProd(\''+p.id+'\')">저장하기</button></div>');
@@ -2063,9 +2078,13 @@ async function doEditProd(pid) {
 async function delProd(pid) {
   var p=S.prods.find(function(x){return x.id===pid;}); if(!p) return;
   if(!confirm(p.name+' 삭제할까요?')) return;
-  S.prods=S.prods.filter(function(x){return x.id!==pid;});
-  try { await db.collection('products').doc(pid).delete(); toast(p.name+' 삭제됨','ok'); drawProducts(); }
-  catch(e){toast('오류:'+e.message,'err');}
+  try {
+    await safeWrite(async function() {
+      await db.collection('products').doc(pid).delete();
+    });
+    S.prods=S.prods.filter(function(x){return x.id!==pid;});
+    toast(p.name+' 삭제됨','ok'); drawProducts();
+  } catch(e){toast('오류:'+e.message,'err');}
 }
 
 // ── LOGS ─────────────────────────────────────────────────────
@@ -2161,8 +2180,8 @@ document.getElementById('modal-overlay').addEventListener('click',function(e){if
 async function resetProducts() {
   if(!confirm('⚠️ 제품 목록을 최신 QR코드로 완전히 초기화할까요?\n재고는 유지됩니다.\n\n※ 직접 수정한 제품명이 모두 초기화됩니다!')) return;
   if(!confirm('정말 초기화하시겠습니까? 수정한 제품명이 전부 사라집니다.')) return;
-  S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT));
   try {
+    var newProds = JSON.parse(JSON.stringify(PRODS_DEFAULT));
     // Delete all existing products first
     var existing = await db.collection('products').get();
     var b0 = db.batch();
@@ -2170,8 +2189,10 @@ async function resetProducts() {
     if(!existing.empty) await b0.commit();
     // Upload new products
     var b = db.batch();
-    S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); });
+    newProds.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); });
     await b.commit();
+    // Firestore 성공 후 메모리 반영
+    S.prods = newProds;
     toast('제품 목록 초기화 완료! (135개)','ok');
     go('products');
   } catch(e){ toast('오류:'+e.message,'err'); }
