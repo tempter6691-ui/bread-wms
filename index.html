@@ -1216,12 +1216,12 @@ function drawOrdCard(name, data) {
     ? '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">수정</button>'
     : '<button class="btn btn-success btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">입력완료</button>';
   return '<div class="card" id="ocard_'+sid+'"'+(locked?' style="background:#f8fff8;border:1px solid #a8e6b0;"':'')+'>'+
-    '<div style="display:flex;align-items:center;margin-bottom:.6rem;">'+
-      '<div style="flex:1;font-weight:bold;">'+name+codeBadge+driverBadge+lockBadge+'</div>'+
+    '<div style="display:flex;align-items:center;margin-bottom:.6rem;gap:.5rem;">'+
+      '<div style="font-weight:bold;white-space:nowrap;">'+name+codeBadge+driverBadge+lockBadge+'</div>'+
+    '<input type="text" placeholder="📝 특이사항 메모..." value="'+memo.replace(/"/g,'&quot;')+'" style="flex:1;padding:.3rem .6rem;font-size:.8rem;border:1px solid #e0e0e0;border-radius:6px;background:#fffde7;color:#555;min-width:0;" onchange="saveMemo(\''+en+'\',this.value)" onblur="saveMemo(\''+en+'\',this.value)">'+
       lockBtn+
-      '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="moveOrdClient(\''+en+'\')">이동</button>'+
+      '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="moveOrdClient(\''+en+'\')" >이동</button>'+
       '<button class="btn btn-danger btn-sm" onclick="removeOrdClient(\''+en+'\')">삭제</button>'+
-    '<div style="margin-bottom:.5rem;"><input type="text" placeholder="📝 특이사항 메모..." value="'+memo.replace(/"/g,'&quot;')+'" style="width:100%;padding:.35rem .6rem;font-size:.8rem;border:1px solid #e0e0e0;border-radius:6px;background:#fffde7;color:#555;" onchange="saveMemo(\''+en+'\',this.value)" onblur="saveMemo(\''+en+'\',this.value)"></div>'+
     '</div>'+
     (!locked?'<input type="text" placeholder="품목 검색 후 추가..." style="width:100%;padding:.4rem;margin-bottom:.3rem;" oninput="searchProd(\''+en+'\',\''+sid+'\',this.value)">':'')+
     '<div id="psres_'+sid+'" style="margin-bottom:.5rem;"></div>'+
