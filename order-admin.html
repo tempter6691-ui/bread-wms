@@ -302,10 +302,6 @@ function renderCard(o) {
 
 async function exportToOrder(id) {
   var o = allOrders.find(function(x){return x.id===id;}); if(!o) return;
-  // 재등록 시 index에서 수정한 수량이 덮어써지므로 경고
-  if(o.status === 'exported') {
-    if(!confirm('이미 출고지시서에 등록된 발주입니다.\n재등록하면 출고관리 시스템에서 수정한 수량이 초기화될 수 있어요.\n계속할까요?')) return;
-  }
   
   // 날짜 결정 (발주 날짜 or 오늘)
   var t = o.ts&&o.ts.toDate?o.ts.toDate():new Date();
@@ -320,7 +316,7 @@ async function exportToOrder(id) {
   });
 
   try {
-    // merge:true로 해당 거래처만 추가/덮어쓰기 (다른 거래처 데이터 보존)
+    // 출고지시서에 해당 거래처만 추가/덮어쓰기 (merge:true로 다른 거래처 데이터 보호)
     var ordRef = db.collection('orders').doc(dateStr);
     await ordRef.set({ [o.client]: { items: items, driver: driver } }, { merge: true });
 
@@ -337,18 +333,22 @@ async function exportToOrder(id) {
 }
 
 async function confirmOrder(id) {
-  await db.collection('orders_request').doc(id).update({status:'confirmed'});
-  var o = allOrders.find(function(x){return x.id===id;});
-  if(o) o.status='confirmed';
-  updateStats(); renderOrders();
+  try {
+    await db.collection('orders_request').doc(id).update({status:'confirmed'});
+    var o = allOrders.find(function(x){return x.id===id;});
+    if(o) o.status='confirmed';
+    updateStats(); renderOrders();
+  } catch(e){ alert('확인 처리 오류: '+e.message); }
 }
 
 async function cancelOrder(id) {
   if(!confirm('취소하시겠어요?')) return;
-  await db.collection('orders_request').doc(id).update({status:'cancelled'});
-  var o = allOrders.find(function(x){return x.id===id;});
-  if(o) o.status='cancelled';
-  updateStats(); renderOrders();
+  try {
+    await db.collection('orders_request').doc(id).update({status:'cancelled'});
+    var o = allOrders.find(function(x){return x.id===id;});
+    if(o) o.status='cancelled';
+    updateStats(); renderOrders();
+  } catch(e){ alert('취소 처리 오류: '+e.message); }
 }
 
 function printOrder(id) {
@@ -369,9 +369,9 @@ function printOrder(id) {
 
 loadOrders();
 
-// 실시간 신규 발주 감지 (새 pending 건 생기면 자동 새로고침)
+// 실시간 발주 변경 감지 (신규 발주 추가 시 자동 새로고침)
 let _lastSnapCount = 0;
-db.collection('orders_request').where('status','==','pending')
+db.collection('orders_request')
   .onSnapshot(function(snap){
     if(_lastSnapCount !== 0 && snap.size !== _lastSnapCount) {
       loadOrders();

@@ -308,7 +308,7 @@ async function submitOrder(){
     return {pid:pid,pname:p.name,qty:S.cart[pid]};
   });
   try {
-    // 오늘 날짜 같은 거래처 발주 있는지 확인
+    // 오늘 날짜 같은 거래처 발주 있는지 확인 (orderBy 없이 where만 사용 → 인덱스 불필요)
     var today = new Date();
     var todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     var todayEnd = new Date(todayStart.getTime() + 86400000);
@@ -316,25 +316,24 @@ async function submitOrder(){
       .where('client','==',S.client)
       .where('ts','>=',todayStart)
       .where('ts','<',todayEnd)
-      .orderBy('ts','desc')
       .limit(1)
       .get();
 
     var memo = document.getElementById('order-memo').value;
 
     if(!existing.empty) {
-      // 기존 발주에 품목 합산
+      // 기존 발주에 품목 합산 (pname도 최신으로 갱신)
       var doc = existing.docs[0];
-      var prevItems = doc.data().items || [];
+      var prevItems = (doc.data().items || []).slice();
       items.forEach(function(newItem){
         var ex = prevItems.find(function(i){return i.pid===newItem.pid;});
-        if(ex) ex.qty += newItem.qty;
+        if(ex) { ex.qty += newItem.qty; ex.pname = newItem.pname; } // pname 최신 갱신
         else prevItems.push(newItem);
       });
       await doc.ref.update({
         items: prevItems,
-        memo: memo || doc.data().memo || '',
-        ts: firebase.firestore.FieldValue.serverTimestamp()
+        memo: memo || doc.data().memo || ''
+        // ts는 갱신하지 않음 → 날짜 그룹 유지
       });
     } else {
       // 새 발주 생성
@@ -421,7 +420,13 @@ function reorder(idx){
   var order=window._historyOrders[idx];
   if(!order) return;
   S.cart={};
-  (order.items||[]).forEach(function(item){if(item.pid&&item.qty)S.cart[item.pid]=item.qty;});
+  (order.items||[]).forEach(function(item){
+    if(item.pid&&item.qty){
+      // 현재 존재하는 제품만 담기 (삭제된 제품 제외)
+      var p=S.prods.find(function(x){return x.id===item.pid;});
+      if(p) S.cart[item.pid]=item.qty;
+    }
+  });
   closeHistory();
   S.currentCat='전체'; renderCats(); renderProds(); updateCartCount();
   toast('이전 주문을 장바구니에 담았어요! 🛒');
