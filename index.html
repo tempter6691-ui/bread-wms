@@ -769,12 +769,11 @@ function pgDash() {
       '<div class="stat-card" style="'+(low>0?'border:2px solid #ffc107':'')+'" ><div class="stat-num" style="'+(low>0?'color:#e67e22':'')+'">'+low+'</div><div class="stat-lbl">부족재고(15↓)</div></div>'+
       '<div class="stat-card" style="'+(zero>0?'border:2px solid #e74c3c':'')+'"><div class="stat-num" style="'+(zero>0?'color:#e74c3c':'')+'">'+zero+'</div><div class="stat-lbl">재고없음</div></div>'+
     '</div>'+
-    '<div class="card"><div class="card-title">오늘 출고지시서 ('+S.ordDate+')</div>'+
-    (cnt===0?'<p style="color:#aaa;">오늘 지시서 없음. <a href="#" onclick="go(\'orders\')">지시서 입력하기</a></p>':
-      Object.keys(todayOrd).filter(function(n){
-        return ((todayOrd[n]||{}).items||[]).length > 0;
-      }).map(function(n){
+    (function(){
+      if(cnt===0) return '<div class="card"><div class="card-title">오늘 출고지시서 ('+S.ordDate+')</div><p style="color:#aaa;">오늘 지시서 없음. <a href="#" onclick="go(\'orders\')">지시서 입력하기</a></p></div>';
+      function makeRow(n) {
         var items=(todayOrd[n]||{}).items||[];
+        if(!items.length) return '';
         var totalKinds=items.length;
         var doneKinds=items.filter(function(i){return i.done;}).length;
         var panItems=items.filter(function(i){var p2=S.prods.find(function(x){return x.id===i.pid;}); return !p2||!p2.unit||p2.unit==='판';});
@@ -794,18 +793,41 @@ function pgDash() {
         if(allDone){
           badges='<span class="badge bg-green">✅완료</span>';
         } else {
-          if(totalPan>0) badges+='<span class="badge '+(scannedPan>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedPan+'/'+totalPan+'판</span>';
-          if(totalBong>0) badges+='<span class="badge '+(scannedBong>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedBong+'/'+totalBong+'봉</span>';
-          if(totalGea>0) badges+='<span class="badge '+(scannedGea>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedGea+'/'+totalGea+'개</span>';
-          if(totalBox>0) badges+='<span class="badge '+(scannedBox>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedBox+'/'+totalBox+'박스</span>';
+          if(totalPan>0) badges+='<span class="badge '+(scannedPan>0?'bg-yellow':''+')+" style="margin-right:.2rem;">'+scannedPan+'/'+totalPan+'판</span>';
+          if(totalBong>0) badges+='<span class="badge '+(scannedBong>0?'bg-yellow':''+')+" style="margin-right:.2rem;">'+scannedBong+'/'+totalBong+'봉</span>';
+          if(totalGea>0) badges+='<span class="badge '+(scannedGea>0?'bg-yellow':''+')+" style="margin-right:.2rem;">'+scannedGea+'/'+totalGea+'개</span>';
+          if(totalBox>0) badges+='<span class="badge '+(scannedBox>0?'bg-yellow':''+')+" style="margin-right:.2rem;">'+scannedBox+'/'+totalBox+'박스</span>';
         }
         return '<div style="display:flex;align-items:center;padding:.35rem 0;border-bottom:1px solid #f0f0f0;">'+
           '<span style="flex:1">'+n+'</span>'+
           '<span class="badge '+(allDone?'bg-green':'bg-yellow')+'" style="margin-right:.3rem;">'+doneKinds+'/'+totalKinds+'종</span>'+
-          badges+
+          badges+'</div>';
+      }
+      var driverColors={'A이운영':'#3b82f6','B남재만':'#10b981','C서영덕':'#f59e0b','D장재혁':'#8b5cf6','E정일혁':'#ef4444'};
+      var driverOrder=DRIVERS.concat(['미배정']);
+      var grouped={};
+      driverOrder.forEach(function(drv){ grouped[drv]=[]; });
+      Object.keys(todayOrd).forEach(function(n){
+        var drv=(todayOrd[n]||{}).driver||'';
+        if(!drv){ var cl=S.clients.find(function(c){return c.name===n;}); drv=cl&&cl.driver?cl.driver:'미배정'; }
+        if(!grouped[drv]) grouped[drv]=[];
+        grouped[drv].push(n);
+      });
+      var html='<div class="card"><div class="card-title">오늘 출고지시서 ('+S.ordDate+')</div>';
+      driverOrder.forEach(function(drv){
+        var ns=grouped[drv]||[];
+        var rows=ns.map(makeRow).filter(Boolean);
+        if(!rows.length) return;
+        var col=driverColors[drv]||'#6b7280';
+        html+='<div style="margin-bottom:.75rem;">'+
+          '<div style="font-weight:600;font-size:.82rem;color:'+col+';padding:.3rem .6rem;background:'+col+'18;border-radius:6px;border-left:3px solid '+col+';margin-bottom:.3rem;">'+drv+'</div>'+
+          rows.join('')+
           '</div>';
-      }).join(''))+
-    '</div></div>';
+      });
+      html+='</div>';
+      return html;
+    })()+
+    '</div>';
 }
 
 async function applyTodayTmpl() {
