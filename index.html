@@ -842,8 +842,12 @@ async function applyTodayTmpl() {
     }
   });
   if(!Object.keys(newEntries).length){ toast('이미 모두 추가되어 있어요','ok'); return; }
-  await db.collection('orders').doc(d).set(newEntries, {merge:true});
-  toast('템플릿 불러오기 완료!','ok'); go('orders');
+  try {
+    await safeWrite(async function() {
+      await db.collection('orders').doc(d).set(newEntries, {merge:true});
+    });
+    toast('템플릿 불러오기 완료!','ok'); go('orders');
+  } catch(e){ toast('오류: '+e.message,'err'); }
 }
 
 // ── INBOUND ──────────────────────────────────────────────────
@@ -1450,11 +1454,16 @@ async function autoAddByDay() {
   var dayName = DAYS_KO[date.getDay()];
   // 해당 요일 거래처 찾기
   var dayClients = S.clients.filter(function(c){ return c.day === dayName; });
-  if(!dayClients.length) return;
+  if(!dayClients.length){ toast(dayName+'요일 등록된 거래처가 없습니다','err'); return; }
   if(!S.orders[S.ordDate]) S.orders[S.ordDate] = {};
   var todayOrd = S.orders[S.ordDate];
   var toAdd = dayClients.filter(function(c){ return !todayOrd[c.name]; });
-  if(!toAdd.length) return;
+  if(!toAdd.length){ toast('이미 모두 추가되어 있습니다','ok'); return; }
+  // 확인창
+  var names = toAdd.map(function(c){return c.name;}).join(', ');
+  if(!confirm(dayName+'요일 거래처 '+toAdd.length+'개를 추가할까요?
+
+'+names)) return;
   var newEntries = {};
   toAdd.forEach(function(c){
     todayOrd[c.name] = {items:[], driver: c.driver||''};
@@ -1795,8 +1804,12 @@ async function useTmpl(key) {
     }
   });
   if(!Object.keys(newEntries).length){ toast('이미 모두 추가되어 있어요','ok'); return; }
-  await db.collection('orders').doc(d).set(newEntries, {merge:true});
-  toast('템플릿 적용 완료!','ok'); go('orders');
+  try {
+    await safeWrite(async function() {
+      await db.collection('orders').doc(d).set(newEntries, {merge:true});
+    });
+    toast('템플릿 적용 완료!','ok'); go('orders');
+  } catch(e){ toast('오류: '+e.message,'err'); }
 }
 
 // ── CLIENTS ──────────────────────────────────────────────────
