@@ -182,16 +182,33 @@ document.getElementById('name-modal').addEventListener('click',function(e){if(e.
 
 var WIDE_THRESHOLD = 10; // 이 품목 수 이상이면 wide 카드
 var localConfirmed = {}; // {거래처명: {pid: true}} 보기용 완료 상태
+var gAllOrders = {}; // 전역 주문 데이터 (Firestore 저장용)
+var gDate = ''; // 현재 날짜
 
 function confirmItem(clientName, pid) {
   if(!localConfirmed[clientName]) localConfirmed[clientName]={};
   localConfirmed[clientName][pid]=true;
+
+  // Firestore done 필드 저장
+  if(gAllOrders[clientName] && gAllOrders[clientName].items) {
+    var item = gAllOrders[clientName].items.find(function(i){return i.pid===pid;});
+    if(item) {
+      item.done = true;
+      item.scanned = item.qty;
+    }
+    db.collection('orders').doc(gDate).set(
+      {[clientName]: {items: gAllOrders[clientName].items}},
+      {merge: true}
+    ).catch(function(e){ console.warn('완료 저장 오류:', e.message); });
+  }
+
   // 해당 행 UI 업데이트
   var rowId='row_'+safeid(clientName)+'_'+safeid(pid);
   var row=document.getElementById(rowId);
   if(row){
+    row.dataset.fbdone='1';
     var remEl=row.querySelector('.remain');
-    if(remEl){remEl.classList.remove('pend');remEl.classList.add('done');}
+    if(remEl){remEl.classList.remove('pend');remEl.classList.add('done');remEl.textContent='0';}
     var btnEl=row.querySelector('.confirm-btn');
     if(btnEl){btnEl.outerHTML='<span class="status-done">✅완료</span>';}
   }
@@ -377,6 +394,7 @@ async function loadData(){
     }
 
     var allOrders=oDoc.data();
+    gAllOrders=allOrders; gDate=date; localConfirmed={};
     var myClients=Object.keys(allOrders).filter(function(name){
       return allOrders[name].driver===DRIVER_FULL;
     }).sort(function(a,b){return a.localeCompare(b,"ko");});
