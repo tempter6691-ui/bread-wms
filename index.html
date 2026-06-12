@@ -1675,7 +1675,9 @@ function printOrders() {
       var items = (todayOrd[name].items||[]);
       var pCl = S.clients.find(function(c){return c.name===name;});
       var pCode = pCl&&pCl.code ? ' ('+pCl.code+')' : '';
+      var memo = (todayOrd[name].memo||'').trim();
       html += '<div class="client-block"><div class="client-name">■ '+name+pCode+'</div>';
+      if(memo) html += '<div style="font-size:9px;color:#555;font-style:italic;border-bottom:1px dashed #ccc;margin-bottom:2px;padding-bottom:2px;">📝 '+memo+'</div>';
       if(items.length){
         // 품목을 2열로 나눠서 표시
         var half = Math.ceil(items.length/2);
