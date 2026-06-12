@@ -1461,9 +1461,7 @@ async function autoAddByDay() {
   if(!toAdd.length){ toast('이미 모두 추가되어 있습니다','ok'); return; }
   // 확인창
   var names = toAdd.map(function(c){return c.name;}).join(', ');
-  if(!confirm(dayName+'요일 거래처 '+toAdd.length+'개를 추가할까요?
-
-'+names)) return;
+  if(!confirm(dayName+'요일 거래처 '+toAdd.length+'개를 추가할까요?\n\n'+names)) return;
   var newEntries = {};
   toAdd.forEach(function(c){
     todayOrd[c.name] = {items:[], driver: c.driver||''};
