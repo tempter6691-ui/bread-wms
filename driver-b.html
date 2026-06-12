@@ -210,7 +210,7 @@ function updateCardTotals(clientName) {
   // 이 카드 내의 모든 item row를 찾아 남은수량 합산
   var card=document.getElementById('card_'+sid); if(!card) return;
   var rows=card.querySelectorAll('tr[data-client]');
-  var totals={판:{qty:0,rem:0},봉:{qty:0,rem:0},개:{qty:0,rem:0}};
+  var totals={판:{qty:0,rem:0},봉:{qty:0,rem:0},개:{qty:0,rem:0},박스:{qty:0,rem:0}};
   rows.forEach(function(r){
     var unit=r.dataset.unit||'판';
     var qty=parseInt(r.dataset.qty)||0;
@@ -220,7 +220,7 @@ function updateCardTotals(clientName) {
     var rem=confirmed||fbDone?0:parseInt(r.dataset.rem)||0;
     if(totals[unit]){totals[unit].qty+=qty;totals[unit].rem+=rem;}
   });
-  ['판','봉','개'].forEach(function(u){
+  ['판','봉','개','박스'].forEach(function(u){
     var el=card.querySelector('.total-rem-'+u);
     if(el){
       el.textContent=totals[u].rem;
@@ -271,7 +271,7 @@ function updateSummary(){
 }
 
 function buildItemRows(items, clientName) {
-  var totalPan=0,remPan=0,totalBong=0,remBong=0,totalGea=0,remGea=0;
+  var totalPan=0,remPan=0,totalBong=0,remBong=0,totalGea=0,remGea=0,totalBox=0,remBox=0;
   var rows='';
   items.forEach(function(item){
     var p=prods.find(function(x){return x.id===item.pid;});
@@ -294,6 +294,7 @@ function buildItemRows(items, clientName) {
     if(unit==='판'){totalPan+=item.qty;remPan+=(isDone?0:remaining);}
     else if(unit==='봉'){totalBong+=item.qty;remBong+=(isDone?0:remaining);}
     else if(unit==='개'){totalGea+=item.qty;remGea+=(isDone?0:remaining);}
+    else if(unit==='박스'){totalBox+=item.qty;remBox+=(isDone?0:remaining);}
     var rowId='row_'+safeid(clientName)+'_'+safeid(item.pid);
     rows+='<tr id="'+rowId+'" data-client="'+esc(clientName)+'" data-pid="'+item.pid+'" data-unit="'+unit+'" data-qty="'+item.qty+'" data-rem="'+remaining+'" data-fbdone="'+(fbDone?'1':'0')+'">';
     var uc=unit==='봉'?'#9b59b6':unit==='개'?'#e67e22':unit==='박스'?'#2980b9':'#222222';
@@ -305,6 +306,7 @@ function buildItemRows(items, clientName) {
   if(totalPan>0) foot+='<tr class="total-row"><td style="color:#222222;">합계(판)</td><td class="qty" style="color:#222222;">'+totalPan+'판</td><td><span class="'+(remPan===0?'remain done':'remain pend')+' total-rem-판">'+remPan+'</span></td><td></td></tr>';
   if(totalBong>0) foot+='<tr class="total-row bong"><td style="color:#9b59b6;">합계(봉)</td><td class="qty" style="color:#9b59b6;">'+totalBong+'봉</td><td><span class="'+(remBong===0?'remain done':'remain pend')+' total-rem-봉">'+remBong+'</span></td><td></td></tr>';
   if(totalGea>0) foot+='<tr class="total-row gea"><td style="color:#e67e22;">합계(개)</td><td class="qty" style="color:#e67e22;">'+totalGea+'개</td><td><span class="'+(remGea===0?'remain done':'remain pend')+' total-rem-개">'+remGea+'</span></td><td></td></tr>';
+  if(totalBox>0) foot+='<tr class="total-row box"><td style="color:#2980b9;">합계(박스)</td><td class="qty" style="color:#2980b9;">'+totalBox+'박스</td><td><span class="'+(remBox===0?'remain done':'remain pend')+' total-rem-박스">'+remBox+'</span></td><td></td></tr>';
   return {rows:rows, foot:foot};
 }
 
