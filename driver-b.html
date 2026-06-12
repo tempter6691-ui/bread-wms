@@ -342,7 +342,7 @@ function buildCard(name, data) {
 
   var memo = (data.memo||'').trim();
   var sid2=safeid(name); var html = '<div class="'+cardCls+'" id="card_'+sid2+'">';
-  var memoHtml = memo ? ' <span style="color:#ff0000;font-weight:900;font-size:.8rem;font-style:italic;">'+memo+'</span>' : '';
+  var memoHtml = memo ? ' <span style="color:#ffee00;font-weight:900;font-size:.8rem;font-style:italic;">'+memo+'</span>' : '';
   html += '<div class="'+headerCls+'"><span>'+name+lockMark+memoHtml+'</span>'+statusBadge+'</div>';
 
   if(!items.length) {
