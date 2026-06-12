@@ -793,10 +793,10 @@ function pgDash() {
         if(allDone){
           badges='<span class="badge bg-green">✅완료</span>';
         } else {
-          if(totalPan>0) badges+='<span class="badge '+(scannedPan>0?'bg-yellow':''+')+" style="margin-right:.2rem;">'+scannedPan+'/'+totalPan+'판</span>';
-          if(totalBong>0) badges+='<span class="badge '+(scannedBong>0?'bg-yellow':''+')+" style="margin-right:.2rem;">'+scannedBong+'/'+totalBong+'봉</span>';
-          if(totalGea>0) badges+='<span class="badge '+(scannedGea>0?'bg-yellow':''+')+" style="margin-right:.2rem;">'+scannedGea+'/'+totalGea+'개</span>';
-          if(totalBox>0) badges+='<span class="badge '+(scannedBox>0?'bg-yellow':''+')+" style="margin-right:.2rem;">'+scannedBox+'/'+totalBox+'박스</span>';
+          if(totalPan>0) badges+='<span class="badge '+(scannedPan>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedPan+'/'+totalPan+'판</span>';
+          if(totalBong>0) badges+='<span class="badge '+(scannedBong>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedBong+'/'+totalBong+'봉</span>';
+          if(totalGea>0) badges+='<span class="badge '+(scannedGea>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedGea+'/'+totalGea+'개</span>';
+          if(totalBox>0) badges+='<span class="badge '+(scannedBox>0?'bg-yellow':'')+'" style="margin-right:.2rem;">'+scannedBox+'/'+totalBox+'박스</span>';
         }
         return '<div style="display:flex;align-items:center;padding:.35rem 0;border-bottom:1px solid #f0f0f0;">'+
           '<span style="flex:1">'+n+'</span>'+
