@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>브레드뱅크 발주</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{--primary:#1e3a5f;--accent:#c9a96e;--bg:#f8f5f0;--white:#fff;--success:#27ae60;--border:#ddd;--sub:#888;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-height:100vh;}
+.header{background:var(--primary);color:#fff;padding:1rem 1.2rem;display:flex;align-items:center;gap:.8rem;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+.header-logo{font-size:1.4rem;}
+.header-info{flex:1;}
+.header-title{font-size:1rem;font-weight:700;}
+.header-client{font-size:.78rem;color:var(--accent);margin-top:2px;}
+.hbtn{border:none;border-radius:6px;padding:.5rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;color:#fff;}
+.hbtn-gray{background:#4a5568;margin-right:.3rem;}
+.hbtn-accent{background:#2563eb;display:flex;align-items:center;gap:.4rem;}
+.cart-count{background:#fff;color:#2563eb;border-radius:50%;min-width:22px;height:22px;padding:0 3px;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;}
+.cat-wrap{background:#fff;padding:.6rem .8rem;overflow-x:auto;white-space:nowrap;border-bottom:1px solid var(--border);position:sticky;top:60px;z-index:90;}
+.cat-wrap::-webkit-scrollbar{height:3px;}
+.cat-wrap::-webkit-scrollbar-thumb{background:var(--accent);}
+.cat-btn{display:inline-block;padding:.4rem .9rem;border-radius:20px;border:1px solid var(--border);font-size:.78rem;cursor:pointer;margin-right:.4rem;background:#fff;color:var(--sub);font-family:inherit;transition:.2s;}
+.cat-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.search-wrap{padding:.8rem .8rem .4rem;}
+.search-input{width:100%;padding:.7rem 1rem;border:1px solid var(--border);border-radius:8px;font-size:.9rem;font-family:inherit;background:#fff;}
+.search-input:focus{outline:none;border-color:var(--primary);}
+.products{padding:.8rem;}
+.product-list{display:flex;flex-direction:column;gap:.5rem;}
+.product-item{background:#fff;border-radius:8px;padding:.8rem 1rem;display:flex;align-items:center;gap:.8rem;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.product-name{flex:1;font-size:.9rem;font-weight:500;}
+.product-cat{font-size:.7rem;color:var(--sub);margin-top:2px;}
+.qty-control{display:flex;align-items:center;gap:.5rem;}
+.qty-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--primary);font-weight:700;}
+.qty-input{width:46px;text-align:center;border:1px solid var(--border);border-radius:6px;padding:.3rem;font-size:.9rem;font-family:inherit;}
+.qty-input:focus{outline:none;border-color:var(--primary);}
+.qty-has{background:#e8f4e8;border-color:var(--success);}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;}
+.overlay.show{display:block;}
+.modal{position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:16px 16px 0 0;padding:1.2rem;z-index:201;max-height:82vh;overflow-y:auto;transform:translateY(100%);transition:.3s;}
+.modal.show{transform:translateY(0);}
+.modal-title{font-size:1rem;font-weight:700;margin-bottom:1rem;color:var(--primary);}
+.cart-item{display:flex;align-items:center;padding:.55rem 0;border-bottom:1px solid #f0f0f0;gap:.5rem;}
+.cart-item:last-child{border:none;}
+.cart-item-name{flex:1;font-size:.85rem;}
+.cart-item-sub{font-size:.7rem;color:var(--sub);}
+.cart-item-del{background:none;border:none;color:#e74c3c;cursor:pointer;font-size:1rem;padding:.2rem;}
+.cart-empty{text-align:center;color:var(--sub);padding:1.5rem;font-size:.85rem;}
+.order-memo{width:100%;margin-top:.8rem;padding:.7rem;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;resize:none;}
+.order-memo:focus{outline:none;border-color:var(--primary);}
+.order-btn{width:100%;margin-top:.8rem;padding:.9rem;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;}
+.order-btn:disabled{background:var(--sub);}
+.order-total{text-align:right;font-size:.82rem;color:var(--sub);margin-top:.4rem;}
+.order-total strong{color:var(--primary);}
+.add-section{margin-top:.8rem;border-top:1px solid #eee;padding-top:.7rem;}
+.add-label{font-size:.78rem;color:#888;margin-bottom:.4rem;}
+.add-results{max-height:140px;overflow-y:auto;margin-top:.3rem;border:1px solid #eee;border-radius:6px;}
+.add-result-item{padding:.45rem .7rem;font-size:.82rem;cursor:pointer;display:flex;justify-content:space-between;border-bottom:1px solid #f5f5f5;}
+.add-result-item:last-child{border:none;}
+.add-result-item:hover{background:#f5f5f5;}
+.history-item{border:1px solid var(--border);border-radius:8px;margin-bottom:.8rem;overflow:hidden;}
+.history-header{background:#f8f5f0;padding:.6rem .8rem;display:flex;align-items:center;justify-content:space-between;}
+.history-date{font-size:.82rem;font-weight:700;color:var(--primary);}
+.history-rows{padding:.5rem .8rem;}
+.history-row{display:flex;justify-content:space-between;padding:.22rem 0;font-size:.82rem;border-bottom:1px solid #f8f8f8;}
+.history-row:last-child{border:none;}
+.reorder-btn{width:100%;margin-top:.5rem;padding:.55rem;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;}
+.done-wrap{display:none;position:fixed;inset:0;background:var(--bg);z-index:300;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;}
+.done-wrap.show{display:flex;}
+.done-btn{margin-top:1.5rem;padding:.8rem 2rem;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit;}
+.no-link{display:none;position:fixed;inset:0;background:var(--bg);z-index:400;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;}
+.no-link.show{display:flex;}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:.6rem 1.2rem;border-radius:20px;font-size:.82rem;z-index:500;opacity:0;transition:.3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+.qty-ctrl-sm{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:.9rem;color:var(--primary);font-weight:700;display:inline-flex;align-items:center;justify-content:center;}
+.qty-input-sm{width:38px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px;font-size:.85rem;font-family:inherit;}
+</style>
+</head>
+<body>
+
+<!-- 링크 없이 접속시 -->
+<div class="no-link" id="no-link">
+  <div style="font-size:3rem;margin-bottom:1rem;">🥐</div>
+  <div style="font-size:1.1rem;font-weight:700;color:var(--primary);margin-bottom:.5rem;">브레드뱅크 발주 시스템</div>
+  <div style="font-size:.85rem;color:#888;line-height:1.7;">전용 링크로만 접속 가능합니다.<br>담당자에게 링크를 요청해 주세요.</div>
+</div>
+
+<!-- 메인 발주 화면 -->
+<div id="main-wrap" style="display:none;">
+  <div class="header">
+    <div class="header-logo">🥐</div>
+    <div class="header-info">
+      <div class="header-title">브레드뱅크 발주</div>
+      <div class="header-client" id="header-client"></div>
+    </div>
+    <button class="hbtn hbtn-gray" onclick="openHistory()">📋 내역</button>
+    <button class="hbtn hbtn-accent" onclick="openCart()">🛒 발주 <span class="cart-count" id="cart-count">0</span></button>
+  </div>
+  <div class="cat-wrap" id="cat-wrap"></div>
+  <div class="search-wrap">
+    <input class="search-input" id="search-input" placeholder="제품 검색..." oninput="filterProds(this.value)">
+  </div>
+  <div class="products" id="products-wrap"></div>
+</div>
+
+<!-- 발주 내역 모달 -->
+<div class="overlay" id="ov-history" onclick="closeHistory()"></div>
+<div class="modal" id="modal-history">
+  <div class="modal-title">📋 발주 내역</div>
+  <div id="history-list"></div>
+</div>
+
+<!-- 장바구니 모달 -->
+<div class="overlay" id="ov-cart" onclick="closeCart()"></div>
+<div class="modal" id="modal-cart">
+  <div class="modal-title">🛒 발주 목록</div>
+  <div id="cart-list"></div>
+  <textarea class="order-memo" id="order-memo" rows="2" placeholder="요청사항 (선택)"></textarea>
+  <div class="order-total" id="order-total"></div>
+  <button class="order-btn" id="order-btn" onclick="submitOrder()">발주 완료</button>
+</div>
+
+<!-- 완료 화면 -->
+<div class="done-wrap" id="done-wrap">
+  <div style="font-size:3.5rem;margin-bottom:1rem;">✅</div>
+  <div style="font-size:1.3rem;font-weight:700;color:var(--primary);margin-bottom:.5rem;">발주 완료!</div>
+  <div style="font-size:.88rem;color:#888;line-height:1.8;" id="done-sub"></div>
+  <button class="done-btn" onclick="resetOrder()">추가 발주하기</button>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyAI5VBBXB2dUS5kk5IE--xfCe_C2r0PrIA",
+  authDomain:"bread-wms.firebaseapp.com",
+  projectId:"bread-wms",
+  storageBucket:"bread-wms.firebasestorage.app",
+  messagingSenderId:"310262595402",
+  appId:"1:310262595402:web:49e8df8647cd8258bf0bb3"
+});
+const db = firebase.firestore();
+
+var S = { client:'', prods:[], cats:['전체'], cart:{}, currentCat:'전체', searchText:'' };
+
+function toast(msg) {
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},2000);
+}
+
+function getParam(key) {
+  return decodeURIComponent(new URLSearchParams(window.location.search).get(key)||'');
+}
+
+async function init() {
+  var client = getParam('c');
+  try {
+    var snap = await db.collection('products').get();
+    S.prods=[];
+    snap.forEach(function(d){S.prods.push(Object.assign({id:d.id},d.data()));});
+    S.prods.sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');});
+    var catSet={};
+    S.prods.forEach(function(p){if(p.cat)catSet[p.cat]=true;});
+    S.cats=['전체'].concat(Object.keys(catSet).sort());
+  } catch(e){ console.error(e); }
+
+  if(!client) {
+    document.getElementById('no-link').classList.add('show');
+    return;
+  }
+  S.client=client;
+  document.getElementById('header-client').textContent=client;
+  document.getElementById('main-wrap').style.display='block';
+  renderCats(); renderProds(); updateCartCount();
+}
+
+function renderCats() {
+  document.getElementById('cat-wrap').innerHTML = S.cats.map(function(c){
+    return '<button class="cat-btn'+(c===S.currentCat?' active':'')+'" onclick="setCat(\''+c+'\')">'+c+'</button>';
+  }).join('');
+}
+
+function setCat(cat) {
+  S.currentCat=cat; S.searchText='';
+  document.getElementById('search-input').value='';
+  renderCats(); renderProds();
+}
+
+function filterProds(val) {
+  S.searchText=val; S.currentCat='전체';
+  renderCats(); renderProds();
+}
+
+function renderProds() {
+  var list=S.prods.filter(function(p){
+    if(S.searchText) return p.name.includes(S.searchText);
+    if(S.currentCat!=='전체') return p.cat===S.currentCat;
+    return true;
+  });
+  if(!list.length){document.getElementById('products-wrap').innerHTML='<div style="text-align:center;padding:2rem;color:#aaa;">제품이 없어요</div>';return;}
+  document.getElementById('products-wrap').innerHTML='<div class="product-list">'+list.map(function(p){
+    var qty=S.cart[p.id]||0;
+    return '<div class="product-item">'+
+      '<div style="flex:1;"><div class="product-name">'+p.name+'</div><div class="product-cat">'+p.cat+'</div></div>'+
+      '<div class="qty-control">'+
+        '<button class="qty-btn" onclick="changeQty(\''+p.id+'\',-1)">−</button>'+
+        '<input class="qty-input'+(qty>0?' qty-has':'')+'" type="number" min="0" value="'+qty+'" onchange="setQty(\''+p.id+'\',this.value)" id="qi-'+p.id+'">'+
+        '<button class="qty-btn" onclick="changeQty(\''+p.id+'\',1)">+</button>'+
+      '</div></div>';
+  }).join('')+'</div>';
+}
+
+function changeQty(pid,delta){
+  var n=Math.max(0,(S.cart[pid]||0)+delta);
+  setQtyVal(pid,n);
+}
+function setQty(pid,val){setQtyVal(pid,Math.max(0,parseInt(val)||0));}
+function setQtyVal(pid,qty){
+  if(qty===0)delete S.cart[pid]; else S.cart[pid]=qty;
+  var inp=document.getElementById('qi-'+pid);
+  if(inp){inp.value=qty;inp.className='qty-input'+(qty>0?' qty-has':'');}
+  updateCartCount();
+}
+function updateCartCount(){
+  document.getElementById('cart-count').textContent=Object.keys(S.cart).length;
+}
+
+// 장바구니
+function openCart(){renderCart();document.getElementById('ov-cart').classList.add('show');document.getElementById('modal-cart').classList.add('show');}
+function closeCart(){document.getElementById('ov-cart').classList.remove('show');document.getElementById('modal-cart').classList.remove('show');}
+
+function renderCart(){
+  var keys=Object.keys(S.cart);
+  var total=keys.reduce(function(s,pid){return s+S.cart[pid];},0);
+  var html='';
+  if(!keys.length){
+    html='<div class="cart-empty">담은 제품이 없어요</div>';
+  } else {
+    keys.forEach(function(pid){
+      var p=S.prods.find(function(x){return x.id===pid;})||{name:pid,cat:''};
+      var qty=S.cart[pid];
+      html+='<div class="cart-item">'+
+        '<div class="cart-item-name">'+p.name+'<div class="cart-item-sub">'+p.cat+'</div></div>'+
+        '<div style="display:flex;align-items:center;gap:.3rem;">'+
+          '<button class="qty-ctrl-sm" onclick="cartDelta(\''+pid+'\',-1)">−</button>'+
+          '<input class="qty-input-sm" type="number" value="'+qty+'" min="0" onchange="cartSet(\''+pid+'\',this.value)">'+
+          '<button class="qty-ctrl-sm" onclick="cartDelta(\''+pid+'\',1)">+</button>'+
+        '</div>'+
+        '<button class="cart-item-del" onclick="cartDel(\''+pid+'\')">✕</button>'+
+      '</div>';
+    });
+    html+='<div class="add-section">'+
+      '<div class="add-label">➕ 제품 추가</div>'+
+      '<input class="search-input" id="add-search" placeholder="제품명 검색..." oninput="searchAdd(this.value)" style="font-size:.82rem;">'+
+      '<div id="add-results" class="add-results" style="display:none;"></div>'+
+    '</div>';
+  }
+  document.getElementById('cart-list').innerHTML=html;
+  document.getElementById('order-total').innerHTML=keys.length?'총 <strong>'+keys.length+'개 품목</strong>, <strong>'+total+'개</strong> 발주':'';
+}
+
+function cartDelta(pid,d){
+  var n=Math.max(0,(S.cart[pid]||0)+d);
+  if(n===0){cartDel(pid);return;}
+  S.cart[pid]=n; renderCart(); updateCartCount();
+}
+function cartSet(pid,val){
+  var n=Math.max(0,parseInt(val)||0);
+  if(n===0){cartDel(pid);return;}
+  S.cart[pid]=n; updateCartCount();
+}
+function cartDel(pid){
+  delete S.cart[pid];
+  var inp=document.getElementById('qi-'+pid);
+  if(inp){inp.value=0;inp.className='qty-input';}
+  renderCart(); updateCartCount();
+}
+function searchAdd(val){
+  var el=document.getElementById('add-results');
+  if(!val.trim()){el.style.display='none';return;}
+  var list=S.prods.filter(function(p){return p.name.includes(val)&&!S.cart[p.id];}).slice(0,8);
+  if(!list.length){el.innerHTML='<div style="padding:.5rem;font-size:.78rem;color:#aaa;">없음</div>';el.style.display='block';return;}
+  el.innerHTML=list.map(function(p){
+    return '<div class="add-result-item" onclick="cartAdd(\''+p.id+'\')"><span>'+p.name+'</span><span style="font-size:.7rem;color:#888;">'+p.cat+'</span></div>';
+  }).join('');
+  el.style.display='block';
+}
+function cartAdd(pid){
+  S.cart[pid]=1;
+  document.getElementById('add-search').value='';
+  document.getElementById('add-results').style.display='none';
+  renderCart(); updateCartCount(); toast('추가됐어요!');
+}
+
+// 발주 완료
+async function submitOrder(){
+  var keys=Object.keys(S.cart);
+  if(!keys.length){toast('제품을 선택해 주세요!');return;}
+  var btn=document.getElementById('order-btn');
+  btn.disabled=true; btn.textContent='발주 중...';
+  var items=keys.map(function(pid){
+    var p=S.prods.find(function(x){return x.id===pid;})||{name:pid};
+    return {pid:pid,pname:p.name,qty:S.cart[pid]};
+  });
+  try {
+    var memo = document.getElementById('order-memo').value;
+    // 항상 새 발주로 저장 (인덱스 불필요)
+    await db.collection('orders_request').add({
+      client:S.client, items:items,
+      memo:memo,
+      status:'pending',
+      ts:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    closeCart();
+    var total=items.reduce(function(s,i){return s+i.qty;},0);
+    document.getElementById('done-sub').innerHTML='<strong>'+S.client+'</strong> 발주 접수 완료<br>'+items.length+'개 품목, '+total+'개<br><br>브레드뱅크에서 확인 후 처리해 드릴게요!';
+    document.getElementById('done-wrap').classList.add('show');
+  } catch(e){
+    toast('오류: '+e.message);
+    btn.disabled=false; btn.textContent='발주 완료';
+  }
+}
+
+function resetOrder(){
+  S.cart={};
+  document.getElementById('done-wrap').classList.remove('show');
+  document.getElementById('order-memo').value='';
+  document.getElementById('order-btn').disabled=false;
+  document.getElementById('order-btn').textContent='발주 완료';
+  renderProds(); updateCartCount();
+}
+
+// 발주 내역
+function openHistory(){
+  document.getElementById('ov-history').classList.add('show');
+  document.getElementById('modal-history').classList.add('show');
+  loadHistory();
+}
+function closeHistory(){
+  document.getElementById('ov-history').classList.remove('show');
+  document.getElementById('modal-history').classList.remove('show');
+}
+
+async function loadHistory(){
+  document.getElementById('history-list').innerHTML='<div style="text-align:center;padding:1.5rem;color:#aaa;font-size:.85rem;">로딩 중...</div>';
+  try {
+    var snap=await db.collection('orders_request').where('client','==',S.client).get();
+    var orders=[];
+    snap.forEach(function(d){orders.push(Object.assign({id:d.id},d.data()));});
+    orders.sort(function(a,b){
+      var ta=a.ts&&a.ts.toDate?a.ts.toDate().getTime():0;
+      var tb=b.ts&&b.ts.toDate?b.ts.toDate().getTime():0;
+      return tb-ta;
+    });
+    if(!orders.length){document.getElementById('history-list').innerHTML='<p style="text-align:center;color:#aaa;padding:2rem;font-size:.85rem;">발주 내역이 없어요</p>';return;}
+    var html='';
+    orders.forEach(function(o,idx){
+      var t=o.ts&&o.ts.toDate?o.ts.toDate():new Date();
+      var dateStr=t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')+' '+t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
+      var statusLabel=o.status==='confirmed'?'✅ 확인완료':o.status==='cancelled'?'❌ 취소':'⏳ 대기중';
+      var statusColor=o.status==='confirmed'?'#d4edda':o.status==='cancelled'?'#f8d7da':'#fff3cd';
+      var total=(o.items||[]).reduce(function(s,i){return s+i.qty;},0);
+      var itemsStr=JSON.stringify(o.items||[]);
+      html+='<div class="history-item">'+
+        '<div class="history-header">'+
+          '<div><div class="history-date">📅 '+dateStr+'</div>'+
+          '<div style="font-size:.72rem;color:#888;">총 '+(o.items||[]).length+'개 품목, '+total+'개</div></div>'+
+          '<span style="padding:.25rem .6rem;border-radius:10px;font-size:.7rem;font-weight:700;background:'+statusColor+';">'+statusLabel+'</span>'+
+        '</div>'+
+        '<div class="history-rows">'+
+          (o.items||[]).map(function(item){
+            return '<div class="history-row"><span>'+item.pname+'</span><span style="font-weight:700;color:var(--primary);">'+item.qty+'개</span></div>';
+          }).join('')+
+          (o.memo?'<div style="font-size:.75rem;color:#888;margin-top:.3rem;font-style:italic;">💬 '+o.memo+'</div>':'')+
+          '<button class="reorder-btn" onclick="reorder('+idx+')">🔄 이 주문 그대로 담기</button>'+
+        '</div>'+
+      '</div>';
+    });
+    document.getElementById('history-list').innerHTML=html;
+    window._historyOrders=orders;
+  } catch(e){
+    document.getElementById('history-list').innerHTML='<p style="color:red;font-size:.82rem;">오류: '+e.message+'</p>';
+  }
+}
+
+function reorder(idx){
+  var order=window._historyOrders[idx];
+  if(!order) return;
+  S.cart={};
+  (order.items||[]).forEach(function(item){
+    if(item.pid&&item.qty){
+      // 현재 존재하는 제품만 담기 (삭제된 제품 제외)
+      var p=S.prods.find(function(x){return x.id===item.pid;});
+      if(p) S.cart[item.pid]=item.qty;
+    }
+  });
+  closeHistory();
+  S.currentCat='전체'; renderCats(); renderProds(); updateCartCount();
+  toast('이전 주문을 장바구니에 담았어요! 🛒');
+  setTimeout(function(){openCart();},600);
+}
+
+init();
+</script>
+</body>
+</html>
