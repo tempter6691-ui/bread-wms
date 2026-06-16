@@ -605,7 +605,7 @@ function startApp(cfg) {
 async function loadAll() {
   try {
     var ps = await db.collection('products').get();
-    if (!ps.empty && ps.size >= 5) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit||pd.unit==='') pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
+    if (!ps.empty && ps.size >= 5) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit||pd.unit.trim()==='') pd.unit='판'; else pd.unit=pd.unit.trim(); S.prods.push(Object.assign({id:d.id},pd)); }); }
     else if(ps.empty) { S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); }); await b.commit(); }
     else { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit||pd.unit==='') pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
 
@@ -2073,7 +2073,7 @@ function editProd(pid) {
     '<div><label>분류</label><br><select id="ep-cat" style="width:100%;margin-top:.2rem;padding:.45rem;">'+cats.map(function(c){return '<option'+(c===p.cat?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>'+
     '<div><label>QR코드</label><br><input id="ep-qr" type="text" value="'+(p.qr||'')+'" style="width:100%;margin-top:.2rem;"></div>'+
     '<div><label>단위</label><br><select id="ep-unit" style="width:100%;margin-top:.2rem;padding:.45rem;">'+
-      ['판','봉','개','박스'].map(function(u){return '<option value="'+u+'"'+(u===(p.unit?p.unit:'판')?' selected':'')+'>'+u+'</option>';}).join('')+
+      ['판','봉','개','박스'].map(function(u){var pu=(p.unit||'').trim()||'판'; return '<option value="'+u+'"'+(u===pu?' selected':'')+'>'+u+'</option>';}).join('')+
     '</select></div>'+
     '<div><label>재고</label><br><input id="ep-inv" type="number" value="'+(S.inv[p.id]||0)+'" style="width:100%;margin-top:.2rem;"></div>'+
     '<button class="btn btn-primary" onclick="doEditProd(\''+p.id+'\')">저장하기</button></div>');
@@ -2085,7 +2085,7 @@ async function doEditProd(pid) {
   var cat=(document.getElementById('ep-cat')||{value:p.cat}).value;
   var qr=(document.getElementById('ep-qr')||{value:p.qr}).value.trim();
   var ep_unit_el=document.getElementById('ep-unit');
-  var unit=ep_unit_el?ep_unit_el.value:(p.unit||'판');
+  var unit=(ep_unit_el?ep_unit_el.value:(p.unit||'판')).trim()||'판';
   var inv=parseInt((document.getElementById('ep-inv')||{value:0}).value)||0;
   var oldInv=S.inv[p.id]||0;
   try {
