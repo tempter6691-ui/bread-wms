@@ -312,7 +312,7 @@ async function submitOrder(){
   btn.disabled=true; btn.textContent='발주 중...';
   var items=keys.map(function(pid){
     var p=S.prods.find(function(x){return x.id===pid;})||{name:pid};
-    return {pid:pid,pname:p.name,qty:S.cart[pid]};
+    return {pid:pid,pname:p.name,qty:S.cart[pid],unit:p.unit||'판'};
   });
   try {
     var memo = document.getElementById('order-memo').value;
