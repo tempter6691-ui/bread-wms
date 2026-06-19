@@ -166,7 +166,14 @@ async function init() {
     S.prods.sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');});
     var catSet={};
     S.prods.forEach(function(p){if(p.cat)catSet[p.cat]=true;});
-    S.cats=['전체'].concat(Object.keys(catSet).sort());
+    S.cats=['전체'].concat(Object.keys(catSet).sort(function(a,b){
+      // 카테고리명 끝의 (A)~(Z) 알파벳 기준 정렬, 없으면 뒤로
+      var ma=a.match(/\(([A-Z])\)$/), mb=b.match(/\(([A-Z])\)$/);
+      if(ma&&mb) return ma[1].localeCompare(mb[1]);
+      if(ma&&!mb) return -1;
+      if(!ma&&mb) return 1;
+      return a.localeCompare(b,'ko');
+    }));
   } catch(e){ console.error(e); }
 
   if(!client) {
