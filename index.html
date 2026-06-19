@@ -361,7 +361,7 @@ var PRODS_DEFAULT = [
   {id:'P128',qr:'J22', name:'벨기에와플',         cat:'빵',unit:'봉'},
   // 롤케익
   {id:'P129',qr:'J23', name:'롤케익',             cat:'롤케익'},
-  {id:'P130',qr:'J24', name:'롤케익생크림',       cat:'롤케익'},
+  {id:'P130',qr:'J24', name:'휘핑생크림',         cat:'롤케익'},
   {id:'P131',qr:'K1',  name:'딸기크레이프트400',  cat:'크레이프트'},
   {id:'P132',qr:'K2',  name:'딸기크레이프트600',  cat:'크레이프트'},
   {id:'P133',qr:'K3',  name:'밀크크레이프트400',     cat:'크레이프트'},
@@ -1902,12 +1902,20 @@ async function doAddClient() {
   var drv=(document.getElementById('nc-drv')||{value:''}).value;
   if(!name){toast('거래처명을 입력해주세요','err');return;}
   if(S.clients.some(function(c){return c.name===name;})){toast('이미 있는 거래처예요','err');return;}
-  var id='CL'+Date.now().toString().slice(-8);
-  S.clients.push({id:id,name:name,driver:drv,code:code});
   try {
-    await db.collection('clients').doc(id).set({name:name,driver:drv,code:code});
+    await safeWrite(async function() {
+      // Firestore에서 실시간으로 다시 확인 (동시 추가 방지)
+      var dup = await db.collection('clients').where('name','==',name).limit(1).get();
+      if(!dup.empty) { throw new Error('DUPLICATE'); }
+      var id='CL'+Date.now().toString().slice(-8)+Math.floor(Math.random()*1000);
+      await db.collection('clients').doc(id).set({name:name,driver:drv,code:code});
+      S.clients.push({id:id,name:name,driver:drv,code:code});
+    });
     closeModal(); toast(name+' 추가됨','ok'); drawClients();
-  } catch(e){toast('오류:'+e.message,'err');}
+  } catch(e){
+    if(e.message==='DUPLICATE'){ toast('이미 다른 기기에서 추가된 거래처예요','err'); }
+    else { toast('오류:'+e.message,'err'); }
+  }
 }
 
 async function delClient(cid) {
