@@ -154,7 +154,7 @@ function toast(msg) {
 }
 
 function getParam(key) {
-  return decodeURIComponent(new URLSearchParams(window.location.search).get(key)||'');
+  return decodeURIComponent(new URLSearchParams(window.location.search).get(key)||'').trim();
 }
 
 async function init() {
@@ -305,9 +305,12 @@ function cartAdd(pid){
 }
 
 // 발주 완료
+var _submitting = false; // 중복 제출 방지
 async function submitOrder(){
+  if(_submitting) return; // 이미 처리 중이면 무시 (더블탭 방지)
   var keys=Object.keys(S.cart);
   if(!keys.length){toast('제품을 선택해 주세요!');return;}
+  _submitting = true;
   var btn=document.getElementById('order-btn');
   btn.disabled=true; btn.textContent='발주 중...';
   var items=keys.map(function(pid){
@@ -330,6 +333,8 @@ async function submitOrder(){
   } catch(e){
     toast('오류: '+e.message);
     btn.disabled=false; btn.textContent='발주 완료';
+  } finally {
+    _submitting = false;
   }
 }
 
