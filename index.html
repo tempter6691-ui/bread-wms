@@ -858,6 +858,11 @@ function pgInbound() {
       '<input id="ib-q" type="text" placeholder="제품 검색..." oninput="drawInbound()" style="flex:1;padding:.45rem;">'+
       '<button class="btn btn-primary btn-sm" onclick="showAddProd()">+ 제품 추가</button>'+
     '</div>'+
+    '<div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.4rem;">'+
+      '<label style="font-size:.85rem;color:#555;white-space:nowrap;">스캔당 수량:</label>'+
+      '<input id="ib-mult" type="number" min="1" value="1" style="width:80px;padding:.4rem;border:1px solid #ddd;border-radius:6px;font-weight:700;text-align:center;" onfocus="this.select()">'+
+      '<span style="font-size:.78rem;color:#999;">예: 300으로 설정 후 스캔하면 한 번에 300개씩 입고됩니다</span>'+
+    '</div>'+
     '<input id="ib-scan" type="text" class="scan-input" placeholder="🔍 QR 스캔 또는 코드 입력 후 Enter" onkeydown="if(event.key===\'Enter\')doScanIn()" oninput="ibScanTimer()">'+
     '<div id="ib-result" style="min-height:1.5rem;"></div></div>'+
     '<div id="ib-list"></div>';
@@ -905,11 +910,13 @@ async function doScanIn() {
   if(!qr) return;
   var p=findByQR(qr);
   if(!p){resEl.innerHTML='<div class="res-err">❌ 코드 없음: <strong>'+qr+'</strong></div>';return;}
-  var newQ=(S.inv[p.id]||0)+1; S.inv[p.id]=newQ;
+  var multEl=document.getElementById('ib-mult');
+  var mult=Math.max(1, parseInt(multEl?multEl.value:1)||1);
+  var newQ=(S.inv[p.id]||0)+mult; S.inv[p.id]=newQ;
   try {
     await db.collection('inventory').doc(p.id).set({qty:newQ});
-    await db.collection('logs').add({type:'inbound',pid:p.id,pname:p.name,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
-    resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> 입고! 재고: '+newQ+'</div>';
+    await db.collection('logs').add({type:'inbound',pid:p.id,pname:p.name,qty:mult,ts:firebase.firestore.FieldValue.serverTimestamp()});
+    resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> '+(mult>1?'+'+mult+' 입고!':'입고!')+' 재고: '+newQ+'</div>';
     drawInbound();
   } catch(e){resEl.innerHTML='<div class="res-err">❌ 저장 오류: '+e.message+'</div>';}
 }
