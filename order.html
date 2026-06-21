@@ -163,7 +163,13 @@ async function init() {
     var snap = await db.collection('products').get();
     S.prods=[];
     snap.forEach(function(d){S.prods.push(Object.assign({id:d.id},d.data()));});
-    S.prods.sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');});
+    S.prods.sort(function(a,b){
+      // '(꼬끄)' 표시 제품은 같은 카테고리 내 맨 뒤로
+      var aKko=(a.name||'').includes('(꼬끄)'), bKko=(b.name||'').includes('(꼬끄)');
+      if(aKko&&!bKko) return 1;
+      if(!aKko&&bKko) return -1;
+      return (a.name||'').localeCompare(b.name||'','ko');
+    });
     var catSet={};
     S.prods.forEach(function(p){if(p.cat)catSet[p.cat]=true;});
     S.cats=['전체'].concat(Object.keys(catSet).sort(function(a,b){
