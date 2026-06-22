@@ -138,12 +138,35 @@
 
   .bom-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--purple-light); color: var(--purple); font-size: 11px; padding: 2px 7px; border-radius: 4px; margin: 1px 2px 1px 0; }
 
+  #print-daily-log { display: none; }
+
   @media print {
+    body.printing-daily-log header,
+    body.printing-daily-log .date-bar,
+    body.printing-daily-log .dashboard-row,
+    body.printing-daily-log .loss-summary,
+    body.printing-daily-log .tabs,
+    body.printing-daily-log .container,
+    body.printing-daily-log .toast,
+    body.printing-daily-log .modal-overlay { display: none !important; }
+    body.printing-daily-log #print-daily-log { display: block !important; }
+
     header, .date-bar, .tabs, .btn, .btn-del, .btn-edit, .form-grid, .form-section-title, #form-raw, #form-semi, #form-finished { display: none !important; }
     .container { padding: 0; max-width: 100%; }
     .section-card { box-shadow: none; border: 1px solid #000; }
     body { background: #fff; }
   }
+
+  #print-daily-log { font-family: 'Noto Sans KR', sans-serif; color: #000; padding: 20px; }
+  #print-daily-log h1 { font-size: 20px; font-weight: 700; margin-bottom: 10px; text-align: center; }
+  .pl-meta { display: flex; gap: 14px; justify-content: center; font-size: 13px; margin-bottom: 18px; color: #000; }
+  .pl-meta-sep { color: #999; }
+  .pl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .pl-table th, .pl-table td { border: 1px solid #000; padding: 8px 10px; text-align: left; }
+  .pl-table th { background: #EFEFEF; font-weight: 700; text-align: center; }
+  .pl-table td.pl-num { text-align: center; color: #555; }
+  .pl-table td.pl-blank { height: 30px; }
+  .pl-footnote { margin-top: 14px; font-size: 12px; color: #444; }
 
   @media (max-width: 900px) { .dashboard-row { grid-template-columns: 1fr; } .container { padding: 16px; } .agg-summary-row { grid-template-columns: repeat(2, 1fr); } }
 </style>
@@ -168,6 +191,7 @@
     <input type="date" id="selectedDate">
     <button class="btn btn-primary" onclick="loadAll()">조회</button>
     <button class="btn btn-secondary" onclick="goToday()">오늘</button>
+    <button class="btn btn-secondary" onclick="printDailyLog()">🖨 생산투입일지 인쇄</button>
     <span style="margin-left:auto;font-size:12px;color:var(--text-muted);" id="syncStatus">대기 중...</span>
   </div>
 
@@ -438,6 +462,25 @@
 
 </div>
 
+<!-- 생산투입일지 인쇄 전용 영역 (화면에는 안 보이고 인쇄 시에만 표시) -->
+<div id="print-daily-log">
+  <h1 id="pl-title">생산투입일지</h1>
+  <div class="pl-meta">
+    <span id="pl-date"></span>
+    <span class="pl-meta-sep">|</span>
+    <span>작성자: ________________</span>
+    <span class="pl-meta-sep">|</span>
+    <span>확인: ________________</span>
+  </div>
+  <table class="pl-table">
+    <thead>
+      <tr><th style="width:8%">번호</th><th>품목명</th><th style="width:14%">단위</th><th style="width:22%">투입량</th><th style="width:22%">비고</th></tr>
+    </thead>
+    <tbody id="pl-tbody"></tbody>
+  </table>
+  <p class="pl-footnote">※ 오늘 사용한 원재료의 투입량을 적어주세요. 목록에 없는 품목을 사용했다면 빈 줄에 직접 적어주세요.</p>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- 수정 모달 -->
@@ -472,6 +515,91 @@ let editTarget = null; // {collection, id}
 
 function todayStr() { return new Date().toISOString().slice(0,10); }
 function goToday() { document.getElementById('selectedDate').value = todayStr(); loadAll(); }
+
+// ── 생산투입일지: 자주 쓰는 품목(상시 포함) ──
+// 6월 한 달 입고/사용 기록 분석 결과, 15일 중 8일 이상 사용된 핵심 원재료 (단위는 원재료수불부 기준)
+const DAILY_LOG_STAPLES = [
+  { name:'정제수', unit:'kg' },
+  { name:'생크림(에버휩10kg)', unit:'kg' },
+  { name:'박력밀가루1등', unit:'kg' },
+  { name:'혼합갈분(성림)', unit:'kg' },
+  { name:'B.P(제니코)', unit:'kg' },
+  { name:'설탕/백설1호', unit:'kg' },
+  { name:'정제염(꽃소금)', unit:'kg' },
+  { name:'SP(웰가에스피)', unit:'kg' },
+  { name:'계란(전란액)', unit:'kg' },
+  { name:'콩식용유(대두유)', unit:'L' },
+  { name:'미로젤(광택재)', unit:'kg' },
+  { name:'슈가파우더', unit:'kg' },
+  { name:'슬림버드마가린벌크', unit:'kg' },
+  { name:'프랑스럼주', unit:'L' },
+  { name:'케익코팅초콜릿(준초콜릿)', unit:'kg' },
+  { name:'계란흰자(난백액)', unit:'kg' },
+  { name:'아이러브멸균우유', unit:'L' },
+  { name:'쓰리인원 내츄럴믹스 딸기A7', unit:'kg' },
+  { name:'분말젤라틴', unit:'kg' },
+  { name:'물엿', unit:'kg' },
+  { name:'엘로이크림치즈/비앙카골드크림', unit:'kg' },
+  { name:'코코아분말(데코용)', unit:'kg' },
+  { name:'카스타드분말(커스타드믹스M)', unit:'kg' },
+  { name:'코코아분말(반죽용)', unit:'kg' },
+  { name:'파이시트', unit:'개' }
+];
+
+// 오늘 등록된 원재료 입고 품목명 가져오기 (상시 품목과 합치기 위함)
+async function getTodayRawItemNames() {
+  try {
+    const snap = await db.collection('production_raw').where('date','==',selectedDate).get();
+    const seen = new Map(); // name -> unit
+    snap.forEach(doc=>{
+      const d = doc.data();
+      if(d.name) seen.set(d.name.trim(), d.unit||'');
+    });
+    return seen;
+  } catch(e) { return new Map(); }
+}
+
+async function printDailyLog() {
+  if(!selectedDate){ showToast('날짜를 선택해주세요','error'); return; }
+  showToast('생산투입일지 준비 중...');
+
+  const todayMap = await getTodayRawItemNames(); // name -> unit (오늘 입고 등록분)
+  const finalList = []; // {name, unit}
+  const addedNames = new Set();
+
+  // 1. 상시 포함 품목 먼저
+  DAILY_LOG_STAPLES.forEach(item=>{
+    finalList.push({ name:item.name, unit: todayMap.get(item.name) || item.unit });
+    addedNames.add(item.name);
+  });
+  // 2. 오늘 입고된 품목 중 상시 목록에 없는 것 추가
+  todayMap.forEach((unit, name)=>{
+    if(!addedNames.has(name)){
+      finalList.push({ name, unit });
+      addedNames.add(name);
+    }
+  });
+
+  // 일자 표시
+  const d = new Date(selectedDate+'T00:00:00');
+  document.getElementById('pl-date').textContent = d.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+
+  // 표 렌더링 (+ 직접 적을 수 있는 빈 줄 5개 추가)
+  const tbody = document.getElementById('pl-tbody');
+  let rows = '';
+  finalList.forEach((item, idx)=>{
+    rows += `<tr><td class="pl-num">${idx+1}</td><td>${item.name}</td><td class="pl-num">${item.unit||''}</td><td class="pl-blank"></td><td class="pl-blank"></td></tr>`;
+  });
+  for(let i=0;i<5;i++){
+    rows += `<tr><td class="pl-num">${finalList.length+i+1}</td><td class="pl-blank"></td><td class="pl-blank"></td><td class="pl-blank"></td><td class="pl-blank"></td></tr>`;
+  }
+  tbody.innerHTML = rows;
+
+  document.body.classList.add('printing-daily-log');
+  window.print();
+}
+window.addEventListener('afterprint', ()=>document.body.classList.remove('printing-daily-log'));
+
 function updateHeaderDate() {
   const d = new Date();
   document.getElementById('headerDate').textContent = d.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
