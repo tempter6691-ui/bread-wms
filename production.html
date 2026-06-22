@@ -249,6 +249,7 @@
             <select id="raw-unit"><option>kg</option><option>g</option><option>L</option><option>개</option><option>봉</option><option>박스</option></select>
           </div>
           <div class="form-group"><label>배치번호</label><input type="text" id="raw-batch" placeholder="예: R2026-001" oninput="delete this.dataset.autoBatch"></div>
+          <div class="form-group"><label>제조사 배치번호</label><input type="text" id="raw-mfg-batch" placeholder="캔/포장지에 적힌 번호"></div>
           <div class="form-group"><label>작업자</label><input type="text" id="raw-worker" placeholder="이름"></div>
           <div class="form-group"><label>전일재고</label><input type="number" id="raw-prev" placeholder="0" min="0"></div>
           <div class="form-group"><label>입고량</label><input type="number" id="raw-in" placeholder="0" min="0"></div>
@@ -269,11 +270,11 @@
       </div>
       <table>
         <thead><tr>
-          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th><th>유통기한</th>
+          <th>품목명</th><th>단위</th><th>배치번호</th><th>제조사 배치번호</th><th>작업자</th><th>유통기한</th>
           <th class="num">전일재고</th><th class="num">입고량</th><th class="num">투입량</th><th class="num">폐기량</th><th class="num">잔량</th>
           <th>비고</th><th></th>
         </tr></thead>
-        <tbody id="tbody-raw"><tr><td colspan="12" class="loading">불러오는 중...</td></tr></tbody>
+        <tbody id="tbody-raw"><tr><td colspan="13" class="loading">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -663,10 +664,10 @@ function loadAll() {
 // ── 원재료 ──
 async function loadRaw() {
   const tbody = document.getElementById('tbody-raw');
-  tbody.innerHTML = '<tr><td colspan="12" class="loading">불러오는 중...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="13" class="loading">불러오는 중...</td></tr>';
   try {
     const snap = await db.collection('production_raw').where('date','==',selectedDate).orderBy('createdAt','asc').get();
-    if(snap.empty){ tbody.innerHTML='<tr><td colspan="12" class="empty">등록된 내역이 없습니다</td></tr>'; updateDonut(chartRaw,'pctRaw',0); return; }
+    if(snap.empty){ tbody.innerHTML='<tr><td colspan="13" class="empty">등록된 내역이 없습니다</td></tr>'; updateDonut(chartRaw,'pctRaw',0); return; }
     let totalIn=0, totalUsed=0;
     tbody.innerHTML='';
     snap.forEach(doc=>{
@@ -677,6 +678,7 @@ async function loadRaw() {
         <td class="name">${d.name}</td>
         <td>${d.unit}</td>
         <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${d.batch||'-'}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${d.mfgBatch||'-'}</td>
         <td>${d.worker||'-'}</td>
         <td>${expBadge(d.exp)}</td>
         <td class="num">${(d.prev||0).toLocaleString()}</td>
@@ -690,7 +692,7 @@ async function loadRaw() {
     });
     updateDonut(chartRaw,'pctRaw', totalIn>0?(totalUsed/totalIn)*100:0);
     document.getElementById('syncStatus').textContent='동기화 완료 ✓';
-  } catch(e){ tbody.innerHTML=`<tr><td colspan="12" class="empty">오류: ${e.message}</td></tr>`; }
+  } catch(e){ tbody.innerHTML=`<tr><td colspan="13" class="empty">오류: ${e.message}</td></tr>`; }
 }
 
 function collectRawData() {
@@ -699,6 +701,7 @@ function collectRawData() {
     name:document.getElementById('raw-name').value.trim(),
     unit:document.getElementById('raw-unit').value,
     batch:document.getElementById('raw-batch').value.trim(),
+    mfgBatch:document.getElementById('raw-mfg-batch').value.trim(),
     worker:document.getElementById('raw-worker').value.trim(),
     prev:parseFloat(document.getElementById('raw-prev').value)||0,
     inQty:parseFloat(document.getElementById('raw-in').value)||0,
@@ -713,7 +716,7 @@ function collectRawData() {
 }
 
 function clearRawForm() {
-  ['raw-name','raw-batch','raw-worker','raw-prev','raw-in','raw-used','raw-exp','raw-start','raw-end','raw-waste','raw-note'].forEach(id=>document.getElementById(id).value='');
+  ['raw-name','raw-batch','raw-mfg-batch','raw-worker','raw-prev','raw-in','raw-used','raw-exp','raw-start','raw-end','raw-waste','raw-note'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('raw-waste-reason').value='';
   delete document.getElementById('raw-batch').dataset.autoBatch;
 }
@@ -742,6 +745,7 @@ async function openEditRaw(id) {
         <div class="form-group"><label>품목명</label><input type="text" id="em-name" value="${d.name||''}"></div>
         <div class="form-group"><label>단위</label><input type="text" id="em-unit" value="${d.unit||''}"></div>
         <div class="form-group"><label>배치번호</label><input type="text" id="em-batch" value="${d.batch||''}"></div>
+        <div class="form-group"><label>제조사 배치번호</label><input type="text" id="em-mfg-batch" value="${d.mfgBatch||''}"></div>
         <div class="form-group"><label>작업자</label><input type="text" id="em-worker" value="${d.worker||''}"></div>
         <div class="form-group"><label>전일재고</label><input type="number" id="em-prev" value="${d.prev||0}"></div>
         <div class="form-group"><label>입고량</label><input type="number" id="em-in" value="${d.inQty||0}"></div>
@@ -762,6 +766,7 @@ async function saveEditRaw(id) {
       name:document.getElementById('em-name').value.trim(),
       unit:document.getElementById('em-unit').value.trim(),
       batch:document.getElementById('em-batch').value.trim(),
+      mfgBatch:document.getElementById('em-mfg-batch').value.trim(),
       worker:document.getElementById('em-worker').value.trim(),
       prev:parseFloat(document.getElementById('em-prev').value)||0,
       inQty:parseFloat(document.getElementById('em-in').value)||0,
