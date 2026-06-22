@@ -106,7 +106,46 @@
 
   .form-section-title { font-size: 11px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; padding: 12px 20px 0; border-top: 1px dashed var(--border); margin-top: 4px; }
 
-  @media (max-width: 900px) { .dashboard-row { grid-template-columns: 1fr; } .container { padding: 16px; } }
+  .btn-edit { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; font-weight: 500; }
+  .btn-edit:hover { background: var(--blue-light); }
+  .row-actions { display: flex; gap: 2px; justify-content: flex-end; }
+
+  .badge-exp-ok { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: var(--accent-light); color: var(--accent); font-family: 'DM Mono', monospace; }
+  .badge-exp-warn { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: var(--accent2-light); color: var(--accent2); font-family: 'DM Mono', monospace; }
+  .badge-exp-over { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: var(--red-light); color: var(--red); font-family: 'DM Mono', monospace; }
+
+  .badge-qc-pass { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: var(--accent-light); color: var(--accent); }
+  .badge-qc-fail { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: var(--red-light); color: var(--red); }
+  .badge-qc-none { font-size: 10px; color: var(--text-muted); }
+
+  .sub-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .sub-tab { padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); }
+  .sub-tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 500; }
+  .modal-overlay.show { display: flex; }
+  .modal-box { background: var(--surface); border-radius: var(--radius); width: 90%; max-width: 600px; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
+  .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h3 { font-size: 14px; font-weight: 700; }
+  .modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted); }
+  .modal-body { padding: 16px 20px; }
+
+  .agg-table-wrap { overflow-x: auto; }
+  .agg-summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px 20px; }
+  .agg-stat { background: var(--bg); border-radius: 8px; padding: 12px 16px; text-align: center; }
+  .agg-stat .v { font-size: 18px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .agg-stat .l { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .bom-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--purple-light); color: var(--purple); font-size: 11px; padding: 2px 7px; border-radius: 4px; margin: 1px 2px 1px 0; }
+
+  @media print {
+    header, .date-bar, .tabs, .btn, .btn-del, .btn-edit, .form-grid, .form-section-title, #form-raw, #form-semi, #form-finished { display: none !important; }
+    .container { padding: 0; max-width: 100%; }
+    .section-card { box-shadow: none; border: 1px solid #000; }
+    body { background: #fff; }
+  }
+
+  @media (max-width: 900px) { .dashboard-row { grid-template-columns: 1fr; } .container { padding: 16px; } .agg-summary-row { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
 <body>
@@ -116,7 +155,10 @@
     <span class="logo-badge">BreadBank</span>
     <h1>생산수불대장</h1>
   </div>
-  <span class="header-date" id="headerDate"></span>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨️ 인쇄</button>
+    <span class="header-date" id="headerDate"></span>
+  </div>
 </header>
 
 <div class="container">
@@ -190,6 +232,7 @@
     <button class="tab active" onclick="switchTab('raw')">① 원재료 수불</button>
     <button class="tab" onclick="switchTab('semi')">② 반제품 수불</button>
     <button class="tab" onclick="switchTab('finished')">③ 완제품 수불</button>
+    <button class="tab" onclick="switchTab('agg')">④ 기간별 집계</button>
   </div>
 
   <!-- ① 원재료 -->
@@ -210,17 +253,27 @@
           <div class="form-group"><label>전일재고</label><input type="number" id="raw-prev" placeholder="0" min="0"></div>
           <div class="form-group"><label>입고량</label><input type="number" id="raw-in" placeholder="0" min="0"></div>
           <div class="form-group"><label>생산투입량</label><input type="number" id="raw-used" placeholder="0" min="0"></div>
+          <div class="form-group"><label>유통기한</label><input type="date" id="raw-exp"></div>
+        </div>
+        <div class="form-section-title">⏱️ 작업 시간 / 폐기</div>
+        <div class="form-grid">
+          <div class="form-group"><label>작업 시작</label><input type="time" id="raw-start"></div>
+          <div class="form-group"><label>작업 종료</label><input type="time" id="raw-end"></div>
+          <div class="form-group"><label>폐기량</label><input type="number" id="raw-waste" placeholder="0" min="0"></div>
+          <div class="form-group"><label>폐기 사유</label>
+            <select id="raw-waste-reason"><option value="">-</option><option>유통기한 초과</option><option>품질불량</option><option>파손/오염</option><option>기타</option></select>
+          </div>
           <div class="form-group"><label>비고</label><input type="text" id="raw-note" placeholder="메모 (선택)"></div>
-          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveRaw()">저장</button></div>
+          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveRaw()" id="raw-save-btn">저장</button></div>
         </div>
       </div>
       <table>
         <thead><tr>
-          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th>
-          <th class="num">전일재고</th><th class="num">입고량</th><th class="num">투입량</th><th class="num">잔량</th>
+          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th><th>유통기한</th>
+          <th class="num">전일재고</th><th class="num">입고량</th><th class="num">투입량</th><th class="num">폐기량</th><th class="num">잔량</th>
           <th>비고</th><th></th>
         </tr></thead>
-        <tbody id="tbody-raw"><tr><td colspan="10" class="loading">불러오는 중...</td></tr></tbody>
+        <tbody id="tbody-raw"><tr><td colspan="12" class="loading">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -243,17 +296,40 @@
           <div class="form-group"><label>전일재고</label><input type="number" id="semi-prev" placeholder="0" min="0"></div>
           <div class="form-group"><label>생산량</label><input type="number" id="semi-prod" placeholder="0" min="0"></div>
           <div class="form-group"><label>완제품투입량</label><input type="number" id="semi-used" placeholder="0" min="0"></div>
+          <div class="form-group"><label>유통기한</label><input type="date" id="semi-exp"></div>
+        </div>
+        <div class="form-section-title">🧾 사용 원재료 (BOM)</div>
+        <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr auto;">
+          <div class="form-group"><label>원재료명</label><input type="text" id="semi-bom-name" placeholder="예: 밀가루" list="raw-name-list"></div>
+          <div class="form-group"><label>사용량</label><input type="number" id="semi-bom-qty" placeholder="0" min="0"></div>
+          <div class="form-group"><label>단위</label><input type="text" id="semi-bom-unit" placeholder="kg"></div>
+          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-secondary btn-sm" onclick="addBomTag()">+ 추가</button></div>
+        </div>
+        <div id="semi-bom-tags" style="padding:0 20px 12px;"></div>
+        <datalist id="raw-name-list"></datalist>
+        <div class="form-section-title">⏱️ 작업 시간 / 품질 / 폐기</div>
+        <div class="form-grid">
+          <div class="form-group"><label>작업 시작</label><input type="time" id="semi-start"></div>
+          <div class="form-group"><label>작업 종료</label><input type="time" id="semi-end"></div>
+          <div class="form-group"><label>QC 검사</label>
+            <select id="semi-qc"><option value="">미검사</option><option value="pass">합격</option><option value="fail">불합격</option></select>
+          </div>
+          <div class="form-group"><label>QC 메모</label><input type="text" id="semi-qc-note" placeholder="온도, 농도 등"></div>
+          <div class="form-group"><label>폐기량</label><input type="number" id="semi-waste" placeholder="0" min="0"></div>
+          <div class="form-group"><label>폐기 사유</label>
+            <select id="semi-waste-reason"><option value="">-</option><option>유통기한 초과</option><option>품질불량</option><option>파손/오염</option><option>기타</option></select>
+          </div>
           <div class="form-group"><label>비고</label><input type="text" id="semi-note" placeholder="메모 (선택)"></div>
-          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveSemi()">저장</button></div>
+          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveSemi()" id="semi-save-btn">저장</button></div>
         </div>
       </div>
       <table>
         <thead><tr>
-          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th>
-          <th class="num">전일재고</th><th class="num">생산량</th><th class="num">투입량</th><th class="num">잔량</th>
+          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th><th>유통기한</th><th>사용원재료</th><th>QC</th>
+          <th class="num">전일재고</th><th class="num">생산량</th><th class="num">투입량</th><th class="num">폐기량</th><th class="num">잔량</th>
           <th>비고</th><th></th>
         </tr></thead>
-        <tbody id="tbody-semi"><tr><td colspan="10" class="loading">불러오는 중...</td></tr></tbody>
+        <tbody id="tbody-semi"><tr><td colspan="14" class="loading">불러오는 중...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -277,41 +353,102 @@
           <div class="form-group"><label>목표생산량</label><input type="number" id="fin-target" placeholder="0" min="0"></div>
           <div class="form-group"><label>실제생산량</label><input type="number" id="fin-prod" placeholder="0" min="0" oninput="calcLoss()"></div>
           <div class="form-group"><label>투입량(시트 등)</label><input type="number" id="fin-input" placeholder="0" min="0" oninput="calcLoss()"></div>
+          <div class="form-group"><label>소비기한</label><input type="date" id="fin-exp"></div>
         </div>
+        <div class="form-section-title">🧾 사용 반제품 (BOM)</div>
+        <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr auto;">
+          <div class="form-group"><label>반제품명</label><input type="text" id="fin-bom-name" placeholder="예: 크림치즈무스" list="semi-name-list"></div>
+          <div class="form-group"><label>사용량</label><input type="number" id="fin-bom-qty" placeholder="0" min="0"></div>
+          <div class="form-group"><label>단위</label><input type="text" id="fin-bom-unit" placeholder="kg"></div>
+          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-secondary btn-sm" onclick="addFinBomTag()">+ 추가</button></div>
+        </div>
+        <div id="fin-bom-tags" style="padding:0 20px 12px;"></div>
+        <datalist id="semi-name-list"></datalist>
         <!-- 트리밍 로스 섹션 -->
         <div class="form-section-title">✂️ 트리밍 로스 (사각 커팅)</div>
         <div class="form-grid">
-          <div class="form-group"><label>사각시트 무게 (g)</label><input type="number" id="fin-weight-sheet" placeholder="0" min="0" oninput="calcLoss()"></div>
-          <div class="form-group"><label>재료 총무게 (g)</label><input type="text" id="fin-weight-material" placeholder="0" min="0" oninput="calcLoss()"></div>
-          <div class="form-group"><label>트리밍 로스 무게 (g)</label><input type="number" id="fin-trim" placeholder="0" min="0" oninput="calcLoss()"></div>
+          <div class="form-group"><label>트리밍 로스량</label><input type="number" id="fin-trim" placeholder="0" min="0" oninput="calcLoss()"></div>
           <div class="form-group"><label>로스 활용</label>
             <select id="fin-trim-use"><option>폐기</option><option>재활용(조각판매)</option><option>직원간식</option><option>기타</option></select>
           </div>
-          <div class="form-group"><label>투입 총무게 (자동, g)</label><input type="text" id="fin-weight-total" readonly style="background:#f0f0ee;font-weight:700;font-family:'DM Mono',monospace;" placeholder="자동계산"></div>
           <div class="form-group"><label>수율 % (자동)</label><input type="text" id="fin-yield-display" readonly style="background:#f0f0ee;color:var(--accent);font-weight:700;font-family:'DM Mono',monospace;" placeholder="자동계산"></div>
           <div class="form-group"><label>로스율 % (자동)</label><input type="text" id="fin-loss-display" readonly style="background:#f0f0ee;color:var(--red);font-weight:700;font-family:'DM Mono',monospace;" placeholder="자동계산"></div>
           <div class="form-group"><label>출하량</label><input type="number" id="fin-ship" placeholder="0" min="0"></div>
           <div class="form-group"><label>폐기량(불량)</label><input type="number" id="fin-waste" placeholder="0" min="0"></div>
+        </div>
+        <div class="form-section-title">⏱️ 작업 시간 / 품질 / 원가</div>
+        <div class="form-grid">
+          <div class="form-group"><label>작업 시작</label><input type="time" id="fin-start"></div>
+          <div class="form-group"><label>작업 종료</label><input type="time" id="fin-end"></div>
+          <div class="form-group"><label>QC 검사</label>
+            <select id="fin-qc"><option value="">미검사</option><option value="pass">합격</option><option value="fail">불합격</option></select>
+          </div>
+          <div class="form-group"><label>QC 메모</label><input type="text" id="fin-qc-note" placeholder="중량, 외관 등"></div>
+          <div class="form-group"><label>개당 원가(원, 선택)</label><input type="number" id="fin-cost" placeholder="0" min="0"></div>
+          <div class="form-group"><label>사진 URL (선택)</label><input type="text" id="fin-photo" placeholder="https://..."></div>
           <div class="form-group"><label>비고</label><input type="text" id="fin-note" placeholder="메모 (선택)"></div>
-          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveFinished()">저장</button></div>
+          <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="saveFinished()" id="fin-save-btn">저장</button></div>
         </div>
       </div>
       <table>
         <thead><tr>
-          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th>
+          <th>품목명</th><th>단위</th><th>배치번호</th><th>작업자</th><th>소비기한</th><th>사용반제품</th><th>QC</th>
           <th class="num">전일재고</th><th class="num">생산량</th><th class="num">목표량</th>
           <th class="num">트리밍로스</th><th class="num">수율</th><th class="num">로스율</th>
-          <th class="num">출하량</th><th class="num">폐기량</th><th class="num">잔량</th>
+          <th class="num">출하량</th><th class="num">폐기량</th><th class="num">잔량</th><th class="num">원가</th>
           <th>비고</th><th></th>
         </tr></thead>
-        <tbody id="tbody-finished"><tr><td colspan="15" class="loading">불러오는 중...</td></tr></tbody>
+        <tbody id="tbody-finished"><tr><td colspan="19" class="loading">불러오는 중...</td></tr></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ④ 기간별 집계 -->
+  <div id="tab-agg" style="display:none;">
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title"><span class="section-badge badge-blue">집계</span>기간별 생산 집계</div>
+      </div>
+      <div style="padding:16px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <div class="sub-tabs">
+          <button class="sub-tab active" onclick="setAggRange('week')">최근 7일</button>
+          <button class="sub-tab" onclick="setAggRange('month')">최근 30일</button>
+          <button class="sub-tab" onclick="setAggRange('custom')">기간 지정</button>
+        </div>
+        <span id="agg-custom-range" style="display:none;gap:8px;align-items:center;">
+          <input type="date" id="agg-from" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">
+          ~
+          <input type="date" id="agg-to" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">
+          <button class="btn btn-primary btn-sm" onclick="loadAgg()">조회</button>
+        </span>
+      </div>
+      <div class="agg-summary-row" id="agg-summary"></div>
+      <div class="agg-table-wrap">
+        <table>
+          <thead><tr>
+            <th>품목명</th><th class="num">생산일수</th><th class="num">총생산량</th><th class="num">총출하량</th>
+            <th class="num">총폐기량</th><th class="num">평균수율</th><th class="num">평균로스율</th><th class="num">총원가</th>
+          </tr></thead>
+          <tbody id="tbody-agg"><tr><td colspan="8" class="empty">기간을 선택해 조회하세요</td></tr></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- 수정 모달 -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="editModalTitle">항목 수정</h3>
+      <button class="modal-close" onclick="closeEditModal()">×</button>
+    </div>
+    <div class="modal-body" id="editModalBody"></div>
+  </div>
+</div>
 
 <script>
 const firebaseConfig = {
@@ -327,6 +464,10 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 let selectedDate = '';
+let semiBomList = [];
+let finBomList = [];
+let aggLoaded = false;
+let editTarget = null; // {collection, id}
 
 function todayStr() { return new Date().toISOString().slice(0,10); }
 function goToday() { document.getElementById('selectedDate').value = todayStr(); loadAll(); }
@@ -336,17 +477,90 @@ function updateHeaderDate() {
 }
 
 function switchTab(tab) {
-  ['raw','semi','finished'].forEach(t => {
+  ['raw','semi','finished','agg'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
   });
   document.querySelectorAll('.tab').forEach((el,i) => {
-    el.classList.toggle('active', ['raw','semi','finished'][i]===tab);
+    el.classList.toggle('active', ['raw','semi','finished','agg'][i]===tab);
   });
+  if(tab==='agg' && !aggLoaded) { setAggRange('week'); }
 }
 
 function openForm(type) {
   const el = document.getElementById('form-'+type);
   el.style.display = el.style.display==='none'?'block':'none';
+}
+
+// ── BOM 태그 (반제품: 사용 원재료) ──
+function addBomTag() {
+  const name=document.getElementById('semi-bom-name').value.trim();
+  const qty=document.getElementById('semi-bom-qty').value;
+  const unit=document.getElementById('semi-bom-unit').value.trim();
+  if(!name||!qty) { showToast('원재료명과 사용량을 입력하세요','error'); return; }
+  semiBomList.push({name, qty:parseFloat(qty)||0, unit:unit||''});
+  document.getElementById('semi-bom-name').value='';
+  document.getElementById('semi-bom-qty').value='';
+  document.getElementById('semi-bom-unit').value='';
+  renderBomTags('semi');
+}
+function removeBomTag(type, idx) {
+  if(type==='semi') semiBomList.splice(idx,1); else finBomList.splice(idx,1);
+  renderBomTags(type);
+}
+function renderBomTags(type) {
+  const list = type==='semi'?semiBomList:finBomList;
+  const wrap = document.getElementById(type+'-bom-tags');
+  wrap.innerHTML = list.map((b,i)=>`<span class="bom-tag">${b.name} ${b.qty}${b.unit} <span style="cursor:pointer;" onclick="removeBomTag('${type}',${i})">×</span></span>`).join('');
+}
+// ── BOM 태그 (완제품: 사용 반제품) ──
+function addFinBomTag() {
+  const name=document.getElementById('fin-bom-name').value.trim();
+  const qty=document.getElementById('fin-bom-qty').value;
+  const unit=document.getElementById('fin-bom-unit').value.trim();
+  if(!name||!qty) { showToast('반제품명과 사용량을 입력하세요','error'); return; }
+  finBomList.push({name, qty:parseFloat(qty)||0, unit:unit||''});
+  document.getElementById('fin-bom-name').value='';
+  document.getElementById('fin-bom-qty').value='';
+  document.getElementById('fin-bom-unit').value='';
+  renderBomTags('fin');
+}
+
+// ── 자동완성 목록 갱신 (원재료명 → 반제품 BOM, 반제품명 → 완제품 BOM) ──
+async function refreshNameLists() {
+  try {
+    const rawSnap = await db.collection('production_raw').where('date','==',selectedDate).get();
+    const rawNames = [...new Set(rawSnap.docs.map(d=>d.data().name))];
+    document.getElementById('raw-name-list').innerHTML = rawNames.map(n=>`<option value="${n}">`).join('');
+
+    const semiSnap = await db.collection('production_semi').where('date','==',selectedDate).get();
+    const semiNames = [...new Set(semiSnap.docs.map(d=>d.data().name))];
+    document.getElementById('semi-name-list').innerHTML = semiNames.map(n=>`<option value="${n}">`).join('');
+  } catch(e) {}
+}
+
+// ── 유통기한 뱃지 ──
+function expBadge(expStr) {
+  if(!expStr) return '<span style="color:var(--text-muted);font-size:11px;">-</span>';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp = new Date(expStr);
+  const diffDays = Math.ceil((exp-today)/(1000*60*60*24));
+  let cls='badge-exp-ok', label=expStr;
+  if(diffDays<0){ cls='badge-exp-over'; label=expStr+' (초과)'; }
+  else if(diffDays<=2){ cls='badge-exp-warn'; label=expStr+' (D-'+diffDays+')'; }
+  return `<span class="${cls}">${label}</span>`;
+}
+
+// ── QC 뱃지 ──
+function qcBadge(qc, qcNote) {
+  if(qc==='pass') return `<span class="badge-qc-pass">합격</span>`+(qcNote?` <small style="color:var(--text-muted);font-size:10px;">${qcNote}</small>`:'');
+  if(qc==='fail') return `<span class="badge-qc-fail">불합격</span>`+(qcNote?` <small style="color:var(--text-muted);font-size:10px;">${qcNote}</small>`:'');
+  return `<span class="badge-qc-none">-</span>`;
+}
+
+// ── BOM 태그 표시 (테이블 셀) ──
+function bomCell(bom) {
+  if(!bom || !bom.length) return '<span style="color:var(--text-muted);font-size:11px;">-</span>';
+  return bom.map(b=>`<span class="bom-tag">${b.name} ${b.qty}${b.unit}</span>`).join('');
 }
 
 function showToast(msg, type='success') {
@@ -361,25 +575,20 @@ function stockClass(val) {
   return 'stock-ok';
 }
 
-// 트리밍 로스 자동계산 (무게 기반)
+// 트리밍 로스 자동계산
 function calcLoss() {
-  const sheetW    = parseFloat(document.getElementById('fin-weight-sheet').value) || 0;
-  const materialW = parseFloat(document.getElementById('fin-weight-material').value) || 0;
-  const trimW     = parseFloat(document.getElementById('fin-trim').value) || 0;
+  const prod = parseFloat(document.getElementById('fin-prod').value) || 0;
+  const input = parseFloat(document.getElementById('fin-input').value) || 0;
+  const trim = parseFloat(document.getElementById('fin-trim').value) || 0;
 
-  const totalW = sheetW + materialW;
-  const el_total = document.getElementById('fin-weight-total');
-  if(el_total) el_total.value = totalW > 0 ? totalW + ' g' : '';
-
-  if(totalW > 0) {
-    const usable   = totalW - trimW;
-    const yieldPct = Math.round((usable / totalW) * 100);
-    const lossPct  = Math.round((trimW  / totalW) * 100);
+  if(input > 0) {
+    const yieldPct = Math.round((prod / input) * 100);
+    const lossPct = Math.round((trim / input) * 100);
     document.getElementById('fin-yield-display').value = yieldPct + '%';
-    document.getElementById('fin-loss-display').value  = lossPct  + '%';
+    document.getElementById('fin-loss-display').value = lossPct + '%';
   } else {
     document.getElementById('fin-yield-display').value = '';
-    document.getElementById('fin-loss-display').value  = '';
+    document.getElementById('fin-loss-display').value = '';
   }
 }
 
@@ -405,87 +614,157 @@ function loadAll() {
   selectedDate = document.getElementById('selectedDate').value;
   if(!selectedDate){ showToast('날짜를 선택해주세요','error'); return; }
   document.getElementById('syncStatus').textContent = '불러오는 중...';
-  loadRaw(); loadSemi(); loadFinished();
+  loadRaw(); loadSemi(); loadFinished(); refreshNameLists();
 }
 
 // ── 원재료 ──
 async function loadRaw() {
   const tbody = document.getElementById('tbody-raw');
-  tbody.innerHTML = '<tr><td colspan="10" class="loading">불러오는 중...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="12" class="loading">불러오는 중...</td></tr>';
   try {
     const snap = await db.collection('production_raw').where('date','==',selectedDate).orderBy('createdAt','asc').get();
-    if(snap.empty){ tbody.innerHTML='<tr><td colspan="10" class="empty">등록된 내역이 없습니다</td></tr>'; updateDonut(chartRaw,'pctRaw',0); return; }
+    if(snap.empty){ tbody.innerHTML='<tr><td colspan="12" class="empty">등록된 내역이 없습니다</td></tr>'; updateDonut(chartRaw,'pctRaw',0); return; }
     let totalIn=0, totalUsed=0;
     tbody.innerHTML='';
     snap.forEach(doc=>{
       const d=doc.data();
-      const remain=(d.prev||0)+(d.inQty||0)-(d.used||0);
+      const remain=(d.prev||0)+(d.inQty||0)-(d.used||0)-(d.waste||0);
       totalIn+=(d.prev||0)+(d.inQty||0); totalUsed+=(d.used||0);
       tbody.innerHTML+=`<tr>
         <td class="name">${d.name}</td>
         <td>${d.unit}</td>
         <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${d.batch||'-'}</td>
         <td>${d.worker||'-'}</td>
+        <td>${expBadge(d.exp)}</td>
         <td class="num">${(d.prev||0).toLocaleString()}</td>
         <td class="num">${(d.inQty||0).toLocaleString()}</td>
         <td class="num">${(d.used||0).toLocaleString()}</td>
+        <td class="num" style="color:var(--red)">${(d.waste||0)>0?(d.waste).toLocaleString()+(d.wasteReason?' <small style="color:var(--text-muted);font-size:10px">('+d.wasteReason+')</small>':''):'-'}</td>
         <td class="num ${stockClass(remain)}">${remain.toLocaleString()}</td>
         <td style="color:var(--text-muted);font-size:12px">${d.note||''}</td>
-        <td><button class="btn-del" onclick="deleteDoc('production_raw','${doc.id}',loadRaw)">×</button></td>
+        <td><div class="row-actions"><button class="btn-edit" onclick="openEditRaw('${doc.id}')">수정</button><button class="btn-del" onclick="deleteDoc('production_raw','${doc.id}',loadRaw)">×</button></div></td>
       </tr>`;
     });
     updateDonut(chartRaw,'pctRaw', totalIn>0?(totalUsed/totalIn)*100:0);
     document.getElementById('syncStatus').textContent='동기화 완료 ✓';
-  } catch(e){ tbody.innerHTML=`<tr><td colspan="10" class="empty">오류: ${e.message}</td></tr>`; }
+  } catch(e){ tbody.innerHTML=`<tr><td colspan="12" class="empty">오류: ${e.message}</td></tr>`; }
+}
+
+function collectRawData() {
+  return {
+    date:selectedDate,
+    name:document.getElementById('raw-name').value.trim(),
+    unit:document.getElementById('raw-unit').value,
+    batch:document.getElementById('raw-batch').value.trim(),
+    worker:document.getElementById('raw-worker').value.trim(),
+    prev:parseFloat(document.getElementById('raw-prev').value)||0,
+    inQty:parseFloat(document.getElementById('raw-in').value)||0,
+    used:parseFloat(document.getElementById('raw-used').value)||0,
+    exp:document.getElementById('raw-exp').value||'',
+    startTime:document.getElementById('raw-start').value||'',
+    endTime:document.getElementById('raw-end').value||'',
+    waste:parseFloat(document.getElementById('raw-waste').value)||0,
+    wasteReason:document.getElementById('raw-waste-reason').value||'',
+    note:document.getElementById('raw-note').value.trim()
+  };
+}
+
+function clearRawForm() {
+  ['raw-name','raw-batch','raw-worker','raw-prev','raw-in','raw-used','raw-exp','raw-start','raw-end','raw-waste','raw-note'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('raw-waste-reason').value='';
 }
 
 async function saveRaw() {
-  const name=document.getElementById('raw-name').value.trim();
-  if(!name){ showToast('품목명을 입력하세요','error'); return; }
+  const data = collectRawData();
+  if(!data.name){ showToast('품목명을 입력하세요','error'); return; }
   try {
-    await db.collection('production_raw').add({
-      date:selectedDate, name,
-      unit:document.getElementById('raw-unit').value,
-      batch:document.getElementById('raw-batch').value.trim(),
-      worker:document.getElementById('raw-worker').value.trim(),
-      prev:parseFloat(document.getElementById('raw-prev').value)||0,
-      inQty:parseFloat(document.getElementById('raw-in').value)||0,
-      used:parseFloat(document.getElementById('raw-used').value)||0,
-      note:document.getElementById('raw-note').value.trim(),
-      createdAt:firebase.firestore.FieldValue.serverTimestamp()
-    });
+    data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db.collection('production_raw').add(data);
     showToast('원재료 내역 저장 완료');
-    ['raw-name','raw-batch','raw-worker','raw-prev','raw-in','raw-used','raw-note'].forEach(id=>document.getElementById(id).value='');
+    clearRawForm();
     document.getElementById('form-raw').style.display='none';
-    loadRaw();
+    loadRaw(); refreshNameLists();
   } catch(e){ showToast('저장 실패: '+e.message,'error'); }
+}
+
+async function openEditRaw(id) {
+  try {
+    const doc = await db.collection('production_raw').doc(id).get();
+    if(!doc.exists) return;
+    const d = doc.data();
+    const body = `
+      <div class="form-grid" style="padding:0 0 8px;">
+        <div class="form-group"><label>품목명</label><input type="text" id="em-name" value="${d.name||''}"></div>
+        <div class="form-group"><label>단위</label><input type="text" id="em-unit" value="${d.unit||''}"></div>
+        <div class="form-group"><label>배치번호</label><input type="text" id="em-batch" value="${d.batch||''}"></div>
+        <div class="form-group"><label>작업자</label><input type="text" id="em-worker" value="${d.worker||''}"></div>
+        <div class="form-group"><label>전일재고</label><input type="number" id="em-prev" value="${d.prev||0}"></div>
+        <div class="form-group"><label>입고량</label><input type="number" id="em-in" value="${d.inQty||0}"></div>
+        <div class="form-group"><label>투입량</label><input type="number" id="em-used" value="${d.used||0}"></div>
+        <div class="form-group"><label>유통기한</label><input type="date" id="em-exp" value="${d.exp||''}"></div>
+        <div class="form-group"><label>폐기량</label><input type="number" id="em-waste" value="${d.waste||0}"></div>
+        <div class="form-group"><label>비고</label><input type="text" id="em-note" value="${d.note||''}"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;" onclick="saveEditRaw('${id}')">수정 완료</button>
+    `;
+    showEditModal('원재료 수정', body);
+  } catch(e){ showToast('불러오기 실패: '+e.message,'error'); }
+}
+
+async function saveEditRaw(id) {
+  try {
+    await db.collection('production_raw').doc(id).update({
+      name:document.getElementById('em-name').value.trim(),
+      unit:document.getElementById('em-unit').value.trim(),
+      batch:document.getElementById('em-batch').value.trim(),
+      worker:document.getElementById('em-worker').value.trim(),
+      prev:parseFloat(document.getElementById('em-prev').value)||0,
+      inQty:parseFloat(document.getElementById('em-in').value)||0,
+      used:parseFloat(document.getElementById('em-used').value)||0,
+      exp:document.getElementById('em-exp').value||'',
+      waste:parseFloat(document.getElementById('em-waste').value)||0,
+      note:document.getElementById('em-note').value.trim()
+    });
+    showToast('수정 완료'); closeEditModal(); loadRaw();
+  } catch(e){ showToast('수정 실패: '+e.message,'error'); }
 }
 
 // ── 반제품 ──
 async function loadSemi() {
   const tbody=document.getElementById('tbody-semi');
-  tbody.innerHTML='<tr><td colspan="10" class="loading">불러오는 중...</td></tr>';
+  tbody.innerHTML='<tr><td colspan="14" class="loading">불러오는 중...</td></tr>';
   try {
     const snap=await db.collection('production_semi').where('date','==',selectedDate).orderBy('createdAt','asc').get();
-    if(snap.empty){ tbody.innerHTML='<tr><td colspan="10" class="empty">등록된 내역이 없습니다</td></tr>'; return; }
+    if(snap.empty){ tbody.innerHTML='<tr><td colspan="14" class="empty">등록된 내역이 없습니다</td></tr>'; return; }
     tbody.innerHTML='';
     snap.forEach(doc=>{
       const d=doc.data();
-      const remain=(d.prev||0)+(d.prod||0)-(d.used||0);
+      const remain=(d.prev||0)+(d.prod||0)-(d.used||0)-(d.waste||0);
       tbody.innerHTML+=`<tr>
         <td class="name">${d.name}</td>
         <td>${d.unit}</td>
         <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${d.batch||'-'}</td>
         <td>${d.worker||'-'}</td>
+        <td>${expBadge(d.exp)}</td>
+        <td>${bomCell(d.bom)}</td>
+        <td>${qcBadge(d.qc, d.qcNote)}</td>
         <td class="num">${(d.prev||0).toLocaleString()}</td>
         <td class="num">${(d.prod||0).toLocaleString()}</td>
         <td class="num">${(d.used||0).toLocaleString()}</td>
+        <td class="num" style="color:var(--red)">${(d.waste||0)>0?(d.waste).toLocaleString()+(d.wasteReason?' <small style="color:var(--text-muted);font-size:10px">('+d.wasteReason+')</small>':''):'-'}</td>
         <td class="num ${stockClass(remain)}">${remain.toLocaleString()}</td>
         <td style="color:var(--text-muted);font-size:12px">${d.note||''}</td>
-        <td><button class="btn-del" onclick="deleteDoc('production_semi','${doc.id}',loadSemi)">×</button></td>
+        <td><div class="row-actions"><button class="btn-edit" onclick="openEditSemi('${doc.id}')">수정</button><button class="btn-del" onclick="deleteDoc('production_semi','${doc.id}',loadSemi)">×</button></div></td>
       </tr>`;
     });
-  } catch(e){ tbody.innerHTML=`<tr><td colspan="10" class="empty">오류: ${e.message}</td></tr>`; }
+  } catch(e){ tbody.innerHTML=`<tr><td colspan="14" class="empty">오류: ${e.message}</td></tr>`; }
+}
+
+function clearSemiForm() {
+  ['semi-name','semi-batch','semi-worker','semi-prev','semi-prod','semi-used','semi-exp','semi-start','semi-end','semi-qc-note','semi-waste','semi-note'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('semi-qc').value='';
+  document.getElementById('semi-waste-reason').value='';
+  semiBomList=[]; renderBomTags('semi');
 }
 
 async function saveSemi() {
@@ -500,24 +779,76 @@ async function saveSemi() {
       prev:parseFloat(document.getElementById('semi-prev').value)||0,
       prod:parseFloat(document.getElementById('semi-prod').value)||0,
       used:parseFloat(document.getElementById('semi-used').value)||0,
+      exp:document.getElementById('semi-exp').value||'',
+      bom: semiBomList.slice(),
+      startTime:document.getElementById('semi-start').value||'',
+      endTime:document.getElementById('semi-end').value||'',
+      qc:document.getElementById('semi-qc').value||'',
+      qcNote:document.getElementById('semi-qc-note').value.trim(),
+      waste:parseFloat(document.getElementById('semi-waste').value)||0,
+      wasteReason:document.getElementById('semi-waste-reason').value||'',
       note:document.getElementById('semi-note').value.trim(),
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
     showToast('반제품 내역 저장 완료');
-    ['semi-name','semi-batch','semi-worker','semi-prev','semi-prod','semi-used','semi-note'].forEach(id=>document.getElementById(id).value='');
+    clearSemiForm();
     document.getElementById('form-semi').style.display='none';
-    loadSemi();
+    loadSemi(); refreshNameLists();
   } catch(e){ showToast('저장 실패: '+e.message,'error'); }
+}
+
+async function openEditSemi(id) {
+  try {
+    const doc = await db.collection('production_semi').doc(id).get();
+    if(!doc.exists) return;
+    const d = doc.data();
+    const body = `
+      <div class="form-grid" style="padding:0 0 8px;">
+        <div class="form-group"><label>품목명</label><input type="text" id="em-name" value="${d.name||''}"></div>
+        <div class="form-group"><label>단위</label><input type="text" id="em-unit" value="${d.unit||''}"></div>
+        <div class="form-group"><label>배치번호</label><input type="text" id="em-batch" value="${d.batch||''}"></div>
+        <div class="form-group"><label>작업자</label><input type="text" id="em-worker" value="${d.worker||''}"></div>
+        <div class="form-group"><label>전일재고</label><input type="number" id="em-prev" value="${d.prev||0}"></div>
+        <div class="form-group"><label>생산량</label><input type="number" id="em-prod" value="${d.prod||0}"></div>
+        <div class="form-group"><label>투입량</label><input type="number" id="em-used" value="${d.used||0}"></div>
+        <div class="form-group"><label>유통기한</label><input type="date" id="em-exp" value="${d.exp||''}"></div>
+        <div class="form-group"><label>QC</label><select id="em-qc"><option value="" ${!d.qc?'selected':''}>미검사</option><option value="pass" ${d.qc==='pass'?'selected':''}>합격</option><option value="fail" ${d.qc==='fail'?'selected':''}>불합격</option></select></div>
+        <div class="form-group"><label>폐기량</label><input type="number" id="em-waste" value="${d.waste||0}"></div>
+        <div class="form-group"><label>비고</label><input type="text" id="em-note" value="${d.note||''}"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;" onclick="saveEditSemi('${id}')">수정 완료</button>
+    `;
+    showEditModal('반제품 수정', body);
+  } catch(e){ showToast('불러오기 실패: '+e.message,'error'); }
+}
+
+async function saveEditSemi(id) {
+  try {
+    await db.collection('production_semi').doc(id).update({
+      name:document.getElementById('em-name').value.trim(),
+      unit:document.getElementById('em-unit').value.trim(),
+      batch:document.getElementById('em-batch').value.trim(),
+      worker:document.getElementById('em-worker').value.trim(),
+      prev:parseFloat(document.getElementById('em-prev').value)||0,
+      prod:parseFloat(document.getElementById('em-prod').value)||0,
+      used:parseFloat(document.getElementById('em-used').value)||0,
+      exp:document.getElementById('em-exp').value||'',
+      qc:document.getElementById('em-qc').value||'',
+      waste:parseFloat(document.getElementById('em-waste').value)||0,
+      note:document.getElementById('em-note').value.trim()
+    });
+    showToast('수정 완료'); closeEditModal(); loadSemi();
+  } catch(e){ showToast('수정 실패: '+e.message,'error'); }
 }
 
 // ── 완제품 ──
 async function loadFinished() {
   const tbody=document.getElementById('tbody-finished');
-  tbody.innerHTML='<tr><td colspan="15" class="loading">불러오는 중...</td></tr>';
+  tbody.innerHTML='<tr><td colspan="19" class="loading">불러오는 중...</td></tr>';
   try {
     const snap=await db.collection('production_finished').where('date','==',selectedDate).orderBy('createdAt','asc').get();
     if(snap.empty){
-      tbody.innerHTML='<tr><td colspan="15" class="empty">등록된 내역이 없습니다</td></tr>';
+      tbody.innerHTML='<tr><td colspan="19" class="empty">등록된 내역이 없습니다</td></tr>';
       updateDonut(chartProd,'pctProd',0); updateDonut(chartShip,'pctShip',0);
       document.getElementById('lossSummary').style.display='none';
       return;
@@ -538,12 +869,16 @@ async function loadFinished() {
 
       const yieldBadge=yieldPct!==null?`<span class="badge-yield" style="background:${yieldPct>=80?'var(--accent-light)':'var(--red-light)'};color:${yieldPct>=80?'var(--accent)':'var(--red)'}">${yieldPct}%</span>`:`<span style="color:var(--text-muted)">-</span>`;
       const lossBadge=lossPct!==null&&lossPct>0?`<span class="badge-loss">${lossPct}%</span>`:`<span style="color:var(--text-muted)">-</span>`;
+      const costTotal = d.cost ? (d.cost*(d.prod||0)) : null;
 
       tbody.innerHTML+=`<tr>
-        <td class="name">${d.name}</td>
+        <td class="name">${d.name}${d.photo?` <a href="${d.photo}" target="_blank" title="사진 보기">📷</a>`:''}</td>
         <td>${d.unit}</td>
         <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${d.batch||'-'}</td>
         <td>${d.worker||'-'}</td>
+        <td>${expBadge(d.exp)}</td>
+        <td>${bomCell(d.bom)}</td>
+        <td>${qcBadge(d.qc, d.qcNote)}</td>
         <td class="num">${(d.prev||0).toLocaleString()}</td>
         <td class="num"><span class="${achColor}">${(d.prod||0).toLocaleString()}</span></td>
         <td class="num" style="color:var(--text-muted)">${(d.target||0).toLocaleString()}</td>
@@ -553,8 +888,9 @@ async function loadFinished() {
         <td class="num">${(d.ship||0).toLocaleString()}</td>
         <td class="num" style="color:var(--red)">${(d.waste||0)>0?(d.waste).toLocaleString():'-'}</td>
         <td class="num ${stockClass(remain)}">${remain.toLocaleString()}</td>
+        <td class="num" style="font-size:12px;">${costTotal!==null?costTotal.toLocaleString()+'원':'-'}</td>
         <td style="color:var(--text-muted);font-size:12px">${d.note||''}</td>
-        <td><button class="btn-del" onclick="deleteDoc('production_finished','${doc.id}',loadFinished)">×</button></td>
+        <td><div class="row-actions"><button class="btn-edit" onclick="openEditFinished('${doc.id}')">수정</button><button class="btn-del" onclick="deleteDoc('production_finished','${doc.id}',loadFinished)">×</button></div></td>
       </tr>`;
     });
 
@@ -574,7 +910,15 @@ async function loadFinished() {
       document.getElementById('lossSummary').style.display='none';
     }
 
-  } catch(e){ tbody.innerHTML=`<tr><td colspan="15" class="empty">오류: ${e.message}</td></tr>`; }
+  } catch(e){ tbody.innerHTML=`<tr><td colspan="19" class="empty">오류: ${e.message}</td></tr>`; }
+}
+
+function clearFinForm() {
+  ['fin-name','fin-batch','fin-worker','fin-prev','fin-target','fin-prod','fin-input','fin-exp','fin-trim','fin-ship','fin-waste','fin-start','fin-end','fin-qc-note','fin-cost','fin-photo','fin-note'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fin-yield-display').value='';
+  document.getElementById('fin-loss-display').value='';
+  document.getElementById('fin-qc').value='';
+  finBomList=[]; renderBomTags('fin');
 }
 
 async function saveFinished() {
@@ -583,11 +927,8 @@ async function saveFinished() {
   const prod=parseFloat(document.getElementById('fin-prod').value)||0;
   const inputQty=parseFloat(document.getElementById('fin-input').value)||0;
   const trim=parseFloat(document.getElementById('fin-trim').value)||0;
-  const sheetW=parseFloat(document.getElementById('fin-weight-sheet').value)||0;
-  const materialW=parseFloat(document.getElementById('fin-weight-material').value)||0;
-  const totalW=sheetW+materialW;
-  const yieldPct=totalW>0?Math.round(((totalW-trim)/totalW)*100):(inputQty>0?Math.round((prod/inputQty)*100):null);
-  const lossPct=totalW>0?Math.round((trim/totalW)*100):(inputQty>0?Math.round((trim/inputQty)*100):null);
+  const yieldPct=inputQty>0?Math.round((prod/inputQty)*100):null;
+  const lossPct=inputQty>0?Math.round((trim/inputQty)*100):null;
   try {
     await db.collection('production_finished').add({
       date:selectedDate, name,
@@ -597,22 +938,150 @@ async function saveFinished() {
       prev:parseFloat(document.getElementById('fin-prev').value)||0,
       target:parseFloat(document.getElementById('fin-target').value)||0,
       prod, inputQty, trim,
-      sheetWeight:sheetW, materialWeight:materialW, totalWeight:totalW,
       trimUse:document.getElementById('fin-trim-use').value,
       yieldPct, lossPct,
+      exp:document.getElementById('fin-exp').value||'',
+      bom: finBomList.slice(),
+      startTime:document.getElementById('fin-start').value||'',
+      endTime:document.getElementById('fin-end').value||'',
+      qc:document.getElementById('fin-qc').value||'',
+      qcNote:document.getElementById('fin-qc-note').value.trim(),
+      cost:parseFloat(document.getElementById('fin-cost').value)||0,
+      photo:document.getElementById('fin-photo').value.trim(),
       ship:parseFloat(document.getElementById('fin-ship').value)||0,
       waste:parseFloat(document.getElementById('fin-waste').value)||0,
       note:document.getElementById('fin-note').value.trim(),
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
     showToast('완제품 내역 저장 완료');
-    ['fin-name','fin-batch','fin-worker','fin-prev','fin-target','fin-prod','fin-input','fin-trim','fin-weight-sheet','fin-weight-material','fin-ship','fin-waste','fin-note'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('fin-yield-display').value='';
-    document.getElementById('fin-loss-display').value='';
-    document.getElementById('fin-weight-total').value='';
+    clearFinForm();
     document.getElementById('form-finished').style.display='none';
     loadFinished();
   } catch(e){ showToast('저장 실패: '+e.message,'error'); }
+}
+
+async function openEditFinished(id) {
+  try {
+    const doc = await db.collection('production_finished').doc(id).get();
+    if(!doc.exists) return;
+    const d = doc.data();
+    const body = `
+      <div class="form-grid" style="padding:0 0 8px;">
+        <div class="form-group"><label>품목명</label><input type="text" id="em-name" value="${d.name||''}"></div>
+        <div class="form-group"><label>단위</label><input type="text" id="em-unit" value="${d.unit||''}"></div>
+        <div class="form-group"><label>배치번호</label><input type="text" id="em-batch" value="${d.batch||''}"></div>
+        <div class="form-group"><label>작업자</label><input type="text" id="em-worker" value="${d.worker||''}"></div>
+        <div class="form-group"><label>전일재고</label><input type="number" id="em-prev" value="${d.prev||0}"></div>
+        <div class="form-group"><label>목표량</label><input type="number" id="em-target" value="${d.target||0}"></div>
+        <div class="form-group"><label>생산량</label><input type="number" id="em-prod" value="${d.prod||0}"></div>
+        <div class="form-group"><label>출하량</label><input type="number" id="em-ship" value="${d.ship||0}"></div>
+        <div class="form-group"><label>폐기량</label><input type="number" id="em-waste" value="${d.waste||0}"></div>
+        <div class="form-group"><label>소비기한</label><input type="date" id="em-exp" value="${d.exp||''}"></div>
+        <div class="form-group"><label>QC</label><select id="em-qc"><option value="" ${!d.qc?'selected':''}>미검사</option><option value="pass" ${d.qc==='pass'?'selected':''}>합격</option><option value="fail" ${d.qc==='fail'?'selected':''}>불합격</option></select></div>
+        <div class="form-group"><label>개당원가</label><input type="number" id="em-cost" value="${d.cost||0}"></div>
+        <div class="form-group"><label>비고</label><input type="text" id="em-note" value="${d.note||''}"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;" onclick="saveEditFinished('${id}')">수정 완료</button>
+    `;
+    showEditModal('완제품 수정', body);
+  } catch(e){ showToast('불러오기 실패: '+e.message,'error'); }
+}
+
+async function saveEditFinished(id) {
+  try {
+    await db.collection('production_finished').doc(id).update({
+      name:document.getElementById('em-name').value.trim(),
+      unit:document.getElementById('em-unit').value.trim(),
+      batch:document.getElementById('em-batch').value.trim(),
+      worker:document.getElementById('em-worker').value.trim(),
+      prev:parseFloat(document.getElementById('em-prev').value)||0,
+      target:parseFloat(document.getElementById('em-target').value)||0,
+      prod:parseFloat(document.getElementById('em-prod').value)||0,
+      ship:parseFloat(document.getElementById('em-ship').value)||0,
+      waste:parseFloat(document.getElementById('em-waste').value)||0,
+      exp:document.getElementById('em-exp').value||'',
+      qc:document.getElementById('em-qc').value||'',
+      cost:parseFloat(document.getElementById('em-cost').value)||0,
+      note:document.getElementById('em-note').value.trim()
+    });
+    showToast('수정 완료'); closeEditModal(); loadFinished();
+  } catch(e){ showToast('수정 실패: '+e.message,'error'); }
+}
+
+// ── 수정 모달 공통 ──
+function showEditModal(title, bodyHtml) {
+  document.getElementById('editModalTitle').textContent = title;
+  document.getElementById('editModalBody').innerHTML = bodyHtml;
+  document.getElementById('editModal').classList.add('show');
+}
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('show');
+}
+
+// ── 기간별 집계 ──
+function setAggRange(mode) {
+  document.querySelectorAll('.sub-tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('agg-custom-range').style.display = mode==='custom'?'inline-flex':'none';
+  const today = new Date();
+  let from, to = today;
+  if(mode==='week'){ from = new Date(today); from.setDate(today.getDate()-6); event.target.classList.add('active'); }
+  else if(mode==='month'){ from = new Date(today); from.setDate(today.getDate()-29); event.target.classList.add('active'); }
+  else { event.target.classList.add('active'); return; }
+  document.getElementById('agg-from').value = from.toISOString().slice(0,10);
+  document.getElementById('agg-to').value = to.toISOString().slice(0,10);
+  loadAgg();
+}
+
+async function loadAgg() {
+  aggLoaded = true;
+  const from = document.getElementById('agg-from').value;
+  const to = document.getElementById('agg-to').value;
+  if(!from || !to) { showToast('기간을 선택하세요','error'); return; }
+  const tbody = document.getElementById('tbody-agg');
+  tbody.innerHTML = '<tr><td colspan="8" class="loading">집계 중...</td></tr>';
+  try {
+    const snap = await db.collection('production_finished').where('date','>=',from).where('date','<=',to).get();
+    if(snap.empty){
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">해당 기간에 등록된 내역이 없습니다</td></tr>';
+      document.getElementById('agg-summary').innerHTML='';
+      return;
+    }
+    const grouped = {};
+    let grandProd=0, grandShip=0, grandWaste=0, grandCost=0;
+    snap.forEach(doc=>{
+      const d = doc.data();
+      if(!grouped[d.name]) grouped[d.name] = {days:new Set(), prod:0, ship:0, waste:0, yieldSum:0, yieldCnt:0, lossSum:0, lossCnt:0, cost:0};
+      const g = grouped[d.name];
+      g.days.add(d.date);
+      g.prod += (d.prod||0); g.ship += (d.ship||0); g.waste += (d.waste||0);
+      if(d.yieldPct!==null && d.yieldPct!==undefined){ g.yieldSum+=d.yieldPct; g.yieldCnt++; }
+      if(d.lossPct!==null && d.lossPct!==undefined){ g.lossSum+=d.lossPct; g.lossCnt++; }
+      if(d.cost){ g.cost += d.cost*(d.prod||0); }
+      grandProd+=(d.prod||0); grandShip+=(d.ship||0); grandWaste+=(d.waste||0);
+      if(d.cost) grandCost += d.cost*(d.prod||0);
+    });
+    tbody.innerHTML = Object.keys(grouped).sort().map(name=>{
+      const g = grouped[name];
+      const avgYield = g.yieldCnt>0?Math.round(g.yieldSum/g.yieldCnt):null;
+      const avgLoss = g.lossCnt>0?Math.round(g.lossSum/g.lossCnt):null;
+      return `<tr>
+        <td class="name">${name}</td>
+        <td class="num">${g.days.size}</td>
+        <td class="num">${g.prod.toLocaleString()}</td>
+        <td class="num">${g.ship.toLocaleString()}</td>
+        <td class="num" style="color:var(--red)">${g.waste>0?g.waste.toLocaleString():'-'}</td>
+        <td class="num">${avgYield!==null?avgYield+'%':'-'}</td>
+        <td class="num">${avgLoss!==null?avgLoss+'%':'-'}</td>
+        <td class="num">${g.cost>0?Math.round(g.cost).toLocaleString()+'원':'-'}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('agg-summary').innerHTML = `
+      <div class="agg-stat"><div class="v">${grandProd.toLocaleString()}</div><div class="l">총 생산량</div></div>
+      <div class="agg-stat"><div class="v">${grandShip.toLocaleString()}</div><div class="l">총 출하량</div></div>
+      <div class="agg-stat"><div class="v" style="color:var(--red)">${grandWaste.toLocaleString()}</div><div class="l">총 폐기량</div></div>
+      <div class="agg-stat"><div class="v">${grandCost>0?Math.round(grandCost).toLocaleString()+'원':'-'}</div><div class="l">총 생산원가</div></div>
+    `;
+  } catch(e){ tbody.innerHTML = `<tr><td colspan="8" class="empty">오류: ${e.message}</td></tr>`; }
 }
 
 async function deleteDoc(collection, id, reloadFn) {
