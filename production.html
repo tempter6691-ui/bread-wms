@@ -248,7 +248,7 @@
           <div class="form-group"><label>단위</label>
             <select id="raw-unit"><option>kg</option><option>g</option><option>L</option><option>개</option><option>봉</option><option>박스</option></select>
           </div>
-          <div class="form-group"><label>배치번호</label><input type="text" id="raw-batch" placeholder="예: B2026-001"></div>
+          <div class="form-group"><label>배치번호</label><input type="text" id="raw-batch" placeholder="예: R2026-001" oninput="delete this.dataset.autoBatch"></div>
           <div class="form-group"><label>작업자</label><input type="text" id="raw-worker" placeholder="이름"></div>
           <div class="form-group"><label>전일재고</label><input type="number" id="raw-prev" placeholder="0" min="0"></div>
           <div class="form-group"><label>입고량</label><input type="number" id="raw-in" placeholder="0" min="0"></div>
@@ -291,7 +291,7 @@
           <div class="form-group"><label>단위</label>
             <select id="semi-unit"><option>kg</option><option>g</option><option>개</option><option>판</option><option>배치</option></select>
           </div>
-          <div class="form-group"><label>배치번호</label><input type="text" id="semi-batch" placeholder="예: B2026-001"></div>
+          <div class="form-group"><label>배치번호</label><input type="text" id="semi-batch" placeholder="예: S2026-001" oninput="delete this.dataset.autoBatch"></div>
           <div class="form-group"><label>작업자</label><input type="text" id="semi-worker" placeholder="이름"></div>
           <div class="form-group"><label>전일재고</label><input type="number" id="semi-prev" placeholder="0" min="0"></div>
           <div class="form-group"><label>생산량</label><input type="number" id="semi-prod" placeholder="0" min="0"></div>
@@ -347,7 +347,7 @@
           <div class="form-group"><label>단위</label>
             <select id="fin-unit"><option>개</option><option>박스</option><option>판</option><option>kg</option></select>
           </div>
-          <div class="form-group"><label>배치번호</label><input type="text" id="fin-batch" placeholder="예: B2026-001"></div>
+          <div class="form-group"><label>배치번호</label><input type="text" id="fin-batch" placeholder="예: F2026-001" oninput="delete this.dataset.autoBatch"></div>
           <div class="form-group"><label>작업자</label><input type="text" id="fin-worker" placeholder="이름"></div>
           <div class="form-group"><label>전일재고</label><input type="number" id="fin-prev" placeholder="0" min="0"></div>
           <div class="form-group"><label>목표생산량</label><input type="number" id="fin-target" placeholder="0" min="0"></div>
@@ -488,7 +488,50 @@ function switchTab(tab) {
 
 function openForm(type) {
   const el = document.getElementById('form-'+type);
-  el.style.display = el.style.display==='none'?'block':'none';
+  const willOpen = el.style.display==='none';
+  el.style.display = willOpen?'block':'none';
+  if(willOpen) prefillBatch(type);
+}
+
+// ── 배치번호 자동 생성 ──
+// 유형별 접두사: 원재료 R / 반제품 S / 완제품 F, 연도별로 001부터 재시작
+const BATCH_PREFIX = { raw:'R', semi:'S', finished:'F' };
+const BATCH_INPUT_ID = { raw:'raw-batch', semi:'semi-batch', finished:'fin-batch' };
+
+// 폼을 열 때, 배치번호 입력란이 비어있으면 "다음 예상 번호"를 미리 보여준다 (아직 카운터를 올리지 않음 — 미리보기 용도)
+async function prefillBatch(type) {
+  const inputId = BATCH_INPUT_ID[type];
+  const input = document.getElementById(inputId);
+  if(!input || input.value.trim()) return; // 이미 값이 있으면 건드리지 않음
+  try {
+    const year = new Date().getFullYear();
+    const prefix = BATCH_PREFIX[type];
+    const counterId = type+'_'+year;
+    const doc = await db.collection('batch_counters').doc(counterId).get();
+    const last = doc.exists ? (doc.data().last||0) : 0;
+    const next = last+1;
+    input.value = `${prefix}${year}-${String(next).padStart(3,'0')}`;
+    input.dataset.autoBatch = '1'; // 자동 생성된 값임을 표시 (저장 시 카운터 증가용)
+  } catch(e) { /* 자동 채우기 실패해도 수동 입력은 가능하므로 조용히 무시 */ }
+}
+
+// 저장 시점에 호출: 입력값이 자동생성 미리보기와 일치하면 카운터를 트랜잭션으로 1 증가시켜 다음 사용자와의 충돌을 막는다.
+// 사용자가 값을 직접 수정했다면 카운터를 건드리지 않는다 (수동 입력으로 간주).
+async function commitBatchCounter(type) {
+  const inputId = BATCH_INPUT_ID[type];
+  const input = document.getElementById(inputId);
+  if(!input || input.dataset.autoBatch !== '1') return; // 자동 생성된 값을 그대로 썼을 때만 카운터 증가
+  try {
+    const year = new Date().getFullYear();
+    const counterId = type+'_'+year;
+    const ref = db.collection('batch_counters').doc(counterId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const last = snap.exists ? (snap.data().last||0) : 0;
+      tx.set(ref, { last:last+1, year, type }, { merge:true });
+    });
+  } catch(e) { /* 카운터 증가 실패는 저장 자체를 막지 않음 */ }
+  delete input.dataset.autoBatch;
 }
 
 // ── BOM 태그 (반제품: 사용 원재료) ──
@@ -672,6 +715,7 @@ function collectRawData() {
 function clearRawForm() {
   ['raw-name','raw-batch','raw-worker','raw-prev','raw-in','raw-used','raw-exp','raw-start','raw-end','raw-waste','raw-note'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('raw-waste-reason').value='';
+  delete document.getElementById('raw-batch').dataset.autoBatch;
 }
 
 async function saveRaw() {
@@ -680,6 +724,7 @@ async function saveRaw() {
   try {
     data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
     await db.collection('production_raw').add(data);
+    await commitBatchCounter('raw');
     showToast('원재료 내역 저장 완료');
     clearRawForm();
     document.getElementById('form-raw').style.display='none';
@@ -765,6 +810,7 @@ function clearSemiForm() {
   document.getElementById('semi-qc').value='';
   document.getElementById('semi-waste-reason').value='';
   semiBomList=[]; renderBomTags('semi');
+  delete document.getElementById('semi-batch').dataset.autoBatch;
 }
 
 async function saveSemi() {
@@ -790,6 +836,7 @@ async function saveSemi() {
       note:document.getElementById('semi-note').value.trim(),
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
+    await commitBatchCounter('semi');
     showToast('반제품 내역 저장 완료');
     clearSemiForm();
     document.getElementById('form-semi').style.display='none';
@@ -919,6 +966,7 @@ function clearFinForm() {
   document.getElementById('fin-loss-display').value='';
   document.getElementById('fin-qc').value='';
   finBomList=[]; renderBomTags('fin');
+  delete document.getElementById('fin-batch').dataset.autoBatch;
 }
 
 async function saveFinished() {
@@ -953,6 +1001,7 @@ async function saveFinished() {
       note:document.getElementById('fin-note').value.trim(),
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
+    await commitBatchCounter('finished');
     showToast('완제품 내역 저장 완료');
     clearFinForm();
     document.getElementById('form-finished').style.display='none';
