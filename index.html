@@ -134,9 +134,9 @@ tr:hover td{background:#fafafa;}
 
 /* 모바일 */
 #mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:500;}
-.mob-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:.45rem .2rem;cursor:pointer;font-size:.58rem;color:var(--sub);font-weight:500;}
+.mob-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:.4rem .1rem;cursor:pointer;font-size:.54rem;color:var(--sub);font-weight:500;}
 .mob-item.active{color:var(--accent);}
-.mob-icon{font-size:1.2rem;}
+.mob-icon{font-size:1.05rem;}
 .res-ok{background:#dcfce7;padding:.6rem;border-radius:6px;color:#166534;margin:.5rem 0;font-size:.85rem;}
 .res-err{background:#fee2e2;padding:.6rem;border-radius:6px;color:#991b1b;margin:.5rem 0;font-size:.85rem;}
 
@@ -201,6 +201,7 @@ tr:hover td{background:#fafafa;}
   <div class="mob-item" onclick="go('outbound')"><div class="mob-icon">🚚</div>출고</div>
   <div class="mob-item" onclick="go('stock')"><div class="mob-icon">📋</div>재고</div>
   <div class="mob-item" onclick="go('orders')"><div class="mob-icon">📝</div>지시서</div>
+  <div class="mob-item" onclick="go('logs')"><div class="mob-icon">🕐</div>로그</div>
 </div>
 
 <!-- Modal -->
