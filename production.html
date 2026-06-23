@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -546,6 +547,7 @@
     <div class="section-card">
       <div class="section-header">
         <div class="section-title"><span class="section-badge badge-green">기록</span>오늘 배치생산 기록</div>
+        <button class="btn btn-secondary btn-sm" onclick="exportEcountExcel()">이카운트 업로드용 엑셀 다운로드</button>
       </div>
       <table>
         <thead><tr>
@@ -562,9 +564,10 @@
         <button class="btn btn-primary btn-sm" onclick="openNewRecipeForm()">+ 새 레시피</button>
       </div>
       <div id="recipe-form" style="display:none;border-bottom:1px solid var(--border);background:#FAFAF8;padding:16px 20px;">
-        <div class="form-grid" style="padding:0 0 4px;grid-template-columns: 2fr 1fr;">
-          <div class="form-group"><label>제품명</label><input type="text" id="recipe-name" placeholder="예: 008.3생 (3호 원형 생크림케익)"></div>
+        <div class="form-grid" style="padding:0 0 4px;grid-template-columns: 2fr 1fr 1fr;">
+          <div class="form-group"><label>제품명</label><input type="text" id="recipe-name" placeholder="예: 008.3생 (3호생크림케익(원형)라온)"></div>
           <div class="form-group"><label>1개당 반죽중량(g)</label><input type="number" id="recipe-unit-weight" placeholder="750" min="0" oninput="renderRecipeEditSum()"></div>
+          <div class="form-group"><label>이카운트 품목코드</label><input type="text" id="recipe-ecount-code" placeholder="예: 00003"></div>
         </div>
         <div class="form-section-title" style="border-top:none;padding-top:0;">원부재료 배합비</div>
         <table style="margin-top:8px;">
@@ -584,8 +587,8 @@
         </div>
       </div>
       <table>
-        <thead><tr><th>제품명</th><th class="num">1개당 반죽중량</th><th class="num">재료 수</th><th></th></tr></thead>
-        <tbody id="tbody-recipe"><tr><td colspan="4" class="loading">불러오는 중...</td></tr></tbody>
+        <thead><tr><th>제품명</th><th>이카운트 품목코드</th><th class="num">1개당 반죽중량</th><th class="num">재료 수</th><th></th></tr></thead>
+        <tbody id="tbody-recipe"><tr><td colspan="5" class="loading">불러오는 중...</td></tr></tbody>
       </table>
     </div>
 
@@ -1547,15 +1550,16 @@ async function loadRecipeTab() {
 // ── 레시피 목록 불러오기 + 배치생산 제품 선택란 채우기 ──
 async function loadRecipeList() {
   const tbody = document.getElementById('tbody-recipe');
-  tbody.innerHTML = '<tr><td colspan="4" class="loading">불러오는 중...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" class="loading">불러오는 중...</td></tr>';
   try {
     const snap = await db.collection('recipes').orderBy('name').get();
     recipeCache = snap.docs.map(d => Object.assign({id:d.id}, d.data()));
     if(!recipeCache.length){
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">등록된 레시피가 없습니다. "+ 새 레시피"로 추가하세요</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">등록된 레시피가 없습니다. "+ 새 레시피"로 추가하세요</td></tr>';
     } else {
       tbody.innerHTML = recipeCache.map(r => `<tr>
         <td class="name">${r.name}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${r.ecountCode||'<span style="color:var(--red)">미입력</span>'}</td>
         <td class="num">${(r.unitWeight||0).toLocaleString()}g</td>
         <td class="num">${(r.ingredients||[]).length}개</td>
         <td><div class="row-actions">
@@ -1571,7 +1575,7 @@ async function loadRecipeList() {
       : '<option value="">레시피를 먼저 등록하세요</option>';
     if(prevVal && recipeCache.some(r=>r.id===prevVal)) sel.value = prevVal;
     onBatchRecipeChange();
-  } catch(e){ tbody.innerHTML = `<tr><td colspan="4" class="empty">오류: ${e.message}</td></tr>`; }
+  } catch(e){ tbody.innerHTML = `<tr><td colspan="5" class="empty">오류: ${e.message}</td></tr>`; }
 }
 function loadRecipeTabAfterDelete(){ loadRecipeList(); }
 
@@ -1580,6 +1584,7 @@ function openNewRecipeForm() {
   recipeEditingId = null;
   document.getElementById('recipe-name').value = '';
   document.getElementById('recipe-unit-weight').value = '';
+  document.getElementById('recipe-ecount-code').value = '';
   recipeEditIngredients = [{name:'', ratio:0}];
   document.getElementById('recipe-form').style.display = 'block';
   renderRecipeEditRows();
@@ -1591,6 +1596,7 @@ function openEditRecipeForm(id) {
   recipeEditingId = id;
   document.getElementById('recipe-name').value = r.name || '';
   document.getElementById('recipe-unit-weight').value = r.unitWeight || '';
+  document.getElementById('recipe-ecount-code').value = r.ecountCode || '';
   recipeEditIngredients = (r.ingredients||[]).map(i => ({name:i.name, ratio:i.ratio}));
   if(!recipeEditIngredients.length) recipeEditIngredients = [{name:'', ratio:0}];
   document.getElementById('recipe-form').style.display = 'block';
@@ -1635,8 +1641,10 @@ function renderRecipeEditSum() {
 async function saveRecipe() {
   const name = document.getElementById('recipe-name').value.trim();
   const unitWeight = parseFloat(document.getElementById('recipe-unit-weight').value) || 0;
+  const ecountCode = document.getElementById('recipe-ecount-code').value.trim();
   if(!name){ showToast('제품명을 입력하세요','error'); return; }
   if(!unitWeight){ showToast('1개당 반죽중량을 입력하세요','error'); return; }
+  if(!ecountCode){ if(!confirm('이카운트 품목코드가 입력되지 않았습니다. 이 경우 이카운트 업로드용 엑셀에서 이 제품이 빠집니다. 그래도 저장하시겠습니까?')) return; }
   const ingredients = recipeEditIngredients
     .filter(i => i.name && i.name.trim())
     .map(i => ({name:i.name.trim(), ratio:i.ratio||0}));
@@ -1646,7 +1654,7 @@ async function saveRecipe() {
     if(!confirm(`배합비 합계가 ${sum.toFixed(2)}%로 100%가 아닙니다. 그래도 저장하시겠습니까?`)) return;
   }
   try {
-    const payload = { name, unitWeight, ingredients, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    const payload = { name, unitWeight, ecountCode, ingredients, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
     if(recipeEditingId){
       await db.collection('recipes').doc(recipeEditingId).set(payload, {merge:true});
     } else {
@@ -1811,6 +1819,57 @@ async function loadBatchList() {
       </tr>`;
     }).join('');
   } catch(e){ tbody.innerHTML = `<tr><td colspan="7" class="empty">오류: ${e.message}</td></tr>`; }
+}
+
+// ── 이카운트 "생산입고I" 웹자료올리기 양식에 맞춰 엑셀 생성 ──
+// 양식 컬럼 순서: 일자, 순번, 담당자, 생산된공장, 받는창고, 작지(일자-번호 품목), 번호, 작업지시품목코드, 품목코드, 품목명, 규격, BOM버전, 수량, 적요, 노무시간
+async function exportEcountExcel() {
+  try {
+    const snap = await db.collection('production_batch').where('date','==',selectedDate).get();
+    if(snap.empty){ showToast('오늘 배치생산 기록이 없습니다','error'); return; }
+
+    const rows = snap.docs.map(d => Object.assign({id:d.id}, d.data()));
+    rows.sort((a,b) => (a.createdAt?.seconds||0) - (b.createdAt?.seconds||0));
+
+    const dateForEcount = selectedDate.replace(/-/g,'/'); // 2026-06-23 → 2026/06/23
+
+    const noCodeNames = [];
+    const excelRows = rows.map((r, i) => {
+      const recipe = recipeCache.find(rc => rc.id === r.recipeId);
+      const ecountCode = recipe ? (recipe.ecountCode||'') : '';
+      if(!ecountCode) noCodeNames.push(r.name);
+      return {
+        '일자': dateForEcount,
+        '순번': i+1,
+        '담당자': r.worker || '',
+        '생산된공장': '제조공장',
+        '받는창고': '본사창고',
+        '작지(일자-번호 품목)': '',
+        '번호': '',
+        '작업지시품목코드': '',
+        '품목코드': ecountCode,
+        '품목명': r.name,
+        '규격': '',
+        'BOM버전': '기본',
+        '수량': r.qty,
+        '적요': r.batch || '',
+        '노무시간': ''
+      };
+    });
+
+    if(noCodeNames.length){
+      if(!confirm(`다음 제품은 레시피에 이카운트 품목코드가 입력되지 않아 품목코드가 빈 칸으로 나갑니다:\n\n${[...new Set(noCodeNames)].join(', ')}\n\n그래도 엑셀을 만드시겠습니까? (이카운트 업로드 전 직접 채워야 합니다)`)) return;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(excelRows);
+    ws['!cols'] = [
+      {wch:11},{wch:6},{wch:10},{wch:10},{wch:10},{wch:16},{wch:6},{wch:14},{wch:10},{wch:24},{wch:10},{wch:8},{wch:8},{wch:14},{wch:8}
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '생산입고I');
+    XLSX.writeFile(wb, `이카운트_생산입고_${selectedDate}.xlsx`);
+    showToast('엑셀 다운로드 완료');
+  } catch(e){ showToast('엑셀 생성 실패: '+e.message,'error'); }
 }
 
 // ── 배치생산 기록 삭제 (차감했던 원재료 재고를 되돌림) ──
