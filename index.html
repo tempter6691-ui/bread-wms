@@ -571,7 +571,7 @@ var DRIVERS = ['A이운영','B남재만','C서영덕','D장재혁','E정일혁']
 // ── STATE ─────────────────────────────────────────────────────
 var db = null;
 var S = {
-  page:'dashboard', prods:[], clients:[], inv:{},
+  page:'dashboard', prods:[], clients:[], inv:{}, todayInbound:{},
   orders:{}, templates:{}, outClient:null,
   ordDate:todayStr(), ordDriver:'전체'
 };
@@ -627,6 +627,11 @@ async function loadAll() {
 
     var iv = await db.collection('inventory').get();
     S.inv = {}; iv.forEach(function(d){ S.inv[d.id] = d.data().qty || 0; });
+
+    // 오늘 날짜 기준 품목별 입고 스캔 누적량 (날짜가 바뀌면 자동으로 0부터 다시 시작)
+    var today = todayStr();
+    var dib = await db.collection('dailyInbound').where('date','==',today).get();
+    S.todayInbound = {}; dib.forEach(function(d){ var dd=d.data(); S.todayInbound[dd.pid] = dd.qty || 0; });
 
     var od = await db.collection('orders').get();
     S.orders = {}; od.forEach(function(d){ S.orders[d.id] = d.data(); });
@@ -901,12 +906,14 @@ function drawInbound() {
   filtered.forEach(function(p){ if(!grouped[p.cat]) grouped[p.cat]=[]; grouped[p.cat].push(p); });
   listEl.innerHTML=Object.keys(grouped).map(function(cat){
     return '<div class="card"><div class="card-title">'+cat+'</div><table>'+
-      '<thead><tr><th>제품명</th><th>QR코드</th><th>재고</th><th>입고</th></tr></thead><tbody>'+
+      '<thead><tr><th>제품명</th><th>QR코드</th><th>재고</th><th>오늘입고</th><th>입고</th></tr></thead><tbody>'+
       grouped[cat].map(function(p){
         var q2=S.inv[p.id]||0, bc=q2===0?'bg-red':q2<=15?'bg-yellow':'bg-green';
+        var todayQ=S.todayInbound[p.id]||0;
         var lowLabel=q2<=15&&q2>0?'<span class="badge bg-yellow" style="margin-left:.3rem;">부족</span>':'';
         return '<tr><td>'+p.name+(q2===0?'<span class="badge bg-red" style="margin-left:.3rem;">품절</span>':lowLabel)+'</td><td><code>'+p.qr+'</code></td>'+
           '<td><span class="badge '+bc+'">'+q2+'</span></td>'+
+          '<td>'+(todayQ>0?'<span class="badge bg-green">'+todayQ+'</span>':'<span style="color:#bbb;">-</span>')+'</td>'+
           '<td style="display:flex;gap:.3rem;align-items:center;">'+
           '<button class="btn btn-danger btn-sm" onclick="manualOut(\''+p.id+'\')" '+(q2<=0?'disabled style="opacity:.4"':'')+'>-1</button>'+
           '<button class="btn btn-success btn-sm" onclick="manualIn(\''+p.id+'\')">+1</button>'+
@@ -926,10 +933,14 @@ async function doScanIn() {
   var multEl=document.getElementById('ib-mult');
   var mult=Math.max(1, parseInt(multEl?multEl.value:1)||1);
   var newQ=(S.inv[p.id]||0)+mult; S.inv[p.id]=newQ;
+  var today = todayStr();
+  var todayQ=(S.todayInbound[p.id]||0)+mult; S.todayInbound[p.id]=todayQ;
+  var dibId = today+'_'+p.id;
   try {
     await db.collection('inventory').doc(p.id).set({qty:newQ});
+    await db.collection('dailyInbound').doc(dibId).set({date:today,pid:p.id,pname:p.name,qty:todayQ}, {merge:true});
     await db.collection('logs').add({type:'inbound',pid:p.id,pname:p.name,qty:mult,ts:firebase.firestore.FieldValue.serverTimestamp()});
-    resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> '+(mult>1?'+'+mult+' 입고!':'입고!')+' 재고: '+newQ+'</div>';
+    resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> '+(mult>1?'+'+mult+' 입고!':'입고!')+' 오늘 입고: '+todayQ+'개 <span style="color:#999;font-size:.85em;">(전체 재고 '+newQ+')</span></div>';
     drawInbound();
   } catch(e){resEl.innerHTML='<div class="res-err">❌ 저장 오류: '+e.message+'</div>';}
 }
@@ -948,10 +959,14 @@ async function manualOut(pid) {
 async function manualIn(pid) {
   var p=S.prods.find(function(x){return x.id===pid;}); if(!p) return;
   var newQ=(S.inv[pid]||0)+1; S.inv[pid]=newQ;
+  var today = todayStr();
+  var todayQ=(S.todayInbound[pid]||0)+1; S.todayInbound[pid]=todayQ;
+  var dibId = today+'_'+pid;
   try {
     await db.collection('inventory').doc(pid).set({qty:newQ});
+    await db.collection('dailyInbound').doc(dibId).set({date:today,pid:pid,pname:p.name,qty:todayQ}, {merge:true});
     await db.collection('logs').add({type:'inbound',pid:pid,pname:p.name,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
-    toast(p.name+' +1 (재고:'+newQ+')','ok'); drawInbound();
+    toast(p.name+' 오늘 입고: '+todayQ+'개 (전체 재고 '+newQ+')','ok'); drawInbound();
   } catch(e){toast('오류:'+e.message,'err');}
 }
 
