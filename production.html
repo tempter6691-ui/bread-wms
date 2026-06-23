@@ -139,6 +139,19 @@
   .bom-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--purple-light); color: var(--purple); font-size: 11px; padding: 2px 7px; border-radius: 4px; margin: 1px 2px 1px 0; }
 
   #print-daily-log { display: none; }
+  /* 인쇄 전, 빈 줄 개수 계산을 위해 화면 밖에 실제 크기로 렌더링 */
+  body.printing-daily-log #print-daily-log {
+    display: block;
+    position: absolute; top: 0; left: -9999px;
+    width: 210mm; /* A4 너비 */
+  }
+
+  #print-bread-log { display: none; }
+  body.printing-bread-log #print-bread-log {
+    display: block;
+    position: absolute; top: 0; left: -9999px;
+    width: 210mm;
+  }
 
   @media print {
     body.printing-daily-log header,
@@ -149,13 +162,27 @@
     body.printing-daily-log .container,
     body.printing-daily-log .toast,
     body.printing-daily-log .modal-overlay { display: none !important; }
-    body.printing-daily-log #print-daily-log { display: block !important; }
+    body.printing-daily-log #print-daily-log { position: static; left: auto; display: block !important; }
+
+    body.printing-bread-log header,
+    body.printing-bread-log .date-bar,
+    body.printing-bread-log .dashboard-row,
+    body.printing-bread-log .loss-summary,
+    body.printing-bread-log .tabs,
+    body.printing-bread-log .container,
+    body.printing-bread-log .toast,
+    body.printing-bread-log .modal-overlay { display: none !important; }
+    body.printing-bread-log #print-bread-log { position: static; left: auto; display: block !important; }
 
     header, .date-bar, .tabs, .btn, .btn-del, .btn-edit, .form-grid, .form-section-title, #form-raw, #form-semi, #form-finished { display: none !important; }
     .container { padding: 0; max-width: 100%; }
     .section-card { box-shadow: none; border: 1px solid #000; }
     body { background: #fff; }
   }
+
+  #print-bread-log { font-family: 'Noto Sans KR', sans-serif; color: #000; padding: 20px; }
+  #print-bread-log h1 { font-size: 20px; font-weight: 700; margin-bottom: 10px; text-align: center; }
+  .pl-section-label { font-size: 14px; font-weight: 700; margin: 18px 0 8px; color: #000; }
 
   #print-daily-log { font-family: 'Noto Sans KR', sans-serif; color: #000; padding: 20px; }
   #print-daily-log h1 { font-size: 20px; font-weight: 700; margin-bottom: 10px; text-align: center; }
@@ -192,6 +219,7 @@
     <button class="btn btn-primary" onclick="loadAll()">조회</button>
     <button class="btn btn-secondary" onclick="goToday()">오늘</button>
     <button class="btn btn-secondary" onclick="printDailyLog()">🖨 생산투입일지 인쇄</button>
+    <button class="btn btn-secondary" onclick="printBreadLog()">🍞 빵류 생산투입일지 인쇄</button>
     <span style="margin-left:auto;font-size:12px;color:var(--text-muted);" id="syncStatus">대기 중...</span>
   </div>
 
@@ -481,6 +509,36 @@
   <p class="pl-footnote">※ 오늘 사용한 원재료의 투입량을 적어주세요. 목록에 없는 품목을 사용했다면 빈 줄에 직접 적어주세요.</p>
 </div>
 
+<!-- 빵류 생산투입일지 인쇄 전용 영역 -->
+<div id="print-bread-log">
+  <h1>빵류 생산투입일지</h1>
+  <div class="pl-meta">
+    <span id="bl-date"></span>
+    <span class="pl-meta-sep">|</span>
+    <span>작성자: ________________</span>
+    <span class="pl-meta-sep">|</span>
+    <span>확인: ________________</span>
+  </div>
+
+  <p class="pl-section-label">공통 재료 (대부분의 빵에 사용)</p>
+  <table class="pl-table">
+    <thead>
+      <tr><th style="width:8%">번호</th><th>품목명</th><th style="width:14%">단위</th><th style="width:22%">투입량</th><th style="width:22%">비고</th></tr>
+    </thead>
+    <tbody id="bl-tbody-common"></tbody>
+  </table>
+
+  <p class="pl-section-label">특수 재료 (해당 빵을 만들 때만 기록)</p>
+  <table class="pl-table">
+    <thead>
+      <tr><th style="width:8%">번호</th><th>품목명</th><th style="width:14%">단위</th><th style="width:22%">투입량</th><th style="width:22%">비고</th></tr>
+    </thead>
+    <tbody id="bl-tbody-special"></tbody>
+  </table>
+
+  <p class="pl-footnote">※ 오늘 만든 빵에 들어간 재료에만 투입량을 적어주세요. 만들지 않은 빵의 재료는 비워두시면 됩니다. 목록에 없는 재료를 썼다면 빈 줄에 직접 적어주세요.</p>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- 수정 모달 -->
@@ -584,21 +642,114 @@ async function printDailyLog() {
   const d = new Date(selectedDate+'T00:00:00');
   document.getElementById('pl-date').textContent = d.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
 
-  // 표 렌더링 (+ 직접 적을 수 있는 빈 줄 5개 추가)
+  const blankRow = (n) => `<tr><td class="pl-num">${n}</td><td class="pl-blank"></td><td class="pl-blank"></td><td class="pl-blank"></td><td class="pl-blank"></td></tr>`;
+
   const tbody = document.getElementById('pl-tbody');
   let rows = '';
   finalList.forEach((item, idx)=>{
     rows += `<tr><td class="pl-num">${idx+1}</td><td>${item.name}</td><td class="pl-num">${item.unit||''}</td><td class="pl-blank"></td><td class="pl-blank"></td></tr>`;
   });
-  for(let i=0;i<5;i++){
-    rows += `<tr><td class="pl-num">${finalList.length+i+1}</td><td class="pl-blank"></td><td class="pl-blank"></td><td class="pl-blank"></td><td class="pl-blank"></td></tr>`;
+  tbody.innerHTML = rows;
+
+  // A4 한 페이지(297mm) 안에서 표가 끝날 때까지 빈 줄을 추가
+  // 인쇄 영역을 화면 밖에 실제 크기로 렌더링해서 높이를 측정한다
+  const logEl = document.getElementById('print-daily-log');
+  document.body.classList.add('printing-daily-log');
+
+  // 클래스 적용 후 브라우저가 레이아웃을 계산할 시간을 한 프레임 기다림
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  const A4_HEIGHT_PX = 1122; // 297mm @ 96dpi
+  const PAGE_PADDING_PX = 40; // 위아래 padding(20px*2)
+  const headerEl = logEl.querySelector('h1');
+  const metaEl = logEl.querySelector('.pl-meta');
+  const footEl = logEl.querySelector('.pl-footnote');
+  const theadEl = logEl.querySelector('.pl-table thead');
+  const reservedHeight = headerEl.offsetHeight + metaEl.offsetHeight + footEl.offsetHeight + theadEl.offsetHeight + PAGE_PADDING_PX + 40; // 여유분 40px
+  const availableHeight = A4_HEIGHT_PX - reservedHeight;
+
+  let rowHeight = tbody.querySelector('tr') ? tbody.querySelector('tr').offsetHeight : 41;
+  let currentRowsHeight = finalList.length * rowHeight;
+  let extra = Math.max(0, Math.floor((availableHeight - currentRowsHeight) / rowHeight));
+  // 최소 한 줄은 빈 줄을 보장
+  if(extra < 1) extra = 1;
+
+  for(let i=0;i<extra;i++){
+    rows += blankRow(finalList.length+i+1);
   }
   tbody.innerHTML = rows;
 
-  document.body.classList.add('printing-daily-log');
   window.print();
 }
 window.addEventListener('afterprint', ()=>document.body.classList.remove('printing-daily-log'));
+
+// ── 빵류 생산투입일지 ──
+// 원재료수불부 배합비표(2026.06) 기준, 빵류 13종에서 실제 사용되는 원재료
+// 공통 재료: 대부분의 빵 레시피에 공통으로 들어가는 재료
+const BREAD_LOG_COMMON = [
+  { name:'강력밀가루1등', unit:'kg' },
+  { name:'정제수', unit:'kg' },
+  { name:'제니코이스트(생효모)', unit:'kg' },
+  { name:'설탕/백설1호', unit:'kg' },
+  { name:'정제염(꽃소금)', unit:'kg' },
+  { name:'제빵개량제(선인엑셀)', unit:'kg' },
+  { name:'슬림버드마가린벌크', unit:'kg' },
+  { name:'계란(전란액)', unit:'kg' },
+];
+// 특수 재료: 특정 빵 종류에만 들어가는 재료 (식빵/바게트/단호박빵/호박식빵/스톨랜/모카빵/홍국쌀빵/녹차식빵/치즈롤빵/홍국치즈롤빵/먹물모닝빵/먹물치즈빵 기준)
+const BREAD_LOG_SPECIAL = [
+  { name:'드라이이스트레드', unit:'kg' },
+  { name:'단호박분말', unit:'kg' },
+  { name:'건포도', unit:'kg' },
+  { name:'호두분태(다이아몬드)', unit:'kg' },
+  { name:'박력밀가루1등', unit:'kg' },
+  { name:'B.P(제니코)', unit:'kg' },
+  { name:'베이킹소다', unit:'kg' },
+  { name:'커피액기스(커피플레이버)', unit:'L' },
+  { name:'알파옥분(월드콘)', unit:'kg' },
+  { name:'슈가파우더', unit:'kg' },
+  { name:'밀글루텐/활성글루텐', unit:'kg' },
+  { name:'홍국쌀가루', unit:'kg' },
+  { name:'녹차레진', unit:'kg' },
+  { name:'엘로이크림치즈/비앙카골드크림', unit:'kg' },
+  { name:'쓰리인원 내츄럴믹스 초코A', unit:'kg' },
+  { name:'오징어먹물', unit:'kg' },
+];
+
+function buildBlankRows(startNum, count) {
+  let rows = '';
+  for(let i=0;i<count;i++){
+    rows += `<tr><td class="pl-num">${startNum+i}</td><td class="pl-blank"></td><td class="pl-blank"></td><td class="pl-blank"></td><td class="pl-blank"></td></tr>`;
+  }
+  return rows;
+}
+
+function renderBreadTable(tbodyId, items, startNum) {
+  const tbody = document.getElementById(tbodyId);
+  let rows = '';
+  items.forEach((item, idx)=>{
+    rows += `<tr><td class="pl-num">${startNum+idx}</td><td>${item.name}</td><td class="pl-num">${item.unit||''}</td><td class="pl-blank"></td><td class="pl-blank"></td></tr>`;
+  });
+  tbody.innerHTML = rows;
+  return rows;
+}
+
+async function printBreadLog() {
+  if(!selectedDate){ showToast('날짜를 선택해주세요','error'); return; }
+  showToast('빵류 생산투입일지 준비 중...');
+
+  const d = new Date(selectedDate+'T00:00:00');
+  document.getElementById('bl-date').textContent = d.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+
+  renderBreadTable('bl-tbody-common', BREAD_LOG_COMMON, 1);
+  renderBreadTable('bl-tbody-special', BREAD_LOG_SPECIAL, BREAD_LOG_COMMON.length+1);
+
+  document.body.classList.add('printing-bread-log');
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  window.print();
+}
+window.addEventListener('afterprint', ()=>document.body.classList.remove('printing-bread-log'));
 
 function updateHeaderDate() {
   const d = new Date();
