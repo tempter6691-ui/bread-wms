@@ -154,6 +154,8 @@
   }
 
   @media print {
+    @page { margin: 10mm; }
+
     body.printing-daily-log header,
     body.printing-daily-log .date-bar,
     body.printing-daily-log .dashboard-row,
@@ -180,14 +182,16 @@
     body { background: #fff; }
   }
 
-  #print-bread-log { font-family: 'Noto Sans KR', sans-serif; color: #000; padding: 14px 20px; }
-  #print-bread-log h1 { font-size: 18px; font-weight: 700; margin-bottom: 6px; text-align: center; }
-  #print-bread-log .pl-meta { margin-bottom: 10px; }
-  #print-bread-log .pl-section-label { font-size: 13px; font-weight: 700; margin: 10px 0 5px; color: #000; }
-  #print-bread-log .pl-table { font-size: 12px; }
-  #print-bread-log .pl-table th, #print-bread-log .pl-table td { padding: 4px 8px; }
-  #print-bread-log .pl-table td.pl-blank { height: 21px; }
-  #print-bread-log .pl-footnote { margin-top: 8px; font-size: 11px; }
+  #print-bread-log { font-family: 'Noto Sans KR', sans-serif; color: #000; padding: 8px 18px; }
+  #print-bread-log h1 { font-size: 16px; font-weight: 700; margin-bottom: 4px; text-align: center; }
+  #print-bread-log .pl-meta { margin-bottom: 6px; font-size: 12px; }
+  #print-bread-log .pl-section-label { font-size: 12px; font-weight: 700; margin: 6px 0 3px; color: #000; }
+  #print-bread-log .pl-table { font-size: 11px; }
+  #print-bread-log .pl-table th, #print-bread-log .pl-table td { padding: 2px 7px; }
+  #print-bread-log .pl-table td.pl-blank { height: 16px; }
+  #print-bread-log .pl-footnote { margin-top: 5px; font-size: 10px; }
+  #print-bread-log, #print-bread-log * { page-break-inside: avoid; break-inside: avoid; }
+  #print-bread-log table, #print-bread-log tr { page-break-inside: avoid; break-inside: avoid; }
   .pl-section-label { font-size: 14px; font-weight: 700; margin: 18px 0 8px; color: #000; }
 
   #print-daily-log { font-family: 'Noto Sans KR', sans-serif; color: #000; padding: 20px; }
