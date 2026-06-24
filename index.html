@@ -753,6 +753,7 @@ async function safeWrite(fn) {
 var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고 (부장님)',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그'};
 
 function go(page) {
+  if(S.page === 'inbound' && page !== 'inbound') { clearInterval(_ibPollTimer); }
   S.page = page;
   document.getElementById('page-title').textContent = TITLES[page] || page;
   render();
@@ -2332,7 +2333,7 @@ async function resetProducts() {
     await b.commit();
     // Firestore 성공 후 메모리 반영
     S.prods = newProds;
-    toast('제품 목록 초기화 완료! (135개)','ok');
+    toast('제품 목록 초기화 완료! ('+newProds.length+'개)','ok');
     go('products');
   } catch(e){ toast('오류:'+e.message,'err'); }
 }
