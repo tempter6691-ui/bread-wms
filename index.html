@@ -753,7 +753,7 @@ async function safeWrite(fn) {
 var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고 (부장님)',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그'};
 
 function go(page) {
-  if(S.page === 'inbound' && page !== 'inbound') { clearInterval(_ibPollTimer); }
+  if(S.page === 'inbound' && page !== 'inbound') { clearInterval(_ibPollTimer); clearInterval(_ibMultPollTimer); }
   S.page = page;
   document.getElementById('page-title').textContent = TITLES[page] || page;
   render();
@@ -897,6 +897,7 @@ function afterInbound() {
   drawInbound();
   setTimeout(function(){ var el=document.getElementById('ib-scan'); if(el) el.focus(); },80);
   startIbPoll();
+  startIbMultPoll();
 }
 
 // 스캔당 수량 입력 후 (Enter 또는 다른 곳 터치) 자동으로 QR 스캔 칸에 포커스 복귀
@@ -905,6 +906,27 @@ function focusIbScan() {
     var el = document.getElementById('ib-scan');
     if(el && el.offsetParent) el.focus(); // 화면에 실제로 보일 때만 (모달 등이 떠 있으면 건너뜀)
   }, 50);
+}
+
+// 스캔당 수량 칸 값이 잠시 변화 없이 멈추면(값이 바뀐 뒤 안정되면) 자동으로 스캔 칸으로 포커스 이동
+// startIbPoll과 동일한 안전한 폴링 방식: oninput을 직접 가로채지 않아서 입력을 방해하지 않음
+var _ibMultPollTimer=null;
+var _ibMultLastVal=null;
+function startIbMultPoll(){
+  clearInterval(_ibMultPollTimer);
+  _ibMultLastVal=null;
+  _ibMultPollTimer=setInterval(function(){
+    var el=document.getElementById('ib-mult');
+    if(!el){ return; }
+    if(document.activeElement !== el){ _ibMultLastVal=null; return; } // 포커스가 없으면 감시 안 함
+    var v=el.value;
+    if(v!=='' && v===_ibMultLastVal){
+      focusIbScan();
+      _ibMultLastVal=null;
+    } else {
+      _ibMultLastVal=v;
+    }
+  },350);
 }
 
 function drawInbound() {
