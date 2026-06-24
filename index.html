@@ -2293,15 +2293,38 @@ async function loadLogs() {
           '</div>'+
         '</div>'+
         '<table style="border-radius:0 0 4px 4px;overflow:hidden;">'+
-        '<thead><tr><th>제품명</th><th style="text-align:center;width:80px;">입고 수량</th></tr></thead><tbody>'+
+        '<thead><tr><th>제품명</th><th style="text-align:center;width:140px;">입고 수량</th></tr></thead><tbody>'+
         Object.keys(prods).sort().map(function(pname){
           var q=prods[pname];
+          var isToday = (date === todayStr());
+          if(isToday){
+            return '<tr><td>'+pname+'</td><td style="text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:.4rem;">'+
+              '<button class="btn btn-danger btn-sm" onclick="adjustTodayLogQty(\''+esc(pname)+'\',-1)" style="padding:.15rem .5rem;">-1</button>'+
+              '<span style="font-weight:bold;color:#27ae60;min-width:2.2em;display:inline-block;">'+(q>=0?'+':'')+q+'</span>'+
+              '<button class="btn btn-success btn-sm" onclick="adjustTodayLogQty(\''+esc(pname)+'\',1)" style="padding:.15rem .5rem;">+1</button>'+
+              '</div></td></tr>';
+          }
           return '<tr><td>'+pname+'</td><td style="text-align:center;font-weight:bold;color:#27ae60;">'+(q>=0?'+':'')+q+'</td></tr>';
         }).join('')+
         '</tbody></table></div>';
     });
     el.innerHTML=html;
   } catch(e){el.innerHTML='<p style="color:red;">오류: '+e.message+'</p>';}
+}
+
+// ── 입고 기록 화면에서 오늘 입고 수량 +/- 조정 ──────────────────
+// (① 입고 화면의 +1/-1 버튼과 동일한 효과: 오늘 입고 누적량 + 전체 재고를 같이 조정)
+async function adjustTodayLogQty(pname, delta) {
+  var p = S.prods.find(function(x){ return x.name===pname; });
+  if(!p){ toast('제품을 찾을 수 없어요: '+pname,'err'); return; }
+  if(delta < 0) {
+    var curTodayQ = S.todayInbound[p.id]||0;
+    if(curTodayQ<=0){ toast(pname+'의 오늘 입고가 이미 0이에요','err'); return; }
+    await manualOut(p.id);
+  } else {
+    await manualIn(p.id);
+  }
+  loadLogs(); // 방금 조정한 값이 로그 화면에도 바로 반영되도록 다시 그림
 }
 
 // ── LOG DATE CHANGE ──────────────────────────────────────────
