@@ -958,12 +958,20 @@ async function manualOut(pid) {
   var p=S.prods.find(function(x){return x.id===pid;}); if(!p) return;
   var curQ=S.inv[pid]||0; if(curQ<=0){toast('재고가 없어요!','err');return;}
   var estQ=curQ-1; S.inv[pid]=estQ;
+  var today = todayStr();
+  var curTodayQ=S.todayInbound[pid]||0;
+  var estTodayQ=Math.max(0, curTodayQ-1); S.todayInbound[pid]=estTodayQ;
+  var dibId = today+'_'+pid;
   try {
     await safeWrite(async function() {
       await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+      // 오늘 입고량도 같이 차감 (0 밑으로는 내려가지 않도록 보호)
+      if(curTodayQ > 0) {
+        await db.collection('dailyInbound').doc(dibId).set({date:today,pid:pid,pname:p.name,qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+      }
       await db.collection('logs').add({type:'outbound',pid:pid,pname:p.name,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
     });
-    toast(p.name+' -1 (재고:'+estQ+')','ok'); drawInbound();
+    toast(p.name+' -1 (재고:'+estQ+', 오늘입고:'+estTodayQ+')','ok'); drawInbound();
   } catch(e){toast('오류:'+e.message,'err');}
 }
 
