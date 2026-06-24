@@ -969,7 +969,7 @@ async function manualOut(pid) {
       if(curTodayQ > 0) {
         await db.collection('dailyInbound').doc(dibId).set({date:today,pid:pid,pname:p.name,qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
       }
-      await db.collection('logs').add({type:'outbound',pid:pid,pname:p.name,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
+      await db.collection('logs').add({type:'outbound',via:'inboundCancel',pid:pid,pname:p.name,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
     });
     toast(p.name+' -1 (재고:'+estQ+', 오늘입고:'+estTodayQ+')','ok'); drawInbound();
   } catch(e){toast('오류:'+e.message,'err');}
@@ -2222,7 +2222,7 @@ async function delProd(pid) {
 // ── LOGS ─────────────────────────────────────────────────────
 function pgLogs() {
   var today=todayStr();
-  return '<div class="card"><div class="card-title">📦 입출고 기록 (날짜별 합산)</div>'+
+  return '<div class="card"><div class="card-title">📦 입고 기록 (날짜별 합산)</div>'+
     '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">'+
       '<label style="font-size:.85rem;font-weight:600;">날짜: <input type="date" id="log-date" value="'+today+'" style="padding:.4rem;margin-left:.3rem;"></label>'+
       '<button class="btn btn-primary btn-sm" onclick="loadLogs()">조회</button>'+
@@ -2237,8 +2237,9 @@ async function loadLogs() {
   try {
     var snap=await db.collection('logs').where('type','in',['inbound','outbound']).get();
 
-    // 날짜+제품별로 입고/출고 합산
-    var dayProd = {}; // 'YYYY-MM-DD' -> { productName: {in:0, out:0} }
+    // 날짜+제품별로 입고는 더하고, "입고 취소"(via:inboundCancel)인 출고만 빼서 순수 입고량을 계산
+    // (거래처로 나가는 진짜 출고는 별도 영역이라 여기서는 건드리지 않음)
+    var dayProd = {}; // 'YYYY-MM-DD' -> { productName: qty }
     var dayDocIds = {}; // 'YYYY-MM-DD' -> [docId, ...] (입고 기록만, 날짜수정은 입고 기준)
     snap.forEach(function(d){
       var r=d.data();
@@ -2246,43 +2247,40 @@ async function loadLogs() {
       if(!t) return;
       var dateStr=t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0');
       if(filterDate && dateStr!==filterDate) return;
+      if(r.type==='outbound' && r.via!=='inboundCancel') return; // 거래처 정상 출고는 입고 기록에서 제외
       if(!dayProd[dateStr]) dayProd[dateStr]={};
       var pname=r.pname||r.pid||'-';
-      if(!dayProd[dateStr][pname]) dayProd[dateStr][pname]={in:0,out:0};
+      if(!dayProd[dateStr][pname]) dayProd[dateStr][pname]=0;
       if(r.type==='inbound'){
-        dayProd[dateStr][pname].in+=(r.qty||1);
+        dayProd[dateStr][pname]+=(r.qty||1);
         if(!dayDocIds[dateStr]) dayDocIds[dateStr]=[];
         dayDocIds[dateStr].push(d.id);
       } else {
-        dayProd[dateStr][pname].out+=(r.qty||1);
+        dayProd[dateStr][pname]-=(r.qty||1);
       }
     });
 
     var dates=Object.keys(dayProd).sort(function(a,b){return b.localeCompare(a);});
-    if(!dates.length){el.innerHTML='<p style="color:#aaa;">해당 날짜 입출고 기록 없음</p>';return;}
+    if(!dates.length){el.innerHTML='<p style="color:#aaa;">해당 날짜 입고 기록 없음</p>';return;}
 
     var html='';
     dates.forEach(function(date){
       var prods=dayProd[date];
       var docIds=dayDocIds[date]||[];
-      var totalIn=0, totalOut=0;
-      Object.values(prods).forEach(function(v){ totalIn+=v.in; totalOut+=v.out; });
+      var total=Object.values(prods).reduce(function(a,b){return a+b;},0);
       html+='<div style="margin-bottom:1rem;">'+
         '<div style="background:#1e3a5f;color:#fff;padding:.4rem .8rem;border-radius:4px 4px 0 0;font-weight:bold;display:flex;justify-content:space-between;align-items:center;">'+
           '<span>📅 '+date+'</span>'+
           '<div style="display:flex;align-items:center;gap:.5rem;">'+
-            '<span>입고 +'+totalIn+' / 출고 -'+totalOut+'</span>'+
+            '<span>총 '+total+'개</span>'+
             (docIds.length?'<button onclick="changeLogDate(\''+date+'\','+JSON.stringify(docIds)+')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:.2rem .5rem;border-radius:4px;cursor:pointer;font-size:.75rem;">날짜수정</button>':'')+
           '</div>'+
         '</div>'+
         '<table style="border-radius:0 0 4px 4px;overflow:hidden;">'+
-        '<thead><tr><th>제품명</th><th style="text-align:center;width:70px;">입고</th><th style="text-align:center;width:70px;">출고</th><th style="text-align:center;width:70px;">순변동</th></tr></thead><tbody>'+
+        '<thead><tr><th>제품명</th><th style="text-align:center;width:80px;">입고 수량</th></tr></thead><tbody>'+
         Object.keys(prods).sort().map(function(pname){
-          var v=prods[pname]; var net=v.in-v.out;
-          return '<tr><td>'+pname+'</td>'+
-            '<td style="text-align:center;font-weight:bold;color:#27ae60;">'+(v.in?'+'+v.in:'-')+'</td>'+
-            '<td style="text-align:center;font-weight:bold;color:#c0392b;">'+(v.out?'-'+v.out:'-')+'</td>'+
-            '<td style="text-align:center;font-weight:bold;">'+(net>0?'+':'')+net+'</td></tr>';
+          var q=prods[pname];
+          return '<tr><td>'+pname+'</td><td style="text-align:center;font-weight:bold;color:#27ae60;">'+(q>=0?'+':'')+q+'</td></tr>';
         }).join('')+
         '</tbody></table></div>';
     });
