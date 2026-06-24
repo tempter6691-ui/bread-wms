@@ -885,7 +885,7 @@ function pgInbound() {
     '</div>'+
     '<div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.4rem;">'+
       '<label style="font-size:.85rem;color:#555;white-space:nowrap;">스캔당 수량:</label>'+
-      '<input id="ib-mult" type="number" min="1" value="1" inputmode="numeric" style="width:80px;padding:.4rem;border:1px solid #ddd;border-radius:6px;font-weight:700;text-align:center;" onfocus="this.select()" oninput="ibMultDebounce()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();focusIbScan();}" onblur="focusIbScan()">'+
+      '<input id="ib-mult" type="text" inputmode="numeric" pattern="[0-9]*" min="1" value="1" style="width:80px;padding:.4rem;border:1px solid #ddd;border-radius:6px;font-weight:700;text-align:center;" onfocus="this.select()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();focusIbScan();}" onblur="focusIbScan()">'+
       '<span style="font-size:.78rem;color:#999;">예: 300으로 설정 후 스캔하면 한 번에 300개씩 입고됩니다</span>'+
     '</div>'+
     '<input id="ib-scan" type="text" class="scan-input" placeholder="🔍 QR 스캔 또는 코드 입력 후 Enter" onkeydown="if(event.key===\'Enter\')doScanIn()">'+
@@ -905,17 +905,6 @@ function focusIbScan() {
     var el = document.getElementById('ib-scan');
     if(el && el.offsetParent) el.focus(); // 화면에 실제로 보일 때만 (모달 등이 떠 있으면 건너뜀)
   }, 50);
-}
-
-// 스캔당 수량 칸에 타이핑을 멈추면(700ms) 자동으로 스캔 칸으로 포커스 이동
-// -> 사람이 직접 Enter나 다른 곳을 누르지 않아도, 스캐너가 그 사이에 수량 칸을 잘못 건드릴 위험을 줄임
-var _ibMultTimer=null;
-function ibMultDebounce() {
-  clearTimeout(_ibMultTimer);
-  _ibMultTimer = setTimeout(function(){
-    var multEl = document.getElementById('ib-mult');
-    if(multEl && document.activeElement === multEl) focusIbScan();
-  }, 700);
 }
 
 function drawInbound() {
