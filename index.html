@@ -912,21 +912,26 @@ function focusIbScan() {
 // startIbPoll과 동일한 안전한 폴링 방식: oninput을 직접 가로채지 않아서 입력을 방해하지 않음
 var _ibMultPollTimer=null;
 var _ibMultLastVal=null;
+var _ibMultStableCount=0;
 function startIbMultPoll(){
   clearInterval(_ibMultPollTimer);
   _ibMultLastVal=null;
+  _ibMultStableCount=0;
   _ibMultPollTimer=setInterval(function(){
     var el=document.getElementById('ib-mult');
     if(!el){ return; }
-    if(document.activeElement !== el){ _ibMultLastVal=null; return; } // 포커스가 없으면 감시 안 함
+    if(document.activeElement !== el){ _ibMultLastVal=null; _ibMultStableCount=0; return; } // 포커스가 없으면 감시 안 함
     var v=el.value;
     if(v!=='' && v===_ibMultLastVal){
-      focusIbScan();
-      _ibMultLastVal=null;
+      _ibMultStableCount++;
+      if(_ibMultStableCount>=5){ // 약 1.5초 동안 값이 안 바뀌면 자동 이동
+        focusIbScan();
+        _ibMultLastVal=null; _ibMultStableCount=0;
+      }
     } else {
-      _ibMultLastVal=v;
+      _ibMultLastVal=v; _ibMultStableCount=0;
     }
-  },350);
+  },300);
 }
 
 function drawInbound() {
