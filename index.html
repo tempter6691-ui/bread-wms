@@ -260,12 +260,12 @@ var PRODS_DEFAULT = [
   {id:'P036',qr:'E2',  name:'슈피',               cat:'제과류(E)'},
   {id:'P037',qr:'E31', name:'만주1단',              cat:'제과류(E)'},
   {id:'P038',qr:'E32', name:'만주2단',              cat:'제과류(E)'},
-  {id:'P039',qr:'E41', name:'슈가도넛1',          cat:'제과류(E)'},
-  {id:'P040',qr:'E42', name:'슈가도넛2',          cat:'제과류(E)'},
-  {id:'P041',qr:'E51', name:'초코도넛1',          cat:'제과류(E)'},
-  {id:'P042',qr:'E52', name:'초코도넛2',          cat:'제과류(E)'},
-  {id:'P043',qr:'S61', name:'누네띠네1',          cat:'제과류(E)'},
-  {id:'P044',qr:'E62', name:'누네띠네2',          cat:'제과류(E)'},
+  {id:'P039',qr:'E41', name:'슈가도넛1단',          cat:'제과류(E)'},
+  {id:'P040',qr:'E42', name:'슈가도넛2단',          cat:'제과류(E)'},
+  {id:'P041',qr:'E51', name:'초코도넛1단',          cat:'제과류(E)'},
+  {id:'P042',qr:'E52', name:'초코도넛2단',          cat:'제과류(E)'},
+  {id:'P043',qr:'S61', name:'누네띠네1단',          cat:'제과류(E)'},
+  {id:'P044',qr:'E62', name:'누네띠네2단',          cat:'제과류(E)'},
   {id:'P045',qr:'E7',  name:'호두과자',           cat:'제과류(E)'},
   {id:'P046',qr:'E8',  name:'붕어빵',             cat:'제과류(E)'},
   // 파이
@@ -380,21 +380,6 @@ var PRODS_DEFAULT = [
   {id:'P134',qr:'K4',  name:'초코크레이프트400',     cat:'(3호)원형크레이프류(N)'},
   // 기타
   {id:'P135',qr:'L1',  name:'미니와플',           cat:'제과류(E)'},
-  {id:'P136',qr:'',name:'초코휘낭시에1단',cat:'제과류(E)',unit:'판'},
-  {id:'P137',qr:'',name:'초코휘낭시에2단',cat:'제과류(E)',unit:'판'},
-  {id:'P138',qr:'',name:'무화과휘낭시에',cat:'제과류(E)',unit:'판'},
-  {id:'P139',qr:'',name:'슈크림1단',cat:'제과류(E)',unit:'판'},
-  {id:'P140',qr:'',name:'슈크림2단',cat:'제과류(E)',unit:'판'},
-  {id:'P141',qr:'',name:'만주1단',cat:'제과류(E)',unit:'판'},
-  {id:'P142',qr:'',name:'만주2단',cat:'제과류(E)',unit:'판'},
-  {id:'P143',qr:'',name:'슈가도넛1단',cat:'제과류(E)',unit:'판'},
-  {id:'P144',qr:'',name:'슈가도넛2단',cat:'제과류(E)',unit:'판'},
-  {id:'P145',qr:'',name:'초코도넛1단',cat:'제과류(E)',unit:'판'},
-  {id:'P146',qr:'',name:'초코도넛2단',cat:'제과류(E)',unit:'판'},
-  {id:'P147',qr:'',name:'누네띠네1단',cat:'제과류(E)',unit:'판'},
-  {id:'P148',qr:'',name:'누네띠네2단',cat:'제과류(E)',unit:'판'},
-  {id:'P149',qr:'',name:'호두과자',cat:'제과류(E)',unit:'판'},
-  {id:'P150',qr:'',name:'붕어빵',cat:'제과류(E)',unit:'판'},
 ];
 
 var CLIENTS_DEFAULT = [
@@ -623,9 +608,18 @@ function startApp(cfg) {
 async function loadAll() {
   try {
     var ps = await db.collection('products').get();
-    if (!ps.empty && ps.size >= 5) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit||pd.unit.trim()==='') pd.unit='판'; else pd.unit=pd.unit.trim(); S.prods.push(Object.assign({id:d.id},pd)); }); }
-    else if(ps.empty) { S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); }); await b.commit(); }
-    else { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit||pd.unit==='') pd.unit='판'; S.prods.push(Object.assign({id:d.id},pd)); }); }
+    if (!ps.empty) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit||pd.unit.trim()==='') pd.unit='판'; else pd.unit=pd.unit.trim(); S.prods.push(Object.assign({id:d.id},pd)); }); }
+    else {
+      // 제품 목록이 정말 비어있을 때만 진입. 네트워크 문제로 일시적으로 비어 보이는 경우를 막기 위해
+      // 절대 자동으로 Firestore를 덮어쓰지 않고, 사용자에게 직접 확인을 받습니다.
+      var confirmInit = confirm('⚠ 제품 데이터가 비어있는 것으로 확인됩니다.\n네트워크 문제로 일시적으로 그렇게 보일 수도 있습니다.\n\n정말로 기본 제품 목록으로 초기화하시겠습니까?\n(취소하면 빈 목록으로 표시되며, 새로고침으로 다시 확인할 수 있습니다)');
+      if (confirmInit) {
+        S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); }); await b.commit();
+      } else {
+        S.prods = [];
+        toast('제품 목록을 불러오지 못했습니다. 새로고침해주세요.','err');
+      }
+    }
 
     var cs = await db.collection('clients').get();
     if (!cs.empty) { S.clients = []; cs.forEach(function(d){ S.clients.push(Object.assign({id:d.id},d.data())); }); }
