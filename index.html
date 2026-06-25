@@ -182,7 +182,6 @@ tr:hover td{background:#fafafa;}
     <button class="btn btn-warning btn-sm" onclick="doBackup()" style="width:100%;margin-bottom:.4rem;">💾 데이터 백업</button>
     <button class="btn btn-gray btn-sm" onclick="document.getElementById('restore-input').click()" style="width:100%;">📂 데이터 복원</button>
     <input type="file" id="restore-input" accept=".json" style="display:none;" onchange="doRestore(this)">
-    <button class="btn btn-danger btn-sm" onclick="resetProducts()" style="width:100%;margin-top:.4rem;">🔄 제품목록 초기화</button>
   </div>
 </div>
 <div id="main">
@@ -2376,26 +2375,6 @@ function closeModal(){document.getElementById('modal-overlay').classList.remove(
 document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
 // ── BACKUP / RESTORE ─────────────────────────────────────────
-async function resetProducts() {
-  if(!confirm('⚠️ 제품 목록을 최신 QR코드로 완전히 초기화할까요?\n재고는 유지됩니다.\n\n※ 직접 수정한 제품명이 모두 초기화됩니다!')) return;
-  if(!confirm('정말 초기화하시겠습니까? 수정한 제품명이 전부 사라집니다.')) return;
-  try {
-    var newProds = JSON.parse(JSON.stringify(PRODS_DEFAULT));
-    // Delete all existing products first
-    var existing = await db.collection('products').get();
-    var b0 = db.batch();
-    existing.forEach(function(d){ b0.delete(d.ref); });
-    if(!existing.empty) await b0.commit();
-    // Upload new products
-    var b = db.batch();
-    newProds.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); });
-    await b.commit();
-    // Firestore 성공 후 메모리 반영
-    S.prods = newProds;
-    toast('제품 목록 초기화 완료! ('+newProds.length+'개)','ok');
-    go('products');
-  } catch(e){ toast('오류:'+e.message,'err'); }
-}
 
 function doBackup() {
   var data={prods:S.prods,clients:S.clients,inv:S.inv,orders:S.orders,templates:S.templates,at:new Date().toISOString()};
