@@ -1999,8 +1999,8 @@ async function doAddClient() {
       var dup = await db.collection('clients').where('name','==',name).limit(1).get();
       if(!dup.empty) { throw new Error('DUPLICATE'); }
       var id='CL'+Date.now().toString().slice(-8)+Math.floor(Math.random()*1000);
-      await db.collection('clients').doc(id).set({name:name,driver:drv,code:code});
-      S.clients.push({id:id,name:name,driver:drv,code:code});
+      await db.collection('clients').doc(id).set({name:name,driver:drv,code:code,entity:'법인'});
+      S.clients.push({id:id,name:name,driver:drv,code:code,entity:'법인'});
     });
     closeModal(); toast(name+' 추가됨','ok'); drawClients();
   } catch(e){
