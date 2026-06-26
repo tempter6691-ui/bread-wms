@@ -2114,8 +2114,32 @@ function pgProducts() {
   return '<div class="card">'+
     '<div style="display:flex;gap:.5rem;margin-bottom:.75rem;">'+
       '<input id="pr-q" type="text" style="flex:1;padding:.45rem;" placeholder="제품 검색..." oninput="drawProducts()">'+
+      '<button class="btn btn-success btn-sm" onclick="exportProductsExcel()">📥 엑셀로 내보내기</button>'+
       '<button class="btn btn-primary btn-sm" onclick="showAddProd()">+ 추가</button>'+
     '</div><div id="pr-list"></div></div>';
+}
+
+function exportProductsExcel() {
+  if(!S.prods.length){ toast('제품 데이터가 없어요','err'); return; }
+
+  var rows = [['제품ID','QR코드','제품명','분류','단위','현재재고']];
+  S.prods.forEach(function(p){
+    rows.push([p.id, p.qr||'', p.name, p.cat, p.unit||'', S.inv[p.id]||0]);
+  });
+
+  var csv = rows.map(function(r){
+    return r.map(function(c){return '"'+(c===undefined||c===null?'':c).toString().replace(/"/g,'""')+'"';}).join(',');
+  }).join('\n');
+
+  var bom = '\uFEFF';
+  var blob = new Blob([bom+csv],{type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  var today = new Date();
+  var ds = today.getFullYear()+''+(today.getMonth()+1).toString().padStart(2,'0')+today.getDate().toString().padStart(2,'0');
+  a.download = '제품관리목록_'+ds+'.csv';
+  a.click();
+  toast('엑셀 다운로드 완료!','ok');
 }
 
 function drawProducts() {
