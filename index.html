@@ -916,14 +916,14 @@ function startIbMultPoll(){
     var v=el.value;
     if(v!=='' && v===_ibMultLastVal){
       _ibMultStableCount++;
-      if(_ibMultStableCount>=10){ // 400ms x 10 = 4초 동안 값이 안 바뀌면 자동 이동
+      if(_ibMultStableCount>=5){ // 500ms x 5 = 2.5초 동안 값이 안 바뀌면 자동 이동
         focusIbScan();
         _ibMultLastVal=null; _ibMultStableCount=0;
       }
     } else {
       _ibMultLastVal=v; _ibMultStableCount=0;
     }
-  },400);
+  },500);
 }
 
 function drawInbound() {
