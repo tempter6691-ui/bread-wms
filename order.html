@@ -395,6 +395,11 @@ async function loadHistory(){
             return '<div class="history-row"><span>'+item.pname+'</span><span style="font-weight:700;color:var(--primary);">'+item.qty+'개</span></div>';
           }).join('')+
           (o.memo?'<div style="font-size:.75rem;color:#888;margin-top:.3rem;font-style:italic;">💬 '+o.memo+'</div>':'')+
+          ((o.reply||o.replyTag)?'<div style="font-size:.75rem;color:#1b5e7d;margin-top:.3rem;background:#f0f7ff;border-radius:6px;padding:.4rem .5rem;">'+
+            '<strong>📩 브레드뱅크 답변</strong>'+
+            (o.replyTag?' <span style="background:#2980b9;color:#fff;font-size:.66rem;padding:1px 6px;border-radius:8px;font-weight:700;">'+o.replyTag+'</span>':'')+
+            (o.reply?'<div style="margin-top:.2rem;">'+o.reply+'</div>':'')+
+          '</div>':'')+
           '<button class="reorder-btn" onclick="reorder('+idx+')">🔄 이 주문 그대로 담기</button>'+
         '</div>'+
       '</div>';
