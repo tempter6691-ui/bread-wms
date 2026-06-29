@@ -163,11 +163,17 @@ async function init() {
     var snap = await db.collection('products').get();
     S.prods=[];
     snap.forEach(function(d){S.prods.push(Object.assign({id:d.id},d.data()));});
+    // orderHidden:true 인 제품은 발주앱(거래처 화면)에서만 숨김 - WMS 제품관리 데이터는 그대로 유지됨
+    S.prods = S.prods.filter(function(p){ return !p.orderHidden; });
     S.prods.sort(function(a,b){
       // '(꼬끄)' 표시 제품은 같은 카테고리 내 맨 뒤로
       var aKko=(a.name||'').includes('(꼬끄)'), bKko=(b.name||'').includes('(꼬끄)');
       if(aKko&&!bKko) return 1;
       if(!aKko&&bKko) return -1;
+      // '도지마롤' 제품은 같은 카테고리 내에서 서로 묶이도록 맨 뒤로 (그 안에서는 가나다순)
+      var aRoll=(a.name||'').includes('도지마롤'), bRoll=(b.name||'').includes('도지마롤');
+      if(aRoll&&!bRoll) return 1;
+      if(!aRoll&&bRoll) return -1;
       return (a.name||'').localeCompare(b.name||'','ko');
     });
     var catSet={};
