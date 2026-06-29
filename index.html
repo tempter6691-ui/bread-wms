@@ -216,10 +216,10 @@ tr:hover td{background:#fafafa;}
 // ── DEFAULT DATA ──────────────────────────────────────────────
 var PRODS_DEFAULT = [
   // 원형케익
-  {id:'P001',qr:'A1',  name:'3호생크림 케익(원형)', cat:'케익류(A)',unit:'박스'},
-  {id:'P157',qr:'A2',  name:'3호생크림케익아이씽',  cat:'케익류(A)',unit:'판'},
-  {id:'P158',qr:'A3',  name:'3호생크림케익(화이트아이씽JWG용)', cat:'케익류(A)',unit:'판'},
-  {id:'P004',qr:'A4',  name:'생크림4호',          cat:'(3호)원형케익류(H)',unit:'박스'},
+  {id:'P001',qr:'A1',  name:'3호생크림 케익(원형)', cat:'행사케익류(A)',unit:'박스'},
+  {id:'P157',qr:'A2',  name:'3호생크림케익아이씽',  cat:'행사케익류(A)',unit:'판'},
+  {id:'P158',qr:'A3',  name:'3호생크림케익(화이트아이씽JWG용)', cat:'행사케익류(A)',unit:'판'},
+  {id:'P004',qr:'A4',  name:'생크림4호',          cat:'원형케익류(H)',unit:'박스'},
   // 타르트
   {id:'P005',qr:'B1',  name:'레몬타르트',         cat:'타르트류(B)',unit:'판'},
   {id:'P006',qr:'B2',  name:'시리얼타르트',       cat:'타르트류(B)',unit:'판'},
@@ -268,10 +268,10 @@ var PRODS_DEFAULT = [
   {id:'P045',qr:'E7',  name:'호두과자',           cat:'제과류(E)',unit:'판'},
   {id:'P046',qr:'E8',  name:'붕어빵',             cat:'제과류(E)',unit:'판'},
   // 파이
-  {id:'P047',qr:'E91', name:'딸기파이1단',          cat:'파이류(M)',unit:'판'},
-  {id:'P048',qr:'E92', name:'딸기파이2단',          cat:'파이류(M)',unit:'판'},
-  {id:'P049',qr:'E101',name:'갈릭파이1단',          cat:'파이류(M)',unit:'판'},
-  {id:'P050',qr:'E102',name:'갈릭파이2단',          cat:'파이류(M)',unit:'판'},
+  {id:'P047',qr:'E91', name:'딸기파이1단',          cat:'파이류(F)',unit:'판'},
+  {id:'P048',qr:'E92', name:'딸기파이2단',          cat:'파이류(F)',unit:'판'},
+  {id:'P049',qr:'E101',name:'갈릭파이1단',          cat:'파이류(F)',unit:'판'},
+  {id:'P050',qr:'E102',name:'갈릭파이2단',          cat:'파이류(F)',unit:'판'},
   // 마카롱
   {id:'P051',qr:'E111',name:'마카롱로즈1단',        cat:'마카롱류(L)',unit:'판'},
   {id:'P052',qr:'E112',name:'마카롱로즈2단',        cat:'마카롱류(L)',unit:'판'},
@@ -289,24 +289,24 @@ var PRODS_DEFAULT = [
   {id:'P155',qr:'M4',  name:'로즈피(꼬끄)',         cat:'마카롱류(L)',unit:'판'},
   {id:'P156',qr:'M5',  name:'블루피(꼬끄)',         cat:'마카롱류(L)',unit:'판'},
   // 파이
-  {id:'P061',qr:'E16', name:'매작파이',           cat:'파이류(M)',unit:'판'},
+  {id:'P061',qr:'E16', name:'매작파이',           cat:'파이류(F)',unit:'판'},
   // 롤케익
-  {id:'P062',qr:'F1',  name:'바나나롤',           cat:'조각케익류(F)',unit:'판'},
-  {id:'P063',qr:'F2',  name:'녹차롤',             cat:'조각케익류(F)',unit:'판'},
-  {id:'P064',qr:'F3',  name:'딸기롤',             cat:'조각케익류(F)',unit:'판'},
+  {id:'P062',qr:'F1',  name:'바나나도지마롤',           cat:'조각케익류(M)',unit:'판'},
+  {id:'P063',qr:'F2',  name:'녹차도지마롤',             cat:'조각케익류(M)',unit:'판'},
+  {id:'P064',qr:'F3',  name:'딸기도지마롤',             cat:'조각케익류(M)',unit:'판'},
   // 기타
   {id:'P065',qr:'F4',  name:'오믈렛',             cat:'제과류(E)',unit:'판'},
   // 사각케익
-  {id:'P066',qr:'F5',  name:'초코가나슈케익사각',     cat:'조각케익류(F)',unit:'판'},
-  {id:'P067',qr:'F6',  name:'바나나케익사각',         cat:'조각케익류(F)',unit:'판'},
-  {id:'P068',qr:'F7',  name:'모카케익사각',           cat:'조각케익류(F)',unit:'판'},
-  {id:'P069',qr:'F8',  name:'블루베리케익사각',       cat:'조각케익류(F)',unit:'판'},
-  {id:'P070',qr:'F9',  name:'화이트초코케익사각',     cat:'조각케익류(F)',unit:'판'},
-  {id:'P071',qr:'F10', name:'녹차케익사각',        cat:'조각케익류(F)',unit:'판'},
+  {id:'P066',qr:'F5',  name:'초코가나슈케익사각',     cat:'조각케익류(M)',unit:'판'},
+  {id:'P067',qr:'F6',  name:'바나나케익사각',         cat:'조각케익류(M)',unit:'판'},
+  {id:'P068',qr:'F7',  name:'모카케익사각',           cat:'조각케익류(M)',unit:'판'},
+  {id:'P069',qr:'F8',  name:'블루베리케익사각',       cat:'조각케익류(M)',unit:'판'},
+  {id:'P070',qr:'F9',  name:'화이트초코케익사각',     cat:'조각케익류(M)',unit:'판'},
+  {id:'P071',qr:'F10', name:'녹차케익사각',        cat:'조각케익류(M)',unit:'판'},
   {id:'P072',qr:'G1',  name:'고구마무스사각',     cat:'사각무스케익류(G)',unit:'판'},
   {id:'P073',qr:'G2',  name:'요거트무스사각',     cat:'사각무스케익류(G)',unit:'판'},
   {id:'P074',qr:'G3',  name:'딸기무스사각',       cat:'사각무스케익류(G)',unit:'판'},
-  {id:'P075',qr:'G4',  name:'치즈케익사각',           cat:'조각케익류(F)',unit:'판'},
+  {id:'P075',qr:'G4',  name:'치즈케익사각',           cat:'사각무스케익류(G)',unit:'판'},
   {id:'P076',qr:'G5',  name:'모카무스사각',       cat:'사각무스케익류(G)',unit:'판'},
   {id:'P077',qr:'G6',  name:'티라미스사각',       cat:'사각무스케익류(G)',unit:'판'},
   {id:'P078',qr:'G7',  name:'망고무스사각',       cat:'사각무스케익류(G)',unit:'판'},
@@ -314,28 +314,28 @@ var PRODS_DEFAULT = [
   {id:'P080',qr:'G9',  name:'녹차무스사각',       cat:'사각무스케익류(G)',unit:'판'},
   {id:'P081',qr:'G10', name:'브라우니사각',       cat:'사각무스케익류(G)',unit:'판'},
   // 원형케익
-  {id:'P082',qr:'H1',  name:'모카무스3호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P083',qr:'H2',  name:'티라미스2호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P084',qr:'H3',  name:'티라미스3호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P085',qr:'H4',  name:'딸기무스2호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P086',qr:'H5',  name:'딸기무스3호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P087',qr:'H6',  name:'오레오무스3호',        cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P088',qr:'H7',  name:'치즈2호',              cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P089',qr:'H8',  name:'치즈3호',              cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P090',qr:'H9',  name:'치즈3루나호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P091',qr:'H10', name:'체리무스3호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P092',qr:'H11', name:'치즈마블3호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P093',qr:'H12', name:'견과3호',              cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P094',qr:'H13', name:'바나나3호',            cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P095',qr:'H14', name:'바나나3JWG호',         cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P096',qr:'H15', name:'블루베리3호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P097',qr:'H16', name:'녹차3호',              cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P098',qr:'H17', name:'녹차3JWG호',           cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P099',qr:'H18', name:'브라우니3호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P100',qr:'H19', name:'망고무스2호',          cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P101',qr:'H20', name:'고구마2호',            cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P102',qr:'H21', name:'당근3호',              cat:'(3호)원형케익류(H)',unit:'판'},
-  {id:'P103',qr:'H22', name:'까망베르3호',          cat:'(3호)원형케익류(H)',unit:'판'},
+  {id:'P082',qr:'H1',  name:'모카무스3호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P083',qr:'H2',  name:'티라미스2호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P084',qr:'H3',  name:'티라미스3호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P085',qr:'H4',  name:'딸기무스2호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P086',qr:'H5',  name:'딸기무스3호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P087',qr:'H6',  name:'오레오무스3호',        cat:'원형케익류(H)',unit:'판'},
+  {id:'P088',qr:'H7',  name:'치즈2호',              cat:'원형케익류(H)',unit:'판'},
+  {id:'P089',qr:'H8',  name:'치즈3호',              cat:'원형케익류(H)',unit:'판'},
+  {id:'P090',qr:'H9',  name:'치즈3루나호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P091',qr:'H10', name:'체리무스3호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P092',qr:'H11', name:'치즈마블3호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P093',qr:'H12', name:'견과3호',              cat:'원형케익류(H)',unit:'판'},
+  {id:'P094',qr:'H13', name:'바나나3호',            cat:'원형케익류(H)',unit:'판'},
+  {id:'P095',qr:'H14', name:'바나나3JWG호',         cat:'원형케익류(H)',unit:'판'},
+  {id:'P096',qr:'H15', name:'블루베리3호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P097',qr:'H16', name:'녹차3호',              cat:'원형케익류(H)',unit:'판'},
+  {id:'P098',qr:'H17', name:'녹차3JWG호',           cat:'원형케익류(H)',unit:'판'},
+  {id:'P099',qr:'H18', name:'브라우니3호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P100',qr:'H19', name:'망고무스2호',          cat:'원형케익류(H)',unit:'판'},
+  {id:'P101',qr:'H20', name:'고구마2호',            cat:'원형케익류(H)',unit:'판'},
+  {id:'P102',qr:'H21', name:'당근3호',              cat:'원형케익류(H)',unit:'판'},
+  {id:'P103',qr:'H22', name:'까망베르3호',          cat:'원형케익류(H)',unit:'판'},
   // 쿠키
   {id:'P104',qr:'I1',  name:'체리쿠키',           cat:'쿠키류(I)',unit:'봉'},
   {id:'P105',qr:'I2',  name:'흑임자쿠키',         cat:'쿠키류(I)',unit:'봉'},
@@ -364,7 +364,7 @@ var PRODS_DEFAULT = [
   {id:'P127',qr:'J21', name:'단호박빵',           cat:'빵류(J)',unit:'봉'},
   {id:'P128',qr:'J22', name:'벨기에와플',         cat:'빵류(J)',unit:'봉'},
   // 롤케익
-  {id:'P129',qr:'J23', name:'롤케익',             cat:'조각케익류(F)',unit:'개'},
+  {id:'P129',qr:'J23', name:'롤케익',             cat:'조각케익류(M)',unit:'개',orderHidden:true},
   {id:'P130',qr:'J24', name:'휘핑생크림',         cat:'빵류(J)',unit:'봉'},
   {id:'P151',qr:'J25', name:'피자도우',           cat:'기타(O)',unit:'박스'},
   {id:'P546543',qr:'L13', name:'블루베리베이글',     cat:'기타(O)',unit:'박스'},
@@ -373,9 +373,9 @@ var PRODS_DEFAULT = [
   {id:'P794659',qr:'L10', name:'스와레이',           cat:'기타(O)',unit:'박스'},
   {id:'P638931',qr:'L12', name:'트위스터 다크화이트 초콜릿', cat:'기타(O)',unit:'박스'},
   {id:'P142236',qr:'L14', name:'과일3종',            cat:'기타(O)',unit:'박스'},
-  {id:'P131',qr:'K1',  name:'딸기크레이프트400',  cat:'(3호)원형크레이프류(N)',unit:'박스'},
-  {id:'P132',qr:'K2',  name:'딸기크레이프트600',  cat:'(3호)원형크레이프류(N)',unit:'박스'},
-  {id:'P133',qr:'K3',  name:'밀크크레이프트400',     cat:'(3호)원형크레이프류(N)',unit:'박스'},
+  {id:'P131',qr:'K1',  name:'딸기크레이프트400',  cat:'원형크레이프류(N)',unit:'박스'},
+  {id:'P132',qr:'K2',  name:'딸기크레이프트600',  cat:'원형크레이프류(N)',unit:'박스',orderHidden:true},
+  {id:'P133',qr:'K3',  name:'밀크크레이프트400',     cat:'원형크레이프류(N)',unit:'박스'},
   // 기타
   {id:'P135',qr:'L1',  name:'미니와플',           cat:'제과류(E)',unit:'박스'},
 ];
@@ -875,9 +875,11 @@ function pgInbound() {
       '<input id="ib-q" type="text" placeholder="제품 검색..." oninput="drawInbound()" style="flex:1;padding:.45rem;">'+
       '<button class="btn btn-primary btn-sm" onclick="showAddProd()">+ 제품 추가</button>'+
     '</div>'+
-    '<div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.4rem;">'+
+    '<div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.4rem;flex-wrap:wrap;">'+
       '<label style="font-size:.85rem;color:#555;white-space:nowrap;">스캔당 수량:</label>'+
       '<input id="ib-mult" type="text" inputmode="numeric" pattern="[0-9]*" min="1" value="1" style="width:80px;padding:.4rem;border:1px solid #ddd;border-radius:6px;font-weight:700;text-align:center;" onfocus="this.select()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();focusIbScan();}" onblur="focusIbScan()">'+
+      '<button type="button" class="btn btn-sm" onclick="setIbMult(1)" style="padding:.4rem .7rem;">1</button>'+
+      '<button type="button" class="btn btn-sm" onclick="setIbMult(24)" style="padding:.4rem .7rem;">24</button>'+
       '<span style="font-size:.78rem;color:#999;">예: 300으로 설정 후 스캔하면 한 번에 300개씩 입고됩니다</span>'+
     '</div>'+
     '<input id="ib-scan" type="text" class="scan-input" placeholder="🔍 QR 스캔 또는 코드 입력 후 Enter" onkeydown="if(event.key===\'Enter\')doScanIn()">'+
@@ -890,6 +892,14 @@ function afterInbound() {
   setTimeout(function(){ var el=document.getElementById('ib-scan'); if(el) el.focus(); },80);
   startIbPoll();
   startIbMultPoll();
+}
+
+// 스캔당 수량 빠른 설정 버튼 (1, 24 등) - 누르면 즉시 값 설정 후 QR 스캔 칸으로 이동
+function setIbMult(n) {
+  var el = document.getElementById('ib-mult');
+  if (!el) return;
+  el.value = n;
+  focusIbScan();
 }
 
 // 스캔당 수량 입력 후 (Enter 또는 다른 곳 터치) 자동으로 QR 스캔 칸에 포커스 복귀
