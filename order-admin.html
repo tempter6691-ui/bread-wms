@@ -410,6 +410,9 @@ async function exportToOrder(id) {
     var mergedMap = {};
     existingItems.forEach(function(item){ mergedMap[item.pid] = Object.assign({}, item); });
 
+    // 특이사항(메모)도 주문별로 추적 - 여러 주문이 합쳐져도 각자 메모가 안 사라지고, 재등록해도 중복되지 않게
+    var orderMemos = Object.assign({}, (existingClientData && existingClientData.orderMemos) || {});
+
     if (prevContribution) {
       // 재등록: 이 주문이 예전에 더했던 수량을 먼저 되돌려서, 아래서 새 수량을 더해도 중복 합산되지 않게 함
       prevContribution.forEach(function(p){
@@ -433,6 +436,7 @@ async function exportToOrder(id) {
         if (!overwriteChoice) return;
         mergedMap = {}; // 덮어쓰기: 기존 내용 전부 삭제
         orderContributions = {}; // 다른 주문들의 기여분 기록도 함께 초기화
+        orderMemos = {}; // 다른 주문들의 메모 기록도 함께 초기화
       }
     }
 
@@ -453,9 +457,14 @@ async function exportToOrder(id) {
     // 이 주문이 이번에 반영한 수량을 기록 (다음에 또 재등록할 때 이 값을 빼고 다시 더함)
     orderContributions[id] = newItems.map(function(it){ return {pid: it.pid, qty: it.qty}; });
 
+    // 이 주문의 특이사항(메모) 기록 (재등록하면 같은 키라서 교체될 뿐 중복되지 않음)
+    if (o.memo) { orderMemos[id] = o.memo; } else { delete orderMemos[id]; }
+    // 같은 거래처/날짜에 여러 주문이 합쳐진 경우, 각 주문의 메모를 줄바꿈으로 모두 보여줌
+    var combinedMemo = Object.keys(orderMemos).map(function(k){ return orderMemos[k]; }).filter(Boolean).join('\n');
+
     // 출고지시서에 해당 거래처만 추가/덮어쓰기 (merge:true로 다른 거래처 데이터 보호)
     // 정식 거래처명(resolvedClient)을 키로 사용 - 자동매핑된 경우 원래 표기와 달라도 정식명으로 통일 저장
-    await ordRef.set({ [resolvedClient]: { items: finalItems, driver: driver, orderContributions: orderContributions } }, { merge: true });
+    await ordRef.set({ [resolvedClient]: { items: finalItems, driver: driver, orderContributions: orderContributions, orderMemos: orderMemos, memo: combinedMemo } }, { merge: true });
 
     // 발주 상태를 exported로 업데이트
     await db.collection('orders_request').doc(id).update({status:'exported'});
