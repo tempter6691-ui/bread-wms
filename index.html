@@ -1183,8 +1183,9 @@ async function removeObClient(name) {
 async function doScanOut() {
   var scanEl=document.getElementById('ob-scan'), resEl=document.getElementById('ob-result');
   if(!scanEl||!S.outClient) return;
-  var scrollY=window.scrollY;
-  function restoreScroll(){ window.scrollTo(0,scrollY); }
+  var scrollEl=document.getElementById('content');
+  var scrollY=scrollEl?scrollEl.scrollTop:0;
+  function restoreScroll(){ if(scrollEl) scrollEl.scrollTop=scrollY; }
   var qr=scanEl.value.trim(); scanEl.value='';
   scanEl.focus({preventScroll:true});
   restoreScroll();
