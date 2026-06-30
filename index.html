@@ -2373,6 +2373,7 @@ function pgLogs() {
       '<label style="font-size:.85rem;font-weight:600;">날짜: <input type="date" id="log-date" value="'+today+'" style="padding:.4rem;margin-left:.3rem;"></label>'+
       '<button class="btn btn-primary btn-sm" onclick="loadLogs()">조회</button>'+
       '<button class="btn btn-gray btn-sm" onclick="document.getElementById(\'log-date\').value=\'\';loadLogs()">전체보기</button>'+
+      '<button class="btn btn-success btn-sm" onclick="printLogs()" style="margin-left:.5rem;">🖨️ 인쇄</button>'+
     '</div>'+
     '<div id="logs-content" style="margin-top:.75rem;"><p style="color:#aaa;">로딩 중...</p></div></div>';
 }
@@ -2436,6 +2437,91 @@ async function loadLogs() {
     });
     el.innerHTML=html;
   } catch(e){el.innerHTML='<p style="color:red;">오류: '+e.message+'</p>';}
+}
+
+function printLogs() {
+  var logsEl = document.getElementById('logs-content');
+  if (!logsEl) return;
+
+  var filterDate = (document.getElementById('log-date')||{}).value || '';
+  var title = filterDate ? filterDate + ' 입고 기록' : '입고 기록 (전체)';
+
+  // 테이블 데이터 수집 (날짜별)
+  var tables = logsEl.querySelectorAll('table');
+  var headers = logsEl.querySelectorAll('[style*="background:#1e3a5f"]');
+  if (!tables.length) { alert('출력할 입고 기록이 없습니다.'); return; }
+
+  var sections = '';
+  for (var i = 0; i < tables.length; i++) {
+    var headerEl = headers[i];
+    var dateText = headerEl ? headerEl.querySelector('span:first-child').textContent.replace('📅','').trim() : '';
+    var totalText = headerEl ? headerEl.querySelector('span:last-child') : null;
+    var total = totalText ? totalText.textContent : '';
+
+    // 행 데이터 수집 (+/- 버튼 제외하고 제품명과 수량만)
+    var rows = tables[i].querySelectorAll('tbody tr');
+    var rowsHtml = '';
+    var rowNum = 1;
+    rows.forEach(function(row) {
+      var cells = row.querySelectorAll('td');
+      if (cells.length >= 2) {
+        var pname = cells[0].textContent.trim();
+        // 숫자만 추출 (+30, -1 같은 형태에서 숫자 부분)
+        var qtySpan = cells[1].querySelector('span');
+        var qty = qtySpan ? qtySpan.textContent.trim() : cells[1].textContent.trim();
+        rowsHtml += '<tr><td class="num">' + rowNum++ + '</td><td>' + pname + '</td><td class="qty">' + qty + '</td></tr>';
+      }
+    });
+
+    sections += '<div class="section">' +
+      '<div class="date-header">' +
+        '<span>📅 ' + dateText + '</span>' +
+        '<span>' + total + '</span>' +
+      '</div>' +
+      '<table>' +
+        '<thead><tr><th class="num">#</th><th>제품명</th><th class="qty">입고 수량</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+    '</div>';
+  }
+
+  var w = window.open('', '_blank', 'width=794,height=1123');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + title + '</title><style>' +
+    '@page { size: A4 portrait; margin: 15mm; }' +
+    'body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; font-size: 11pt; color: #000; margin: 0; }' +
+    '.print-title { text-align: center; font-size: 18pt; font-weight: bold; margin-bottom: 4px; }' +
+    '.print-sub { text-align: center; font-size: 10pt; color: #555; margin-bottom: 16px; }' +
+    '.section { margin-bottom: 20px; page-break-inside: avoid; }' +
+    '.date-header { background: #1e3a5f; color: #fff; padding: 6px 10px; font-weight: bold; display: flex; justify-content: space-between; border-radius: 4px 4px 0 0; font-size: 11pt; }' +
+    'table { width: 100%; border-collapse: collapse; }' +
+    'th, td { border: 1px solid #ccc; padding: 5px 8px; }' +
+    'th { background: #f0f0f0; font-weight: bold; text-align: center; }' +
+    'td { text-align: left; }' +
+    'td.num, th.num { width: 36px; text-align: center; }' +
+    'td.qty, th.qty { width: 90px; text-align: center; font-weight: bold; color: #27ae60; }' +
+    'tr:nth-child(even) td { background: #f9f9f9; }' +
+    '.sign-area { margin-top: 32px; border-top: 2px solid #1e3a5f; padding-top: 16px; page-break-inside: avoid; }' +
+    '.sign-title { font-size: 11pt; font-weight: bold; margin-bottom: 12px; }' +
+    '.sign-table { width: 100%; border-collapse: collapse; }' +
+    '.sign-table td { border: 1px solid #aaa; text-align: center; padding: 0; }' +
+    '.sign-label { background: #f0f0f0; font-weight: bold; font-size: 10pt; padding: 6px; border-bottom: 1px solid #aaa; }' +
+    '.sign-box { height: 60px; }' +
+    '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }' +
+  '</style></head><body>' +
+    '<div class="print-title">입고 기록부</div>' +
+    '<div class="print-sub">㈜더브레드뱅크 &nbsp;|&nbsp; 출력일: ' + new Date().toLocaleDateString('ko-KR') + (filterDate ? ' &nbsp;|&nbsp; 조회 날짜: ' + filterDate : '') + '</div>' +
+    sections +
+    '<div class="sign-area">' +
+      '<div class="sign-title">확인</div>' +
+      '<table class="sign-table"><tr>' +
+        '<td style="width:33%"><div class="sign-label">물 류</div><div class="sign-box"></div></td>' +
+        '<td style="width:33%"><div class="sign-label">관 리</div><div class="sign-box"></div></td>' +
+        '<td style="width:34%"><div class="sign-label">대표이사</div><div class="sign-box"></div></td>' +
+      '</tr></table>' +
+    '</div>' +
+  '</body></html>');
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 600);
 }
 
 // ── 입고 기록 화면에서 수량 +/- 조정 (날짜 무관하게 모든 날짜 지원) ──────────────────
