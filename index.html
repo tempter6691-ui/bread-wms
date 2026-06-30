@@ -1087,10 +1087,11 @@ function pgOutbound() {
       }).join(''):
         '<p style="color:#aaa;font-size:.85rem;">이 기사의 오늘 출고지시서가 없습니다.</p>')+
     '</div></div>'+
-    (S.outClient?'<div class="card"><div class="card-title">🚚 '+S.outClient+' — 출고 스캔</div>'+
+    (S.outClient?'<div class="card" style="position:sticky;top:0;z-index:50;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.08);"><div class="card-title">🚚 '+S.outClient+' — 출고 스캔</div>'+
       '<input id="ob-scan" type="text" class="scan-input" placeholder="🔍 QR 스캔 후 Enter" onkeydown="if(event.key===\'Enter\')doScanOut()" oninput="obScanTimer()">'+
       '<div id="ob-result" style="min-height:1.5rem;"></div>'+
-      '<div id="ob-items">'+drawObItems()+'</div></div>':'');
+      '</div>'+
+      '<div class="card"><div id="ob-items">'+drawObItems()+'</div></div>':'');
 }
 
 function drawObItems() {
