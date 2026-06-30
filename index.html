@@ -1148,15 +1148,18 @@ function drawObItems() {
 }
 
 function afterOutbound() {
-  if(S.outClient) setTimeout(function(){
-    var el=document.getElementById('ob-scan');
-    var c=document.getElementById('content');
-    var y=c?c.scrollTop:0;
-    if(el && document.activeElement!==el){
-      el.focus({preventScroll:true});
-      if(c) c.scrollTop=y;
-    }
-  },80);
+  if(S.outClient && S.justSelectedClient){
+    S.justSelectedClient=false;
+    setTimeout(function(){
+      var el=document.getElementById('ob-scan');
+      var c=document.getElementById('content');
+      var y=c?c.scrollTop:0;
+      if(el && document.activeElement!==el){
+        el.focus({preventScroll:true});
+        if(c) c.scrollTop=y;
+      }
+    },80);
+  }
 }
 
 function filterObClients() {
@@ -1181,7 +1184,7 @@ function filterObClients() {
   }).join('');
 }
 
-function selObClient(name){ S.outClient=name; go('outbound'); }
+function selObClient(name){ S.outClient=name; S.justSelectedClient=true; go('outbound'); }
 
 async function removeObClient(name) {
   delete (S.orders[S.ordDate]||{})[name];
