@@ -1184,9 +1184,13 @@ async function doScanOut() {
   var scanEl=document.getElementById('ob-scan'), resEl=document.getElementById('ob-result');
   if(!scanEl||!S.outClient) return;
   var scrollY=window.scrollY;
+  function restoreScroll(){ window.scrollTo(0,scrollY); }
   var qr=scanEl.value.trim(); scanEl.value='';
   scanEl.focus({preventScroll:true});
-  window.scrollTo(0,scrollY);
+  restoreScroll();
+  setTimeout(restoreScroll,0);
+  setTimeout(restoreScroll,50);
+  setTimeout(restoreScroll,150);
   if(!qr) return;
   var p=findByQR(qr);
   if(!p){resEl.innerHTML='<div class="res-err">❌ 코드 없음: '+qr+'</div>';return;}
@@ -1216,9 +1220,11 @@ async function doScanOut() {
     await db.collection('orders').doc(d).set({[S.outClient]: S.orders[d][S.outClient]}, {merge:true});
     await db.collection('logs').add({type:'outbound',pid:p.id,pname:p.name,client:S.outClient,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
     resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> 출고! 남은재고: '+estQ+'</div>';
-    var scrollY2=window.scrollY;
     var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
-    window.scrollTo(0,scrollY2);
+    restoreScroll();
+    setTimeout(restoreScroll,0);
+    setTimeout(restoreScroll,50);
+    setTimeout(restoreScroll,150);
   });
 }
 
