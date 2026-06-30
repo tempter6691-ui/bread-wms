@@ -1203,13 +1203,6 @@ async function doScanOut() {
   var scrollY=scrollEl?scrollEl.scrollTop:0;
   function restoreScroll(){ if(scrollEl) scrollEl.scrollTop=scrollY; }
   var qr=scanEl.value.trim(); scanEl.value='';
-  if(document.activeElement!==scanEl){
-    scanEl.focus({preventScroll:true});
-    restoreScroll();
-    setTimeout(restoreScroll,0);
-    setTimeout(restoreScroll,50);
-    setTimeout(restoreScroll,150);
-  }
   if(!qr) return;
   var p=findByQR(qr);
   if(!p){resEl.innerHTML='<div class="res-err">❌ 코드 없음: '+qr+'</div>';return;}
