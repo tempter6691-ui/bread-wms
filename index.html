@@ -754,6 +754,7 @@ function go(page) {
 function render() {
   var c = document.getElementById('content');
   if (!c) return;
+  var prevScrollTop = c.scrollTop;
   switch(S.page) {
     case 'dashboard': c.innerHTML = pgDash(); break;
     case 'inbound':   c.innerHTML = pgInbound(); afterInbound(); break;
@@ -765,6 +766,10 @@ function render() {
     case 'products':  c.innerHTML = pgProducts(); setTimeout(drawProducts,40); break;
     case 'logs':      c.innerHTML = pgLogs(); setTimeout(loadLogs,40); break;
   }
+  c.scrollTop = prevScrollTop;
+  setTimeout(function(){ c.scrollTop = prevScrollTop; }, 0);
+  setTimeout(function(){ c.scrollTop = prevScrollTop; }, 60);
+  setTimeout(function(){ c.scrollTop = prevScrollTop; }, 200);
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────
@@ -1143,7 +1148,15 @@ function drawObItems() {
 }
 
 function afterOutbound() {
-  if(S.outClient) setTimeout(function(){ var el=document.getElementById('ob-scan'); if(el) el.focus(); },80);
+  if(S.outClient) setTimeout(function(){
+    var el=document.getElementById('ob-scan');
+    var c=document.getElementById('content');
+    var y=c?c.scrollTop:0;
+    if(el && document.activeElement!==el){
+      el.focus({preventScroll:true});
+      if(c) c.scrollTop=y;
+    }
+  },80);
 }
 
 function filterObClients() {
