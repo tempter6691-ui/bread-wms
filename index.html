@@ -2380,15 +2380,11 @@ async function loadLogs() {
         '<thead><tr><th>제품명</th><th style="text-align:center;width:140px;">입고 수량</th></tr></thead><tbody>'+
         Object.keys(prods).sort().map(function(pname){
           var q=prods[pname];
-          var isToday = (date === todayStr());
-          if(isToday){
-            return '<tr><td>'+pname+'</td><td style="text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:.4rem;">'+
-              '<button class="btn btn-danger btn-sm" onclick="adjustTodayLogQty(\''+esc(pname)+'\',-1)" style="padding:.15rem .5rem;">-1</button>'+
-              '<span style="font-weight:bold;color:#27ae60;min-width:2.2em;display:inline-block;">'+(q>=0?'+':'')+q+'</span>'+
-              '<button class="btn btn-success btn-sm" onclick="adjustTodayLogQty(\''+esc(pname)+'\',1)" style="padding:.15rem .5rem;">+1</button>'+
-              '</div></td></tr>';
-          }
-          return '<tr><td>'+pname+'</td><td style="text-align:center;font-weight:bold;color:#27ae60;">'+(q>=0?'+':'')+q+'</td></tr>';
+          return '<tr><td>'+pname+'</td><td style="text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:.4rem;">'+
+            '<button class="btn btn-danger btn-sm" onclick="adjustLogQty(\''+esc(pname)+'\',\''+date+'\',-1)" style="padding:.15rem .5rem;">-1</button>'+
+            '<span style="font-weight:bold;color:#27ae60;min-width:2.2em;display:inline-block;">'+(q>=0?'+':'')+q+'</span>'+
+            '<button class="btn btn-success btn-sm" onclick="adjustLogQty(\''+esc(pname)+'\',\''+date+'\',1)" style="padding:.15rem .5rem;">+1</button>'+
+            '</div></td></tr>';
         }).join('')+
         '</tbody></table></div>';
     });
@@ -2396,19 +2392,47 @@ async function loadLogs() {
   } catch(e){el.innerHTML='<p style="color:red;">오류: '+e.message+'</p>';}
 }
 
-// ── 입고 기록 화면에서 오늘 입고 수량 +/- 조정 ──────────────────
-// (① 입고 화면의 +1/-1 버튼과 동일한 효과: 오늘 입고 누적량 + 전체 재고를 같이 조정)
-async function adjustTodayLogQty(pname, delta) {
+// ── 입고 기록 화면에서 수량 +/- 조정 (날짜 무관하게 모든 날짜 지원) ──────────────────
+async function adjustLogQty(pname, date, delta) {
   var p = S.prods.find(function(x){ return x.name===pname; });
   if(!p){ toast('제품을 찾을 수 없어요: '+pname,'err'); return; }
-  if(delta < 0) {
-    var curTodayQ = S.todayInbound[p.id]||0;
-    if(curTodayQ<=0){ toast(pname+'의 오늘 입고가 이미 0이에요','err'); return; }
-    await manualOut(p.id);
-  } else {
-    await manualIn(p.id);
-  }
-  loadLogs(); // 방금 조정한 값이 로그 화면에도 바로 반영되도록 다시 그림
+
+  var isToday = (date === todayStr());
+  var actionLabel = delta > 0 ? '+1 입고 추가' : '-1 입고 취소';
+  if(!confirm('"'+pname+'" '+date+' 기록을 '+actionLabel+' 할까요?\n재고도 같이 '+( delta>0?'+1 증가':'-1 차감')+'됩니다.')) return;
+
+  try {
+    if(delta > 0) {
+      // +1: 재고 증가 + 해당 날짜 로그 추가
+      S.inv[p.id]=(S.inv[p.id]||0)+1;
+      if(isToday){ S.todayInbound[p.id]=(S.todayInbound[p.id]||0)+1; }
+      var dibId = date+'_'+p.id;
+      await safeWrite(async function() {
+        await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
+        await db.collection('dailyInbound').doc(dibId).set({date:date,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(1)}, {merge:true});
+        // 해당 날짜 기준 타임스탬프로 로그 기록 (오늘이면 서버타임, 과거면 그 날 정오 기준)
+        var logTs = isToday ? firebase.firestore.FieldValue.serverTimestamp() : firebase.firestore.Timestamp.fromDate(new Date(date+'T12:00:00'));
+        await db.collection('logs').add({type:'inbound',pid:p.id,pname:p.name,qty:1,ts:logTs,adjusted:true,adjustedDate:date});
+      });
+      toast(pname+' +1 추가 ('+date+')', 'ok');
+    } else {
+      // -1: 재고 차감 + 해당 날짜 로그에 취소 기록
+      var curQ = S.inv[p.id]||0;
+      if(curQ<=0){ toast(pname+' 재고가 이미 0이에요','err'); return; }
+      S.inv[p.id]=curQ-1;
+      if(isToday){ S.todayInbound[p.id]=Math.max(0,(S.todayInbound[p.id]||0)-1); }
+      var dibId2 = date+'_'+p.id;
+      await safeWrite(async function() {
+        await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+        await db.collection('dailyInbound').doc(dibId2).set({date:date,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+        // 해당 날짜 기준으로 취소 로그 기록
+        var logTs2 = isToday ? firebase.firestore.FieldValue.serverTimestamp() : firebase.firestore.Timestamp.fromDate(new Date(date+'T12:00:01'));
+        await db.collection('logs').add({type:'outbound',via:'inboundCancel',pid:p.id,pname:p.name,qty:1,ts:logTs2,adjusted:true,adjustedDate:date});
+      });
+      toast(pname+' -1 차감 ('+date+')', 'ok');
+    }
+    loadLogs();
+  } catch(e){ toast('오류: '+e.message,'err'); }
 }
 
 // ── LOG DATE CHANGE ──────────────────────────────────────────
