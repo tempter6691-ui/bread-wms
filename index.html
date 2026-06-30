@@ -1202,6 +1202,16 @@ async function doScanOut() {
   var scrollEl=document.getElementById('content');
   var scrollY=scrollEl?scrollEl.scrollTop:0;
   function restoreScroll(){ if(scrollEl) scrollEl.scrollTop=scrollY; }
+  function watchScroll(){
+    if(!scrollEl) return;
+    var until=Date.now()+1000;
+    function tick(){
+      if(Date.now()>until) return;
+      if(scrollEl.scrollTop!==scrollY) scrollEl.scrollTop=scrollY;
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
   var qr=scanEl.value.trim(); scanEl.value='';
   if(!qr) return;
   var p=findByQR(qr);
@@ -1234,9 +1244,7 @@ async function doScanOut() {
     resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> 출고! 남은재고: '+estQ+'</div>';
     var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
     restoreScroll();
-    setTimeout(restoreScroll,0);
-    setTimeout(restoreScroll,50);
-    setTimeout(restoreScroll,150);
+    watchScroll();
   });
 }
 
