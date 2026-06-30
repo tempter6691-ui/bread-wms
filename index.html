@@ -1187,11 +1187,13 @@ async function doScanOut() {
   var scrollY=scrollEl?scrollEl.scrollTop:0;
   function restoreScroll(){ if(scrollEl) scrollEl.scrollTop=scrollY; }
   var qr=scanEl.value.trim(); scanEl.value='';
-  scanEl.focus({preventScroll:true});
-  restoreScroll();
-  setTimeout(restoreScroll,0);
-  setTimeout(restoreScroll,50);
-  setTimeout(restoreScroll,150);
+  if(document.activeElement!==scanEl){
+    scanEl.focus({preventScroll:true});
+    restoreScroll();
+    setTimeout(restoreScroll,0);
+    setTimeout(restoreScroll,50);
+    setTimeout(restoreScroll,150);
+  }
   if(!qr) return;
   var p=findByQR(qr);
   if(!p){resEl.innerHTML='<div class="res-err">❌ 코드 없음: '+qr+'</div>';return;}
@@ -1255,7 +1257,16 @@ async function manualCompleteOb(pid) {
   var pname=p?p.name:pid;
   var remaining=item.qty-(item.scanned||0);
 
-  if(!confirm('"'+pname+'" 을(를) 수동으로 완료 처리할까요?\n\n남은 수량 '+remaining+'개를 출고 완료로 표시합니다.\n(재고는 자동 차감됩니다)')) return;
+  var scrollEl=document.getElementById('content');
+  var scrollY=scrollEl?scrollEl.scrollTop:0;
+  function restoreScroll(){ if(scrollEl) scrollEl.scrollTop=scrollY; }
+
+  var ok=confirm('"'+pname+'" 을(를) 수동으로 완료 처리할까요?\n\n남은 수량 '+remaining+'개를 출고 완료로 표시합니다.\n(재고는 자동 차감됩니다)');
+  restoreScroll();
+  setTimeout(restoreScroll,0);
+  setTimeout(restoreScroll,50);
+  setTimeout(restoreScroll,150);
+  if(!ok) return;
 
   item.scanned=item.qty;
   item.done=true;
@@ -1272,6 +1283,10 @@ async function manualCompleteOb(pid) {
     await db.collection('logs').add({type:'outbound',pid:pid,pname:pname,client:S.outClient,qty:remaining,manual:true,ts:firebase.firestore.FieldValue.serverTimestamp()});
     toast(pname+' 수동 완료!','ok');
     var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
+    restoreScroll();
+    setTimeout(restoreScroll,0);
+    setTimeout(restoreScroll,50);
+    setTimeout(restoreScroll,150);
   });
 }
 
