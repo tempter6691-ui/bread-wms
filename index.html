@@ -1881,9 +1881,9 @@ function printOrders() {
           var lnc = lu==='판'?'#222222':lc;
           var rnc = ru==='판'?'#222222':rc;
           html += '<tr>'+
-            '<td style="color:'+lnc+';">'+(lp?lp.name.replace(/\(.*$/,''):left[i].pid)+'</td>'+
+            '<td style="color:'+lnc+';">'+(lp?lp.name:left[i].pid)+'</td>'+
             '<td class="qty" style="color:'+lc+';">'+(left[i].qty)+'</td>'+
-            '<td style="color:'+rnc+';">'+(rItem?(rp?rp.name.replace(/\(.*$/,''):rItem.pid):'')+'</td>'+
+            '<td style="color:'+rnc+';">'+(rItem?(rp?rp.name:rItem.pid):'')+'</td>'+
             '<td class="qty" style="color:'+rc+';">'+(rItem?rItem.qty:'')+'</td>'+
           '</tr>';
         }
