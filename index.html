@@ -178,6 +178,7 @@ tr:hover td{background:#fafafa;}
   <div class="nav-item" onclick="go('clients')">🏢 거래처 관리</div>
   <div class="nav-item" onclick="go('products')">🏷️ 제품 관리</div>
   <div class="nav-item" onclick="go('logs')">🕐 입출고 로그</div>
+  <div class="nav-item" onclick="go('ecount')">📤 이카운트 전송</div>
   <div id="sidebar-footer">
     <button class="btn btn-warning btn-sm" onclick="doBackup()" style="width:100%;margin-bottom:.4rem;">💾 데이터 백업</button>
     <button class="btn btn-gray btn-sm" onclick="document.getElementById('restore-input').click()" style="width:100%;">📂 데이터 복원</button>
@@ -742,7 +743,7 @@ async function safeWrite(fn) {
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────
-var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고 (부장님)',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그'};
+var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고 (부장님)',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',ecount:'📤 이카운트 전송'};
 
 function go(page) {
   if(S.page === 'inbound' && page !== 'inbound') { clearInterval(_ibPollTimer); clearInterval(_ibMultPollTimer); }
@@ -765,6 +766,7 @@ function render() {
     case 'clients':   c.innerHTML = pgClients(); setTimeout(drawClients,40); break;
     case 'products':  c.innerHTML = pgProducts(); setTimeout(drawProducts,40); break;
     case 'logs':      c.innerHTML = pgLogs(); setTimeout(loadLogs,40); break;
+    case 'ecount':    c.innerHTML = pgEcount(); break;
   }
   c.scrollTop = prevScrollTop;
   setTimeout(function(){ c.scrollTop = prevScrollTop; }, 0);
@@ -2806,3 +2808,113 @@ function toast(msg,type){
 </div>
 </body>
 </html>
+
+<script>
+var ECOUNT_PROXY = 'http://141.164.41.141:3000';
+var ECOUNT_API_KEY = '----123';
+
+function pgEcount() {
+  var today = todayStr();
+  var d7 = new Date(); d7.setDate(d7.getDate()-7);
+  var from7 = d7.toISOString().slice(0,10);
+  return '<div class="card">'+
+    '<div class="card-title">📤 이카운트 판매 전송</div>'+
+    '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">'+
+      '<label style="font-size:.85rem;font-weight:600;">시작일: <input type="date" id="ec-from" value="'+from7+'" style="padding:.4rem;margin-left:.3rem;"></label>'+
+      '<label style="font-size:.85rem;font-weight:600;">종료일: <input type="date" id="ec-to" value="'+today.slice(0,4)+'-'+today.slice(4,6)+'-'+today.slice(6,8)+'" style="padding:.4rem;margin-left:.3rem;"></label>'+
+      '<button class="btn btn-primary btn-sm" onclick="ecPreview()">📋 미리보기</button>'+
+    '</div>'+
+    '<div id="ec-preview"></div>'+
+  '</div>';
+}
+
+async function ecPreview() {
+  var fromRaw=(document.getElementById('ec-from')||{}).value||'';
+  var toRaw=(document.getElementById('ec-to')||{}).value||'';
+  if(!fromRaw||!toRaw){alert('날짜를 선택해주세요.');return;}
+  var from=fromRaw.replace(/-/g,'');
+  var to=toRaw.replace(/-/g,'');
+  if(from>to){alert('시작일이 종료일보다 늦습니다.');return;}
+  var el=document.getElementById('ec-preview');
+  el.innerHTML='<p style="color:#aaa;">데이터 불러오는 중...</p>';
+  try {
+    var snap=await db.collection('logs').where('type','==','outbound').get();
+    var rows=[];
+    snap.forEach(function(doc){
+      var d=doc.data();
+      var logDate=(d.date||'').replace(/-/g,'');
+      if(logDate<from||logDate>to)return;
+      if(!d.client||!d.pid||!d.qty)return;
+      var prod=S.prods.find(function(p){return p.id===d.pid;});
+      if(!prod)return;
+      var ecCode=prod.ecountCode||prod.id;
+      var price=prod.price||0;
+      var client=S.clients.find(function(c){return c.name===d.client;});
+      var custCode=client&&client.ecountCode?client.ecountCode:'';
+      rows.push({IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:d.qty,PRICE:price,WH_CD:'100'});
+    });
+    if(rows.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 출고 데이터가 없습니다.</p>';return;}
+    var noCust=rows.filter(function(r){return !r.CUST;});
+    var html='<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;">'+
+      '<span style="font-size:.85rem;color:#555;">총 <b>'+rows.length+'</b>건</span>'+
+      (noCust.length>0?'<span style="color:#dc2626;font-size:.8rem;">⚠️ 거래처코드 없음 '+noCust.length+'건 (전송 제외됨)</span>':'')+
+      '<button class="btn btn-success btn-sm" style="margin-left:auto;" onclick="ecSend()">📤 이카운트 전송</button>'+
+    '</div>'+
+    '<div style="overflow-x:auto;"><table style="font-size:.8rem;">'+
+    '<thead><tr style="background:#f4f4f5;">'+
+      '<th style="padding:.4rem .6rem;text-align:left;">날짜</th>'+
+      '<th style="padding:.4rem .6rem;text-align:left;">거래처</th>'+
+      '<th style="padding:.4rem .6rem;text-align:left;">거래처코드</th>'+
+      '<th style="padding:.4rem .6rem;text-align:left;">제품</th>'+
+      '<th style="padding:.4rem .6rem;text-align:left;">이카운트코드</th>'+
+      '<th style="padding:.4rem .6rem;text-align:right;">수량</th>'+
+      '<th style="padding:.4rem .6rem;text-align:right;">단가</th>'+
+    '</tr></thead><tbody>';
+    rows.forEach(function(r){
+      var warn=!r.CUST?' style="background:#fff5f5;"':'';
+      html+='<tr'+warn+'>'+
+        '<td style="padding:.35rem .6rem;">'+r.IO_DATE.slice(0,4)+'-'+r.IO_DATE.slice(4,6)+'-'+r.IO_DATE.slice(6,8)+'</td>'+
+        '<td style="padding:.35rem .6rem;">'+r.clientName+'</td>'+
+        '<td style="padding:.35rem .6rem;color:'+(r.CUST?'#333':'#dc2626')+';">'+(r.CUST||'없음')+'</td>'+
+        '<td style="padding:.35rem .6rem;">'+r.prodName+'</td>'+
+        '<td style="padding:.35rem .6rem;">'+r.PROD_CD+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;">'+r.QTY+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;">'+(r.PRICE?r.PRICE.toLocaleString():'0')+'</td>'+
+      '</tr>';
+    });
+    html+='</tbody></table></div>';
+    el.innerHTML=html;
+    window._ecRows=rows;
+  } catch(e){el.innerHTML='<p style="color:#dc2626;">오류: '+e.message+'</p>';}
+}
+
+async function ecSend() {
+  var rows=window._ecRows||[];
+  var sendRows=rows.filter(function(r){return r.CUST;});
+  if(sendRows.length===0){alert('전송할 데이터가 없습니다.\n거래처코드를 먼저 등록해주세요.');return;}
+  if(!confirm(sendRows.length+'건을 이카운트로 전송하시겠습니까?'))return;
+  var el=document.getElementById('ec-preview');
+  el.insertAdjacentHTML('beforeend','<p id="ec-status" style="color:#2563eb;margin-top:.5rem;">전송 중...</p>');
+  var orderMap={};
+  sendRows.forEach(function(r){
+    var key=r.IO_DATE+'_'+r.CUST;
+    if(!orderMap[key])orderMap[key]={IO_DATE:r.IO_DATE,CUST:r.CUST,WH_CD:r.WH_CD,items:[]};
+    orderMap[key].items.push({PROD_CD:r.PROD_CD,QTY:r.QTY,PRICE:r.PRICE});
+  });
+  var orders=Object.values(orderMap);
+  try {
+    var res=await fetch(ECOUNT_PROXY+'/send-to-ecount',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':ECOUNT_API_KEY},
+      body:JSON.stringify({orders:orders})
+    });
+    var data=await res.json();
+    var statusEl=document.getElementById('ec-status');
+    if(data.success){statusEl.style.color='#16a34a';statusEl.textContent='✅ 전송 완료! '+data.message;}
+    else{statusEl.style.color='#dc2626';statusEl.textContent='❌ 전송 실패: '+(data.error||JSON.stringify(data));}
+  } catch(e){
+    var s=document.getElementById('ec-status');
+    if(s){s.textContent='❌ 오류: '+e.message;s.style.color='#dc2626';}
+  }
+}
+</script>
