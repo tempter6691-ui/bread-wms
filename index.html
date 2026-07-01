@@ -1881,9 +1881,9 @@ function printOrders() {
           var lnc = lu==='판'?'#222222':lc;
           var rnc = ru==='판'?'#222222':rc;
           html += '<tr>'+
-            '<td style="color:'+lnc+';">'+(lp?lp.name:left[i].pid)+'</td>'+
+            '<td style="color:'+lnc+';">'+(lp?(lp.cat&&lp.cat.indexOf("마카롱")>=0||lp.id==="P110"||lp.id==="P111"?lp.name:lp.name.replace(/\(.*$/,"")):left[i].pid)+'</td>'+
             '<td class="qty" style="color:'+lc+';">'+(left[i].qty)+'</td>'+
-            '<td style="color:'+rnc+';">'+(rItem?(rp?rp.name:rItem.pid):'')+'</td>'+
+            '<td style="color:'+rnc+';">'+(rItem?(rp?(rp.cat&&rp.cat.indexOf("마카롱")>=0||rp.id==="P110"||rp.id==="P111"?rp.name:rp.name.replace(/\(.*$/,"")):rItem.pid):"")+'</td>'+
             '<td class="qty" style="color:'+rc+';">'+(rItem?rItem.qty:'')+'</td>'+
           '</tr>';
         }
