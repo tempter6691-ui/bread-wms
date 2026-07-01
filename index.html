@@ -2842,7 +2842,7 @@ async function ecPreview() {
     var rows=[];
     snap.forEach(function(doc){
       var d=doc.data();
-      var logDate=(d.date||'').replace(/-/g,'');
+      var logDate=''; if(d.date){logDate=d.date.replace(/-/g,'');} else if(d.ts&&d.ts.toDate){var dt=d.ts.toDate();logDate=dt.getFullYear()+''+String(dt.getMonth()+1).padStart(2,'0')+''+String(dt.getDate()).padStart(2,'0');}
       if(logDate<from||logDate>to)return;
       if(!d.client||!d.pid||!d.qty)return;
       var prod=S.prods.find(function(p){return p.id===d.pid;});
