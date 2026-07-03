@@ -1243,7 +1243,7 @@ async function doScanOut() {
   await safeWrite(async function() {
     await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
     await db.collection('orders').doc(d).set({[S.outClient]: S.orders[d][S.outClient]}, {merge:true});
-    await db.collection('logs').add({type:'outbound',pid:p.id,pname:p.name,client:S.outClient,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
+    await db.collection('logs').add({type:'outbound',pid:p.id,pname:p.name,client:S.outClient,qty:1,date:d,ts:firebase.firestore.FieldValue.serverTimestamp()});
     resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> 출고! 남은재고: '+estQ+'</div>';
     var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
     restoreScroll();
@@ -1300,7 +1300,7 @@ async function manualCompleteOb(pid) {
       await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
     }
     await db.collection('orders').doc(S.ordDate).set({[S.outClient]: S.orders[S.ordDate][S.outClient]}, {merge:true});
-    await db.collection('logs').add({type:'outbound',pid:pid,pname:pname,client:S.outClient,qty:remaining,manual:true,ts:firebase.firestore.FieldValue.serverTimestamp()});
+    await db.collection('logs').add({type:'outbound',pid:pid,pname:pname,client:S.outClient,qty:remaining,manual:true,date:S.ordDate,ts:firebase.firestore.FieldValue.serverTimestamp()});
     toast(pname+' 수동 완료!','ok');
     var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
     restoreScroll();
