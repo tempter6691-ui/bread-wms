@@ -1236,7 +1236,8 @@ async function doScanOut() {
     item.done=scanned>=item.qty;
   } else {
     // 출고지시서에 없는 제품 스캔 시 추가하지 않고 경고
-    resEl.innerHTML='<div class="res-err">⚠️ <strong>'+p.name+'</strong> 은(는) 출고지시서에 없는 제품이에요!</div>';
+    resEl.innerHTML='<div class="res-err">🚨 <strong>'+p.name+'</strong> 은(는) 출고지시서에 없는 제품이에요!</div>';
+    playBeep('wrongItem');
     return;
   }
   var estQ=curQ-1; S.inv[p.id]=estQ;
@@ -2766,6 +2767,38 @@ function toast(msg,type){
   d.className='ti '+(type==='ok'?'ti-ok':type==='err'?'ti-err':'');
   d.textContent=msg; c.appendChild(d);
   setTimeout(function(){d.remove();},3000);
+}
+
+// ── 스캔 효과음 ─────────────────────────────────────────────────
+var _audioCtx=null;
+function _getAudioCtx(){
+  if(!_audioCtx){
+    try{ _audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  if(_audioCtx.state==='suspended'){ _audioCtx.resume(); }
+  return _audioCtx;
+}
+function playBeep(kind){
+  try{
+    var ctx=_getAudioCtx(); if(!ctx) return;
+    function tone(freq, start, dur, type, vol){
+      var osc=ctx.createOscillator(), gain=ctx.createGain();
+      osc.type=type||'sine'; osc.frequency.value=freq;
+      osc.connect(gain); gain.connect(ctx.destination);
+      var t0=ctx.currentTime+start;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(vol||0.25, t0+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+      osc.start(t0); osc.stop(t0+dur+0.02);
+    }
+    if(kind==='wrongItem'){
+      // 거래처 목록에 없는 물품 스캔 — 사이렌처럼 높낮이 반복되는 특이한 경고음
+      for(var i=0;i<3;i++){
+        tone(1200, i*0.22,     0.11, 'sawtooth', 0.28);
+        tone(600,  i*0.22+0.11,0.11, 'sawtooth', 0.28);
+      }
+    }
+  }catch(e){}
 }
 
 // ── INIT ─────────────────────────────────────────────────────
