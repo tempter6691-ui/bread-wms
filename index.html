@@ -765,7 +765,7 @@ function render() {
     case 'templates': c.innerHTML = pgTemplates(); break;
     case 'clients':   c.innerHTML = pgClients(); setTimeout(drawClients,40); break;
     case 'products':  c.innerHTML = pgProducts(); setTimeout(drawProducts,40); break;
-    case 'logs':      c.innerHTML = pgLogs(); setTimeout(loadLogs,40); break;
+    case 'logs':      c.innerHTML = pgLogs(); setTimeout(function(){loadLogs();fillLogProdList();},40); break;
     case 'ecount':    c.innerHTML = pgEcount(); break;
   }
   c.scrollTop = prevScrollTop;
@@ -2445,6 +2445,10 @@ function editProd(pid) {
       ['판','봉','개','박스'].map(function(u){var pu=(p.unit||'').trim()||'판'; return '<option value="'+u+'"'+(u===pu?' selected':'')+'>'+u+'</option>';}).join('')+
     '</select></div>'+
     '<div><label>재고</label><br><input id="ep-inv" type="number" value="'+(S.inv[p.id]||0)+'" style="width:100%;margin-top:.2rem;"></div>'+
+    '<hr style="border:none;border-top:1px solid #eee;margin:.3rem 0;">'+
+    '<div><label>이카운트 품목코드</label><br><input id="ep-ecode" type="text" value="'+(p.ecountCode||'')+'" placeholder="예: E-003" style="width:100%;margin-top:.2rem;"></div>'+
+    '<div><label>이카운트 전송 수량 배수</label><br><input id="ep-emult" type="number" step="0.5" min="0" value="'+(p.ecountQtyMultiplier||1)+'" style="width:100%;margin-top:.2rem;">'+
+      '<div style="font-size:.75rem;color:#888;margin-top:.2rem;">예: "2단" 품목이 이카운트에는 "1단" 기준으로만 등록돼 있으면 2로 설정 (출고 3개 → 이카운트 6개 전송)</div></div>'+
     '<button class="btn btn-primary" onclick="doEditProd(\''+p.id+'\')">저장하기</button></div>');
 }
 
@@ -2456,10 +2460,12 @@ async function doEditProd(pid) {
   var ep_unit_el=document.getElementById('ep-unit');
   var unit=(ep_unit_el?ep_unit_el.value:(p.unit||'판')).trim()||'판';
   var inv=parseInt((document.getElementById('ep-inv')||{value:0}).value)||0;
+  var ecode=(document.getElementById('ep-ecode')||{value:p.ecountCode||''}).value.trim();
+  var emult=parseFloat((document.getElementById('ep-emult')||{value:1}).value)||1;
   var oldInv=S.inv[p.id]||0;
   try {
     await safeWrite(async function() {
-      await db.collection('products').doc(p.id).update({name:name,cat:cat,qr:qr,unit:unit});
+      await db.collection('products').doc(p.id).update({name:name,cat:cat,qr:qr,unit:unit,ecountCode:ecode,ecountQtyMultiplier:emult});
       await db.collection('inventory').doc(p.id).set({qty:inv});
       if(inv !== oldInv) {
         var diff = inv - oldInv;
@@ -2474,7 +2480,7 @@ async function doEditProd(pid) {
       }
     });
     // Firestore 저장 성공 후에만 메모리 반영
-    p.name=name; p.cat=cat; p.qr=qr; p.unit=unit; S.inv[p.id]=inv;
+    p.name=name; p.cat=cat; p.qr=qr; p.unit=unit; p.ecountCode=ecode; p.ecountQtyMultiplier=emult; S.inv[p.id]=inv;
     closeModal(); toast(name+' 수정됨','ok'); drawProducts();
   } catch(e){toast('오류:'+e.message,'err');}
 }
@@ -2494,7 +2500,15 @@ async function delProd(pid) {
 // ── LOGS ─────────────────────────────────────────────────────
 function pgLogs() {
   var today=todayStr();
-  return '<div class="card"><div class="card-title">📦 입고 기록 (날짜별 합산)</div>'+
+  return '<div class="card"><div class="card-title">🔍 제품별 입고 내역 검색</div>'+
+    '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
+      '<input id="log-prod-q" list="log-prod-list" type="text" placeholder="제품명 검색..." style="flex:1;min-width:200px;padding:.45rem;" oninput="onLogProdInput()">'+
+      '<datalist id="log-prod-list"></datalist>'+
+      '<button class="btn btn-gray btn-sm" onclick="clearLogProdSearch()">초기화</button>'+
+    '</div>'+
+    '<div id="log-prod-result" style="margin-top:.75rem;"></div>'+
+  '</div>'+
+  '<div class="card"><div class="card-title">📦 입고 기록 (날짜별 합산)</div>'+
     '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">'+
       '<label style="font-size:.85rem;font-weight:600;">날짜: <input type="date" id="log-date" value="'+today+'" style="padding:.4rem;margin-left:.3rem;"></label>'+
       '<button class="btn btn-primary btn-sm" onclick="loadLogs()">조회</button>'+
@@ -2502,6 +2516,60 @@ function pgLogs() {
       '<button class="btn btn-success btn-sm" onclick="printLogs()" style="margin-left:.5rem;">🖨️ 인쇄</button>'+
     '</div>'+
     '<div id="logs-content" style="margin-top:.75rem;"><p style="color:#aaa;">로딩 중...</p></div></div>';
+}
+
+function fillLogProdList(){
+  var dl = document.getElementById('log-prod-list');
+  if(!dl || !S.prods) return;
+  dl.innerHTML = S.prods.map(function(p){return '<option value="'+esc(p.name)+'">';}).join('');
+}
+
+function clearLogProdSearch(){
+  var q=document.getElementById('log-prod-q'), r=document.getElementById('log-prod-result');
+  if(q) q.value='';
+  if(r) r.innerHTML='';
+}
+
+function onLogProdInput(){
+  var v=(document.getElementById('log-prod-q')||{value:''}).value.trim();
+  var el=document.getElementById('log-prod-result');
+  if(!el) return;
+  if(!v){ el.innerHTML=''; return; }
+  var exact=S.prods.find(function(p){return p.name===v;});
+  if(exact){ searchProdLogs(exact.id, exact.name); return; }
+  var partial=S.prods.filter(function(p){return p.name.toLowerCase().indexOf(v.toLowerCase())>=0;}).slice(0,8);
+  if(partial.length){
+    el.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:.4rem;">'+partial.map(function(p){
+      return '<button class="btn btn-gray btn-sm" onclick="document.getElementById(\'log-prod-q\').value=\''+esc(p.name)+'\';searchProdLogs(\''+p.id+'\',\''+esc(p.name)+'\');">'+p.name+'</button>';
+    }).join('')+'</div>';
+  } else {
+    el.innerHTML='<p style="color:#aaa;">일치하는 제품이 없어요.</p>';
+  }
+}
+
+async function searchProdLogs(pid, pname){
+  var el=document.getElementById('log-prod-result'); if(!el) return;
+  el.innerHTML='<p style="color:#aaa;">로딩 중...</p>';
+  try {
+    var snap=await db.collection('logs').where('pid','==',pid).get();
+    var dayMap={};
+    snap.forEach(function(d){
+      var r=d.data();
+      if(r.type!=='inbound') return;
+      var t=r.ts&&r.ts.toDate?r.ts.toDate():null;
+      var ds=t?(t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')):'날짜없음';
+      if(!dayMap[ds]) dayMap[ds]=0;
+      dayMap[ds]+=(r.qty||1);
+    });
+    var dates=Object.keys(dayMap).sort(function(a,b){return b.localeCompare(a);});
+    if(!dates.length){ el.innerHTML='<p style="color:#aaa;">'+pname+' 입고 기록이 없어요.</p>'; return; }
+    var total=dates.reduce(function(s,d){return s+dayMap[d];},0);
+    var html='<div style="margin-bottom:.5rem;padding:.5rem;background:#f0f4ff;border-radius:4px;font-weight:bold;">'+pname+' — 누적 입고: '+total+'개</div>';
+    html+='<table><thead><tr><th>날짜</th><th>입고 수량</th></tr></thead><tbody>';
+    dates.forEach(function(d){ html+='<tr><td>'+d+'</td><td style="text-align:center;font-weight:bold;">'+dayMap[d]+'개</td></tr>'; });
+    html+='</tbody></table>';
+    el.innerHTML=html;
+  } catch(e){ el.innerHTML='<p style="color:red;">오류: '+e.message+'</p>'; }
 }
 
 async function loadLogs() {
@@ -2922,10 +2990,11 @@ async function ecPreview() {
       var prod=S.prods.find(function(p){return p.id===d.pid;});
       if(!prod)return;
       var ecCode=prod.ecountCode||prod.id;
+      var mult=prod.ecountQtyMultiplier||1;
       var price=prod.price||0;
       var client=S.clients.find(function(c){return c.name===d.client;});
       var custCode=client&&client.ecountCode?client.ecountCode:'';
-      rows.push({IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:d.qty,PRICE:price,WH_CD:'100'});
+      rows.push({IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,PRICE:price,WH_CD:'100'});
     });
     if(rows.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 출고 데이터가 없습니다.</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
@@ -2946,13 +3015,14 @@ async function ecPreview() {
     '</tr></thead><tbody>';
     rows.forEach(function(r){
       var warn=!r.CUST?' style="background:#fff5f5;"':'';
+      var qtyDisp=r.mult>1?(r.origQty+' × '+r.mult+' = <b>'+r.QTY+'</b>'):r.QTY;
       html+='<tr'+warn+'>'+
         '<td style="padding:.35rem .6rem;">'+r.IO_DATE.slice(0,4)+'-'+r.IO_DATE.slice(4,6)+'-'+r.IO_DATE.slice(6,8)+'</td>'+
         '<td style="padding:.35rem .6rem;">'+r.clientName+'</td>'+
         '<td style="padding:.35rem .6rem;color:'+(r.CUST?'#333':'#dc2626')+';">'+(r.CUST||'없음')+'</td>'+
         '<td style="padding:.35rem .6rem;">'+r.prodName+'</td>'+
         '<td style="padding:.35rem .6rem;">'+r.PROD_CD+'</td>'+
-        '<td style="padding:.35rem .6rem;text-align:right;">'+r.QTY+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;">'+qtyDisp+'</td>'+
         '<td style="padding:.35rem .6rem;text-align:right;">'+(r.PRICE?r.PRICE.toLocaleString():'0')+'</td>'+
       '</tr>';
     });
