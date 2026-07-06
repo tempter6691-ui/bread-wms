@@ -2705,8 +2705,8 @@ async function doRestore(input) {
   try {
     var data=JSON.parse(text);
     if(!confirm('복원할까요? 현재 데이터가 덮어씌워집니다.')) return;
-    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'});});await b.commit();}
-    if(data.clients){S.clients=data.clients;var b2=db.batch();S.clients.forEach(function(c){b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||''});});await b2.commit();}
+    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){var pCopy=Object.assign({},p);delete pCopy.id;b.set(db.collection('products').doc(p.id),pCopy,{merge:true});});await b.commit();}
+    if(data.clients){S.clients=data.clients;var b2=db.batch();S.clients.forEach(function(c){var cCopy=Object.assign({},c);delete cCopy.id;b2.set(db.collection('clients').doc(c.id),cCopy,{merge:true});});await b2.commit();}
     if(data.inv){S.inv=data.inv;var b3=db.batch();Object.keys(data.inv).forEach(function(id){b3.set(db.collection('inventory').doc(id),{qty:data.inv[id]});});await b3.commit();}
     if(data.orders){S.orders=data.orders;var b4=db.batch();Object.keys(data.orders).forEach(function(d){b4.set(db.collection('orders').doc(d),data.orders[d]);});await b4.commit();}
     if(data.templates){S.templates=data.templates;var b5=db.batch();Object.keys(data.templates).forEach(function(k){b5.set(db.collection('templates').doc(k),data.templates[k]);});await b5.commit();}
