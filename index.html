@@ -613,7 +613,7 @@ async function loadAll() {
       // 절대 자동으로 Firestore를 덮어쓰지 않고, 사용자에게 직접 확인을 받습니다.
       var confirmInit = confirm('⚠ 제품 데이터가 비어있는 것으로 확인됩니다.\n네트워크 문제로 일시적으로 그렇게 보일 수도 있습니다.\n\n정말로 기본 제품 목록으로 초기화하시겠습니까?\n(취소하면 빈 목록으로 표시되며, 새로고침으로 다시 확인할 수 있습니다)');
       if (confirmInit) {
-        S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ b.set(db.collection('products').doc(p.id),{qr:p.qr,name:p.name,cat:p.cat,unit:p.unit||'판'}); }); await b.commit();
+        S.prods = JSON.parse(JSON.stringify(PRODS_DEFAULT)); var b=db.batch(); S.prods.forEach(function(p){ var pCopy=Object.assign({},p); delete pCopy.id; b.set(db.collection('products').doc(p.id),pCopy,{merge:true}); }); await b.commit();
       } else {
         S.prods = [];
         toast('제품 목록을 불러오지 못했습니다. 새로고침해주세요.','err');
