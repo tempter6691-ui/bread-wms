@@ -2294,7 +2294,8 @@ function printProductsView() {
     'body { font-family: "Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size:10pt; color:#222; margin:0; }' +
     '.print-title { text-align:center; font-size:16pt; font-weight:bold; margin-bottom:4px; }' +
     '.print-sub { text-align:center; font-size:9pt; color:#666; margin-bottom:14px; }' +
-    '.card { margin-bottom:16px; page-break-inside:avoid; }' +
+    '.card { margin-bottom:16px; break-inside:avoid; page-break-inside:avoid; }' +
+    '.print-cols { column-count:2; column-gap:16px; }' +
     '.card-title { font-weight:700; font-size:11pt; margin-bottom:6px; background:#f0f4f8; padding:5px 8px; border-radius:4px; }' +
     'table { width:100%; border-collapse:collapse; }' +
     'th, td { border:1px solid #ddd; padding:4px 8px; font-size:9.5pt; }' +
@@ -2308,7 +2309,7 @@ function printProductsView() {
   '</style></head><body>' +
     '<div class="print-title">🏷️ 제품 관리 현황</div>' +
     '<div class="print-sub">㈜더브레드뱅크 &nbsp;|&nbsp; 출력일: ' + today + rangeText + '</div>' +
-    listEl.innerHTML +
+    '<div class="print-cols">' + listEl.innerHTML + '</div>' +
   '</body></html>');
   w.document.close();
   setTimeout(function(){ w.print(); }, 500);
