@@ -2208,6 +2208,7 @@ function pgProducts() {
     '<div style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;align-items:center;">'+
       '<input id="pr-q" type="text" style="flex:1;min-width:120px;padding:.45rem;" placeholder="제품 검색..." oninput="drawProducts()">'+
       '<button class="btn btn-success btn-sm" onclick="showProductsExcelModal()">📥 엑셀로 내보내기</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="printProductsView()">🖨️ 화면 그대로 내보내기</button>'+
       '<button class="btn btn-primary btn-sm" onclick="showAddProd()">+ 추가</button>'+
     '</div>'+
     '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;padding:.6rem;background:#f8f9fa;border-radius:6px;">'+
@@ -2277,6 +2278,40 @@ async function exportProductsExcelWithRange() {
     closeModal();
     toast('엑셀 다운로드 완료!','ok');
   } catch(e){ toast('오류: '+e.message,'err'); }
+}
+
+function printProductsView() {
+  var listEl = document.getElementById('pr-list');
+  if(!listEl || !listEl.innerHTML.trim()){ toast('내보낼 데이터가 없어요','err'); return; }
+  var today = new Date().toLocaleDateString('ko-KR');
+  var hasOut = Object.keys(_prodOutMap).length > 0;
+  var rangeStart = (document.getElementById('pr-out-start')||{}).value||'';
+  var rangeEnd = (document.getElementById('pr-out-end')||{}).value||'';
+  var rangeText = (hasOut && rangeStart && rangeEnd) ? (' &nbsp;|&nbsp; 출고 조회 기간: ' + rangeStart + ' ~ ' + rangeEnd) : '';
+  var w = window.open('', '_blank', 'width=1000,height=1200');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>제품 관리 현황</title><style>' +
+    '@page { size: A4 landscape; margin: 12mm; }' +
+    'body { font-family: "Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size:10pt; color:#222; margin:0; }' +
+    '.print-title { text-align:center; font-size:16pt; font-weight:bold; margin-bottom:4px; }' +
+    '.print-sub { text-align:center; font-size:9pt; color:#666; margin-bottom:14px; }' +
+    '.card { margin-bottom:16px; page-break-inside:avoid; }' +
+    '.card-title { font-weight:700; font-size:11pt; margin-bottom:6px; background:#f0f4f8; padding:5px 8px; border-radius:4px; }' +
+    'table { width:100%; border-collapse:collapse; }' +
+    'th, td { border:1px solid #ddd; padding:4px 8px; font-size:9.5pt; }' +
+    'th { background:#f7f7f7; text-align:center; }' +
+    'td:first-child { text-align:left; }' +
+    '.badge { padding:.15rem .5rem; border-radius:14px; font-size:8.5pt; font-weight:600; display:inline-block; }' +
+    '.bg-green{background:#dcfce7;color:#166534;} .bg-red{background:#fee2e2;color:#991b1b;} .bg-yellow{background:#fef9c3;color:#854d0e;}' +
+    'code { background:#f2f2f2; padding:1px 5px; border-radius:3px; }' +
+    'button { display:none; }' +
+    '@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }' +
+  '</style></head><body>' +
+    '<div class="print-title">🏷️ 제품 관리 현황</div>' +
+    '<div class="print-sub">㈜더브레드뱅크 &nbsp;|&nbsp; 출력일: ' + today + rangeText + '</div>' +
+    listEl.innerHTML +
+  '</body></html>');
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 500);
 }
 
 // 출고 합산 데이터 전역 저장
