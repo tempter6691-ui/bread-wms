@@ -2314,19 +2314,24 @@ function drawProducts() {
   var f=q?S.prods.filter(function(p){return p.name.toLowerCase().indexOf(q)>=0||(p.qr||'').toLowerCase().indexOf(q)>=0;}):S.prods;
   var el=document.getElementById('pr-list'); if(!el) return;
   var hasOut = Object.keys(_prodOutMap).length > 0;
-  el.innerHTML='<table><thead><tr><th>제품명</th><th>분류</th><th>QR</th><th>재고</th>'+
-    (hasOut?'<th style="color:#e67e22;">출고</th>':'')+
-    '<th></th></tr></thead><tbody>'+
-    f.map(function(p){
-      var q2=S.inv[p.id]||0;
-      var out=_prodOutMap[p.id]||0;
-      return '<tr><td>'+p.name+'</td><td>'+p.cat+'</td><td><code>'+p.qr+'</code></td>'+
-        '<td><span class="badge '+(q2===0?'bg-red':q2<=15?'bg-yellow':'bg-green')+'">'+q2+'</span></td>'+
-        (hasOut?'<td style="text-align:center;font-weight:bold;color:#e67e22;">'+(out>0?out:'-')+'</td>':'')+
-        '<td><button class="btn btn-gray btn-sm" onclick="showProdHistory(\''+p.id+'\',\''+p.name+'\')">내역</button> '+
-        '<button class="btn btn-gray btn-sm" onclick="editProd(\''+p.id+'\')">수정</button> '+
-        '<button class="btn btn-danger btn-sm" onclick="delProd(\''+p.id+'\')">삭제</button></td></tr>';
-    }).join('')+'</tbody></table>';
+  if(!f.length){el.innerHTML='<div class="card" style="color:#aaa;text-align:center;">검색 결과 없음</div>';return;}
+  var grouped={};
+  f.forEach(function(p){ if(!grouped[p.cat]) grouped[p.cat]=[]; grouped[p.cat].push(p); });
+  el.innerHTML=Object.keys(grouped).map(function(cat){
+    return '<div class="card"><div class="card-title">'+cat+'</div><table><thead><tr><th>제품명</th><th>QR</th><th>재고</th>'+
+      (hasOut?'<th style="color:#e67e22;">출고</th>':'')+
+      '<th></th></tr></thead><tbody>'+
+      grouped[cat].map(function(p){
+        var q2=S.inv[p.id]||0;
+        var out=_prodOutMap[p.id]||0;
+        return '<tr><td>'+p.name+'</td><td><code>'+p.qr+'</code></td>'+
+          '<td><span class="badge '+(q2===0?'bg-red':q2<=15?'bg-yellow':'bg-green')+'">'+q2+'</span></td>'+
+          (hasOut?'<td style="text-align:center;font-weight:bold;color:#e67e22;">'+(out>0?out:'-')+'</td>':'')+
+          '<td><button class="btn btn-gray btn-sm" onclick="showProdHistory(\''+p.id+'\',\''+p.name+'\')">내역</button> '+
+          '<button class="btn btn-gray btn-sm" onclick="editProd(\''+p.id+'\')">수정</button> '+
+          '<button class="btn btn-danger btn-sm" onclick="delProd(\''+p.id+'\')">삭제</button></td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }).join('');
 }
 
 async function showProdHistory(pid, pname) {
