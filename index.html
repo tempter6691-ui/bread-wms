@@ -391,7 +391,6 @@ var CLIENTS_DEFAULT = [
   {id:'C007',name:'천년부페',driver:'',code:'523'},
   {id:'C008',name:'주안평택교회',driver:'',code:''},
   {id:'C009',name:'이화학식',driver:'',day:'목',code:'564'},
-  {id:'C010',name:'파티하우스 더엘라',driver:'',code:''},
   {id:'C011',name:'페니체부평',driver:'',code:'95'},
   {id:'C012',name:'경기교총웨딩하우스',driver:'',day:'수',code:'11'},
   {id:'C013',name:'디팰리스웨딩',driver:'',day:'목',code:'110'},
@@ -474,9 +473,6 @@ var CLIENTS_DEFAULT = [
   {id:'C090',name:'벨라루체웨딩',driver:'',day:'수',code:'631'},
   {id:'C091',name:'더비앙',driver:'',day:'목',code:''},
   {id:'C092',name:'송도아르비아웨딩',driver:'',day:'목',code:'638'},
-  {id:'C093',name:'세카이스',driver:'',day:'화',code:'642'},
-  {id:'C094',name:'시스카이컨벤션',driver:'',code:''},
-  {id:'C095',name:'와이엠컨벤션',driver:'',code:''},
   {id:'C096',name:'솔스퀘어',driver:'',day:'수',code:'642'},
   {id:'C097',name:'루클라비더화이트',driver:'',day:'화',code:'643'},
   {id:'C098',name:'강남더퀸',driver:'',code:''},
@@ -484,9 +480,6 @@ var CLIENTS_DEFAULT = [
   {id:'C100',name:'벨라스타웨딩',driver:'',code:'647'},
   {id:'C101',name:'고메스퀘어부천',driver:'',day:'목',code:'648'},
   {id:'C102',name:'에이치앤디푸드',driver:'',day:'금',code:'649'},
-  {id:'C103',name:'문성',driver:'',code:''},
-  {id:'C104',name:'지엔씨',driver:'',code:''},
-  {id:'C105',name:'조앤푸드',driver:'',day:'화',code:''},
   {id:'C106',name:'고메순천',driver:'',code:'651'},
   {id:'C107',name:'에스에이치웨딩',driver:'',day:'목',code:'652'},
   {id:'C108',name:'더시그너스웨딩',driver:'',day:'수',code:'653'},
@@ -622,7 +615,15 @@ async function loadAll() {
 
     var cs = await db.collection('clients').get();
     if (!cs.empty) { S.clients = []; cs.forEach(function(d){ S.clients.push(Object.assign({id:d.id},d.data())); }); }
-    else { S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT)); var b2=db.batch(); S.clients.forEach(function(c){ b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||'',code:c.code||'',day:c.day||''}); }); await b2.commit(); }
+    else {
+      var confirmInitC = confirm('⚠ 거래처 데이터가 비어있는 것으로 확인됩니다.\n네트워크 문제로 일시적으로 그렇게 보일 수도 있습니다.\n\n정말로 기본 거래처 목록으로 초기화하시겠습니까?\n(취소하면 빈 목록으로 표시되며, 새로고침으로 다시 확인할 수 있습니다)');
+      if (confirmInitC) {
+        S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT)); var b2=db.batch(); S.clients.forEach(function(c){ b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||'',code:c.code||'',day:c.day||''}); }); await b2.commit();
+      } else {
+        S.clients = [];
+        toast('거래처 목록을 불러오지 못했습니다. 새로고침해주세요.','err');
+      }
+    }
 
     var iv = await db.collection('inventory').get();
     S.inv = {}; iv.forEach(function(d){ S.inv[d.id] = d.data().qty || 0; });
