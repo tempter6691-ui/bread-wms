@@ -1167,11 +1167,7 @@ async function checkMissingRegularClients() {
       var r=doc.data();
       if(!r.client) return;
       var dateStr=r.date;
-      if(!dateStr){
-        var t=r.ts&&r.ts.toDate?r.ts.toDate():null;
-        if(!t) return;
-        dateStr=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-      }
+      if(!dateStr) return; // date 필드 없는(과거) 로그는 스캔시각 추정 없이 집계에서 제외
       if(dateStr<cutoffStr||dateStr>selDate) return;
       var p=dateStr.split('-').map(Number);
       if(p.length!==3) return;
