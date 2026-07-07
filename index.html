@@ -3009,7 +3009,7 @@ async function ecPreview() {
       var ecCode=prod.ecountCode||prod.id;
       var mult=prod.ecountQtyMultiplier||1;
       var price=prod.price||0;
-      var client=S.clients.find(function(c){return c.name===d.client;});
+      var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
       var custCode=client&&client.ecountCode?client.ecountCode:'';
       rows.push({IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,PRICE:price,WH_CD:'100'});
     });
