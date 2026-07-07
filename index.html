@@ -1142,17 +1142,17 @@ function drawObItems() {
 async function checkMissingRegularClients() {
   var el=document.getElementById('missing-clients-warning');
   if(!el) return;
-  var dateStr=S.ordDate;
-  if(!dateStr) return;
+  var selDate=S.ordDate;
+  if(!selDate) return;
 
   // 같은 날짜로 이미 확인했으면 재조회하지 않고 캐시된 결과만 다시 그림
-  if(S._missingCheckDate===dateStr && S._missingCheckResult){
-    renderMissingWarning(el, S._missingCheckResult, dateStr);
+  if(S._missingCheckDate===selDate && S._missingCheckResult){
+    renderMissingWarning(el, S._missingCheckResult, selDate);
     return;
   }
 
   var days=['일','월','화','수','목','금','토'];
-  var parts=dateStr.split('-').map(Number);
+  var parts=selDate.split('-').map(Number);
   var todayWeekday=days[new Date(parts[0],parts[1]-1,parts[2]).getDay()];
 
   // 최근 8주(56일)치 출고 기록 조회
@@ -1161,22 +1161,29 @@ async function checkMissingRegularClients() {
   var cutoffStr=cutoff.getFullYear()+'-'+String(cutoff.getMonth()+1).padStart(2,'0')+'-'+String(cutoff.getDate()).padStart(2,'0');
 
   try {
-    var snap=await db.collection('logs').where('type','==','outbound').where('date','>=',cutoffStr).where('date','<=',dateStr).get();
+    var snap=await db.collection('logs').where('type','==','outbound').get();
     var clientDates={}; // { 거래처: Set(날짜) } - 해당 요일에만
     snap.forEach(function(doc){
       var r=doc.data();
-      if(!r.client||!r.date) return;
-      var p=r.date.split('-').map(Number);
+      if(!r.client) return;
+      var dateStr=r.date;
+      if(!dateStr){
+        var t=r.ts&&r.ts.toDate?r.ts.toDate():null;
+        if(!t) return;
+        dateStr=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+      }
+      if(dateStr<cutoffStr||dateStr>selDate) return;
+      var p=dateStr.split('-').map(Number);
       if(p.length!==3) return;
       var wd=days[new Date(p[0],p[1]-1,p[2]).getDay()];
       if(wd!==todayWeekday) return;
       if(!clientDates[r.client]) clientDates[r.client]=new Set();
-      clientDates[r.client].add(r.date);
+      clientDates[r.client].add(dateStr);
     });
     var regularClients=Object.keys(clientDates).filter(function(name){ return clientDates[name].size>=2; });
-    S._missingCheckDate=dateStr;
+    S._missingCheckDate=selDate;
     S._missingCheckResult=regularClients;
-    renderMissingWarning(el, regularClients, dateStr);
+    renderMissingWarning(el, regularClients, selDate);
   } catch(e){
     console.error('단골 거래처 확인 오류:', e.message);
   }
