@@ -358,6 +358,7 @@ function renderCard(o) {
     '<div class="order-top">'+
       '<div class="order-client">'+escapeHtml(o.client)+(isNew&&o.status==='pending'?'<span class="new-dot"></span>':'')+
       '</div>'+
+      (o.memo?'<span style="background:#e74c3c;color:#fff;font-size:.75rem;font-weight:700;padding:3px 9px;border-radius:5px;">💬 '+escapeHtml(o.memo)+'</span>':'')+
       (isUnknownClient?'<span style="background:#e74c3c;color:#fff;font-size:.68rem;padding:1px 6px;border-radius:4px;font-weight:700;">⚠️ 미등록 거래처</span>':'')+
       (isAutoMapped?'<span style="background:#2980b9;color:#fff;font-size:.68rem;padding:1px 6px;border-radius:4px;font-weight:700;">🔗 '+escapeHtml(resolved.name)+'로 자동연동</span>':'')+
       (driver?'<span class="order-driver">'+escapeHtml(driver)+'</span>':'')+
@@ -367,7 +368,6 @@ function renderCard(o) {
     '<span class="items-toggle" onclick="toggleItems(this)">▶ 품목 보기 ('+(o.items||[]).length+'개 품목, '+total+'개)</span>'+
     '<div class="items-body">'+
       itemsHtml+
-      (o.memo?'<div class="order-memo">💬 '+escapeHtml(o.memo)+'</div>':'')+
       (isUnknownClient?'<div style="background:#fff3cd;color:#856404;padding:6px 10px;border-radius:6px;font-size:.78rem;margin-top:.4rem;">⚠️ "'+escapeHtml(o.client)+'"은 거래처 관리에 등록되지 않은 이름입니다. 정식 거래처명과 다르면 출고지시서에 중복 거래처가 생성될 수 있습니다. 등록 후 처리해 주세요.</div>':'')+
       (isAutoMapped?'<div style="background:#eaf2f8;color:#1b5e7d;padding:6px 10px;border-radius:6px;font-size:.78rem;margin-top:.4rem;">🔗 "'+escapeHtml(o.client)+'"을 등록된 거래처 "'+escapeHtml(resolved.name)+'"로 자동 연동했어요 (유사도 '+Math.round(resolved.score*100)+'%). 다른 거래처라면 거래처 관리에서 별도 등록해 주세요.</div>':'')+
       buildReplyBox(o)+
