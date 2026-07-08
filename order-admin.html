@@ -141,6 +141,32 @@ const db = firebase.firestore();
 let allOrders = [];
 let clients = {}; // name -> driver
 let statusFilter = 'all';
+let prodCatMap = {}; // pid -> cat (품목 그룹핑용, 최초 1회 로드 후 캐시)
+async function loadProdCatMap() {
+  if (Object.keys(prodCatMap).length) return prodCatMap;
+  try {
+    var snap = await db.collection('products').get();
+    snap.forEach(function(doc){ prodCatMap[doc.id] = (doc.data()||{}).cat || ''; });
+  } catch(e) { console.error('제품 분류 로드 실패:', e.message); }
+  return prodCatMap;
+}
+// 같은 분류(cat) 품목끼리 묶이도록 정렬 (분류 없는 품목은 원래 순서 유지하며 맨 뒤로)
+function groupItemsByCat(items) {
+  var catOrder = [], seen = {};
+  items.forEach(function(it){
+    var c = prodCatMap[it.pid] || '';
+    if (c && !seen[c]) { seen[c] = true; catOrder.push(c); }
+  });
+  var buckets = {}, noCat = [];
+  catOrder.forEach(function(c){ buckets[c] = []; });
+  items.forEach(function(it){
+    var c = prodCatMap[it.pid] || '';
+    if (c) buckets[c].push(it); else noCat.push(it);
+  });
+  var result = [];
+  catOrder.forEach(function(c){ result = result.concat(buckets[c]); });
+  return result.concat(noCat);
+}
 
 function escapeHtml(str) {
   return String(str==null?'':str)
@@ -551,6 +577,9 @@ async function exportToOrder(id) {
 
     // 수량이 0 이하로 떨어진 항목은 정리 (재등록 과정에서 빼고 다시 더했는데 0이 된 경우)
     var finalItems = Object.keys(mergedMap).map(function(k){ return mergedMap[k]; }).filter(function(it){ return (it.qty||0) > 0; });
+    // 같은 품목군(분류)끼리 자동으로 묶어서 정렬
+    await loadProdCatMap();
+    finalItems = groupItemsByCat(finalItems);
 
     // 이 주문이 이번에 반영한 수량을 기록 (다음에 또 재등록할 때 이 값을 빼고 다시 더함)
     orderContributions[id] = newItems.map(function(it){ return {pid: it.pid, qty: it.qty}; });
