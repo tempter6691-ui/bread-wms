@@ -3086,16 +3086,16 @@ async function ecPreview() {
       if(!prod)return;
       var ecCode=prod.ecountCode||prod.id;
       var mult=prod.ecountQtyMultiplier||1;
-      var price=prod.price||0;
       var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
       var custCode=client&&client.ecountCode?client.ecountCode:'';
-      rows.push({IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,PRICE:price,WH_CD:'100'});
+      rows.push({IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100'});
     });
     if(rows.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 출고 데이터가 없습니다.</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
-    var html='<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;">'+
+    var html='<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
       '<span style="font-size:.85rem;color:#555;">총 <b>'+rows.length+'</b>건</span>'+
       (noCust.length>0?'<span style="color:#dc2626;font-size:.8rem;">⚠️ 거래처코드 없음 '+noCust.length+'건 (전송 제외됨)</span>':'')+
+      '<span style="color:#888;font-size:.78rem;">💡 단가는 이카운트에 등록된 거래처별 단가로 자동 계산돼요</span>'+
       '<button class="btn btn-success btn-sm" style="margin-left:auto;" onclick="ecSend()">📤 이카운트 전송</button>'+
     '</div>'+
     '<div style="overflow-x:auto;"><table style="font-size:.8rem;">'+
@@ -3106,7 +3106,6 @@ async function ecPreview() {
       '<th style="padding:.4rem .6rem;text-align:left;">제품</th>'+
       '<th style="padding:.4rem .6rem;text-align:left;">이카운트코드</th>'+
       '<th style="padding:.4rem .6rem;text-align:right;">수량</th>'+
-      '<th style="padding:.4rem .6rem;text-align:right;">단가</th>'+
     '</tr></thead><tbody>';
     rows.forEach(function(r){
       var warn=!r.CUST?' style="background:#fff5f5;"':'';
@@ -3118,7 +3117,6 @@ async function ecPreview() {
         '<td style="padding:.35rem .6rem;">'+r.prodName+'</td>'+
         '<td style="padding:.35rem .6rem;">'+r.PROD_CD+'</td>'+
         '<td style="padding:.35rem .6rem;text-align:right;">'+qtyDisp+'</td>'+
-        '<td style="padding:.35rem .6rem;text-align:right;">'+(r.PRICE?r.PRICE.toLocaleString():'0')+'</td>'+
       '</tr>';
     });
     html+='</tbody></table></div>';
@@ -3138,7 +3136,7 @@ async function ecSend() {
   sendRows.forEach(function(r){
     var key=r.IO_DATE+'_'+r.CUST;
     if(!orderMap[key])orderMap[key]={IO_DATE:r.IO_DATE,CUST:r.CUST,WH_CD:r.WH_CD,items:[]};
-    orderMap[key].items.push({PROD_CD:r.PROD_CD,QTY:r.QTY,PRICE:r.PRICE});
+    orderMap[key].items.push({PROD_CD:r.PROD_CD,QTY:r.QTY}); // PRICE는 일부러 안 보냄 - 이카운트에 등록된 거래처별 단가가 자동으로 채워지게 하기 위함
   });
   var orders=Object.values(orderMap);
   try {
