@@ -2260,11 +2260,18 @@ function pgProducts() {
       '<button class="btn btn-primary btn-sm" onclick="showAddProd()">+ 추가</button>'+
     '</div>'+
     '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;padding:.6rem;background:#f8f9fa;border-radius:6px;">'+
-      '<span style="font-size:.82rem;font-weight:600;color:#555;">📦 출고 조회:</span>'+
+      '<span style="font-size:.82rem;font-weight:600;color:#555;">📦 출고 조회 (과거 실적):</span>'+
       '<label style="font-size:.82rem;">시작 <input type="date" id="pr-out-start" value="'+firstDay+'" style="padding:.3rem;font-size:.82rem;"></label>'+
       '<label style="font-size:.82rem;">종료 <input type="date" id="pr-out-end" value="'+todayStr2+'" style="padding:.3rem;font-size:.82rem;"></label>'+
       '<button class="btn btn-primary btn-sm" onclick="loadProductOutbound()">조회</button>'+
       '<button class="btn btn-gray btn-sm" onclick="clearProductOutbound()">초기화</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;padding:.6rem;background:#fff7e6;border-radius:6px;">'+
+      '<span style="font-size:.82rem;font-weight:600;color:#555;">⏳ 예정출고 조회 (아직 스캔 안 된 출고지시서):</span>'+
+      '<label style="font-size:.82rem;">시작 <input type="date" id="pr-pending-start" value="'+todayStr2+'" style="padding:.3rem;font-size:.82rem;"></label>'+
+      '<label style="font-size:.82rem;">종료 <input type="date" id="pr-pending-end" value="'+todayStr2+'" style="padding:.3rem;font-size:.82rem;"></label>'+
+      '<button class="btn btn-primary btn-sm" onclick="loadProductPending()">조회</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="clearProductPending()">초기화</button>'+
     '</div>'+
     '<div id="pr-list"></div></div>';
 }
@@ -2365,6 +2372,40 @@ function printProductsView() {
 
 // 출고 합산 데이터 전역 저장
 var _prodOutMap = {};
+var _prodPendingMap = {};
+
+// 출고지시서에 입력됐지만 아직 실제 스캔(완료)되지 않은 품목 수량을, 날짜 범위로 조회해서 합산
+// (예: 오늘~7/10 출고지시서에 입력된 것 중 아직 출고 처리 안 된 것 = 앞으로 빠질 예정인 재고)
+async function loadProductPending() {
+  var start = (document.getElementById('pr-pending-start')||{}).value||'';
+  var end = (document.getElementById('pr-pending-end')||{}).value||'';
+  if(!start||!end){ toast('날짜를 선택해주세요','err'); return; }
+  toast('예정출고 조회 중...','ok');
+  try {
+    var snap = await db.collection('orders')
+      .where(firebase.firestore.FieldPath.documentId(), '>=', start)
+      .where(firebase.firestore.FieldPath.documentId(), '<=', end)
+      .get();
+    _prodPendingMap = {};
+    snap.forEach(function(doc){
+      var dayData = doc.data()||{};
+      Object.keys(dayData).forEach(function(clientName){
+        var items = (dayData[clientName]&&dayData[clientName].items)||[];
+        items.forEach(function(it){
+          if(it.done) return; // 이미 스캔 완료된 건 실제 재고에 이미 반영됐으니 제외
+          _prodPendingMap[it.pid] = (_prodPendingMap[it.pid]||0) + (it.qty||1);
+        });
+      });
+    });
+    drawProducts();
+    toast('조회 완료!','ok');
+  } catch(e){ toast('오류: '+e.message,'err'); }
+}
+
+function clearProductPending() {
+  _prodPendingMap = {};
+  drawProducts();
+}
 
 async function loadProductOutbound() {
   var start = (document.getElementById('pr-out-start')||{}).value||'';
@@ -2398,18 +2439,24 @@ function drawProducts() {
   var f=q?S.prods.filter(function(p){return p.name.toLowerCase().indexOf(q)>=0||(p.qr||'').toLowerCase().indexOf(q)>=0;}):S.prods;
   var el=document.getElementById('pr-list'); if(!el) return;
   var hasOut = Object.keys(_prodOutMap).length > 0;
+  var hasPending = Object.keys(_prodPendingMap).length > 0;
   if(!f.length){el.innerHTML='<div class="card" style="color:#aaa;text-align:center;">검색 결과 없음</div>';return;}
   var grouped={};
   f.forEach(function(p){ if(!grouped[p.cat]) grouped[p.cat]=[]; grouped[p.cat].push(p); });
   el.innerHTML=Object.keys(grouped).map(function(cat){
     return '<div class="card"><div class="card-title">'+cat+'</div><table><thead><tr><th>제품명</th><th>QR</th><th>재고</th>'+
+      (hasPending?'<th style="color:#c0392b;">예정출고</th><th style="color:#c0392b;">예상재고</th>':'')+
       (hasOut?'<th style="color:#e67e22;">출고</th>':'')+
       '<th></th></tr></thead><tbody>'+
       grouped[cat].map(function(p){
         var q2=S.inv[p.id]||0;
         var out=_prodOutMap[p.id]||0;
+        var pending=_prodPendingMap[p.id]||0;
+        var projected=q2-pending;
         return '<tr><td>'+p.name+'</td><td><code>'+p.qr+'</code></td>'+
           '<td><span class="badge '+(q2===0?'bg-red':q2<=15?'bg-yellow':'bg-green')+'">'+q2+'</span></td>'+
+          (hasPending?'<td style="text-align:center;font-weight:bold;color:#c0392b;">'+(pending>0?'-'+pending:'-')+'</td>'+
+            '<td style="text-align:center;"><span class="badge '+(projected<0?'bg-red':projected===0?'bg-red':projected<=15?'bg-yellow':'bg-green')+'">'+projected+'</span></td>':'')+
           (hasOut?'<td style="text-align:center;font-weight:bold;color:#e67e22;">'+(out>0?out:'-')+'</td>':'')+
           '<td><button class="btn btn-gray btn-sm" onclick="showProdHistory(\''+p.id+'\',\''+p.name+'\')">내역</button> '+
           '<button class="btn btn-gray btn-sm" onclick="editProd(\''+p.id+'\')">수정</button> '+
