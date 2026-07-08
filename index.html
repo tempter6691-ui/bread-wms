@@ -1874,7 +1874,7 @@ function printOrders() {
     'th{background:#eee;border:1px solid #ccc;padding:2px 4px;text-align:center;}'+
     'td{border:1px solid #ccc;padding:2px 4px;}'+
     'td.qty{text-align:center;width:30px;color:#cc0000;font-weight:bold;}'+
-    '@media print{@page{margin:8mm;size:A4;}body{margin:0;}.driver-section{page-break-before:always;}.driver-section:first-of-type{page-break-before:avoid;}}'+
+    '@media print{@page{margin:8mm;size:A4;}body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.driver-section{page-break-before:always;}.driver-section:first-of-type{page-break-before:avoid;}}'+
   '</style></head><body>'+
   '<h1>📋 출고지시서 — '+S.ordDate+'</h1>';
 
@@ -1909,7 +1909,7 @@ function printOrders() {
           var lu = lp&&lp.unit?lp.unit:'판';
           var ru = rp&&rp.unit?rp.unit:'판';
           function cellStyle(u, isName){
-            if(u==='봉') return 'background:#8e44ad;color:#fff;font-weight:900;';
+            if(u==='봉') return 'background:#ffd400;color:#222;font-weight:900;';
             if(u==='개') return 'background:#d35400;color:#fff;font-weight:900;';
             if(u==='박스') return 'background:#1f5f8b;color:#fff;font-weight:900;';
             return isName ? 'color:#222222;' : 'color:#cc0000;font-weight:bold;';
