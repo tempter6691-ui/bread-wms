@@ -42,10 +42,10 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
 
 /* 날짜 그룹 */
 .date-group{margin:.6rem .7rem 0;}
-.date-header{display:flex;align-items:center;gap:.5rem;padding:.55rem .8rem;background:var(--primary);color:#fff;border-radius:8px 8px 0 0;cursor:pointer;user-select:none;}
+.date-header{display:flex;align-items:center;gap:.5rem;padding:.55rem .8rem;background:#fff;color:#555;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer;user-select:none;}
 .date-header-title{flex:1;font-size:.88rem;font-weight:700;}
-.date-header-count{font-size:.75rem;color:var(--accent);}
-.date-header-arrow{font-size:.8rem;transition:.2s;}
+.date-header-count{font-size:.75rem;color:var(--sub);}
+.date-header-arrow{font-size:.8rem;transition:.2s;color:#999;}
 .date-header.collapsed .date-header-arrow{transform:rotate(-90deg);}
 .date-body{background:#f8f5f0;border:1px solid #ddd;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background-color:#ddd;}
 .date-body.hidden{display:none;}
