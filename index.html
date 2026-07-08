@@ -796,6 +796,15 @@ function computeStockShortages() {
   return list;
 }
 
+function toggleShortageCard() {
+  var body = document.getElementById('shortage-card-body');
+  var icon = document.getElementById('shortage-toggle-icon');
+  if (!body) return;
+  var isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? 'block' : 'none';
+  if (icon) icon.textContent = isHidden ? '▲ 접기' : '▼ 펼치기';
+}
+
 function pgDash() {
   var total = S.prods.length;
   var totalInv = Object.values(S.inv).reduce(function(a,b){return a+b;},0);
@@ -809,13 +818,18 @@ function pgDash() {
   return '<div>'+
     (shortages.length>0?(
       '<div class="card" style="border:2px solid #e74c3c;margin-bottom:1rem;">'+
-        '<div class="card-title" style="color:#c0392b;">⚠️ 앞으로 14일 안에 재고 부족 예상 ('+shortages.length+'개 품목)</div>'+
+        '<div class="card-title" style="color:#c0392b;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="toggleShortageCard()">'+
+          '<span>⚠️ 앞으로 14일 안에 재고 부족 예상 ('+shortages.length+'개 품목)</span>'+
+          '<span id="shortage-toggle-icon" style="font-size:.8rem;color:#888;">▼ 펼치기</span>'+
+        '</div>'+
+        '<div id="shortage-card-body" style="display:none;">'+
         '<table style="font-size:.85rem;"><thead><tr><th>제품명</th><th style="text-align:right;">현재재고</th><th style="text-align:right;">누적예정출고</th><th>부족해지는 날짜</th></tr></thead><tbody>'+
         shortages.slice(0,10).map(function(s){
           return '<tr><td>'+s.name+'</td><td style="text-align:right;">'+s.stock+'</td><td style="text-align:right;color:#c0392b;font-weight:bold;">'+s.pending+'</td><td>'+s.date+(s.date===new Date().toISOString().slice(0,10)?' (오늘)':'')+'</td></tr>';
         }).join('')+
         '</tbody></table>'+
         (shortages.length>10?'<div style="font-size:.8rem;color:#888;margin-top:.4rem;">외 '+(shortages.length-10)+'개 더 있음 (제품 관리 화면에서 예정출고 조회로 전체 확인 가능)</div>':'')+
+        '</div>'+
       '</div>'
     ):'')+
     (hasTmpl&&cnt===0?'<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;"><span>📅 오늘 요일 템플릿이 있어요!</span><button class="btn btn-warning btn-sm" onclick="applyTodayTmpl()">불러오기</button></div>':'')+
