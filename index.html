@@ -1589,6 +1589,11 @@ function searchProd(clientName, sid, q) {
   el.innerHTML=m.map(function(p){return '<button class="client-btn" style="font-size:.76rem;" onclick="addItem(\''+esc(clientName)+'\',\''+p.id+'\',\''+sid+'\')">'+p.name+'['+p.qr+']</button>';}).join('');
 }
 
+// 출고지시서에서, 분류(cat)가 달라도 이름에 이 키워드가 들어간 품목끼리는 서로 붙어있게 묶음
+// (예: "사각" → 조각케익류(케익사각)와 사각무스케익류(무스사각)가 서로 이어져서 표시됨)
+// 새 키워드 추가하고 싶으면 배열에 그냥 문자열 추가하면 됨 (예: ['사각','도지마롤'])
+var ORD_GROUP_KEYWORDS = ['사각'];
+
 async function addItem(clientName, pid, sid) {
   var d=S.ordDate; if(!S.orders[d]) S.orders[d]={};
   if(!S.orders[d][clientName]) S.orders[d][clientName]={items:[]};
@@ -1598,12 +1603,20 @@ async function addItem(clientName, pid, sid) {
   } else {
     var newP=S.prods.find(function(x){return x.id===pid;});
     var newCat=newP?newP.cat:'';
-    // 같은 카테고리(분류) 품목이 이미 있으면 그 그룹 끝에 끼워 넣고, 없으면 맨 뒤에 추가
+    var newName=newP?newP.name:'';
+    var kw=ORD_GROUP_KEYWORDS.find(function(k){return newName.indexOf(k)>=0;});
     var insertAt=items.length;
-    if(newCat){
+    if(kw){
+      // 키워드가 들어간 품목이면, 분류가 달라도 이름에 같은 키워드가 있는 마지막 품목 바로 뒤에 삽입
       for(var i=items.length-1;i>=0;i--){
         var ip=S.prods.find(function(x){return x.id===items[i].pid;});
-        if(ip&&ip.cat===newCat){ insertAt=i+1; break; }
+        if(ip&&ip.name.indexOf(kw)>=0){ insertAt=i+1; break; }
+      }
+    } else if(newCat){
+      // 키워드 없으면 기존처럼 같은 분류(cat) 품목 뒤에 삽입
+      for(var j=items.length-1;j>=0;j--){
+        var jp=S.prods.find(function(x){return x.id===items[j].pid;});
+        if(jp&&jp.cat===newCat){ insertAt=j+1; break; }
       }
     }
     items.splice(insertAt,0,{pid:pid,qty:1,done:false});

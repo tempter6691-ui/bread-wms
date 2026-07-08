@@ -150,22 +150,28 @@ async function loadProdCatMap() {
   } catch(e) { console.error('제품 분류 로드 실패:', e.message); }
   return prodCatMap;
 }
-// 같은 분류(cat) 품목끼리 묶이도록 정렬 (분류 없는 품목은 원래 순서 유지하며 맨 뒤로)
+// 출고지시서와 동일한 키워드 그룹핑 기준 (이름에 이 단어가 들어가면 분류가 달라도 서로 붙어서 표시됨)
+var ORD_GROUP_KEYWORDS = ['사각'];
+// 같은 분류(cat) 또는 같은 키워드 품목끼리 묶이도록 정렬 (분류/키워드 없는 품목은 원래 순서 유지하며 맨 뒤로)
 function groupItemsByCat(items) {
-  var catOrder = [], seen = {};
+  var groupOrder = [], seen = {};
   items.forEach(function(it){
-    var c = prodCatMap[it.pid] || '';
-    if (c && !seen[c]) { seen[c] = true; catOrder.push(c); }
+    var pname = it.pname || '';
+    var kw = ORD_GROUP_KEYWORDS.find(function(k){return pname.indexOf(k)>=0;});
+    var key = kw ? ('kw:'+kw) : (prodCatMap[it.pid] ? ('cat:'+prodCatMap[it.pid]) : '');
+    if (key && !seen[key]) { seen[key] = true; groupOrder.push(key); }
   });
-  var buckets = {}, noCat = [];
-  catOrder.forEach(function(c){ buckets[c] = []; });
+  var buckets = {}, noGroup = [];
+  groupOrder.forEach(function(k){ buckets[k] = []; });
   items.forEach(function(it){
-    var c = prodCatMap[it.pid] || '';
-    if (c) buckets[c].push(it); else noCat.push(it);
+    var pname = it.pname || '';
+    var kw = ORD_GROUP_KEYWORDS.find(function(k){return pname.indexOf(k)>=0;});
+    var key = kw ? ('kw:'+kw) : (prodCatMap[it.pid] ? ('cat:'+prodCatMap[it.pid]) : '');
+    if (key) buckets[key].push(it); else noGroup.push(it);
   });
   var result = [];
-  catOrder.forEach(function(c){ result = result.concat(buckets[c]); });
-  return result.concat(noCat);
+  groupOrder.forEach(function(k){ result = result.concat(buckets[k]); });
+  return result.concat(noGroup);
 }
 
 function escapeHtml(str) {
