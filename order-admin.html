@@ -10,10 +10,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
-  --primary:#1e3a5f;--accent:#c9a96e;--bg:#f8f5f0;--white:#fff;
-  --success:#27ae60;--warning:#f39c12;--danger:#e74c3c;--border:#ddd;--sub:#888;
+  --primary:#7ba7c9;--accent:#e8c5a0;--bg:#faf7f2;--white:#fff;
+  --success:#8fd0a8;--warning:#f5c876;--danger:#f0a5a0;--border:#e5e0da;--sub:#9a9a9a;
 }
-body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-height:100vh;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;min-height:100vh;}
 
 .header{background:var(--primary);color:#fff;padding:.9rem 1rem;display:flex;align-items:center;gap:.6rem;position:sticky;top:0;z-index:100;}
 .header h1{font-size:.95rem;font-weight:700;flex:1;}
@@ -59,9 +59,9 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .order-time{font-size:.72rem;color:var(--sub);}
 .order-driver{font-size:.7rem;padding:.15rem .5rem;border-radius:10px;background:#e8f0ff;color:var(--primary);font-weight:500;}
 .status-badge{padding:.2rem .55rem;border-radius:10px;font-size:.68rem;font-weight:700;}
-.status-pending{background:#fff3cd;color:#856404;}
-.status-confirmed{background:#d4edda;color:#155724;}
-.status-cancelled{background:#f8d7da;color:#721c24;}
+.status-pending{background:#fdf1dc;color:#a17b3f;}
+.status-confirmed{background:#e2f3e7;color:#4a8b62;}
+.status-cancelled{background:#fbe8e6;color:#b06b66;}
 
 /* 아이템 토글 */
 .items-toggle{font-size:.75rem;color:var(--primary);cursor:pointer;text-decoration:underline;margin-bottom:.3rem;display:inline-block;}
@@ -74,17 +74,17 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .order-memo{font-size:.72rem;color:var(--sub);font-style:italic;margin:.2rem 0;}
 
 /* 답글 영역 */
-.reply-box{background:#f0f7ff;border:1px solid #d4e6fb;border-radius:8px;padding:.5rem .6rem;margin-top:.4rem;}
-.reply-shown{font-size:.75rem;color:#1b5e7d;font-weight:600;display:flex;justify-content:space-between;align-items:flex-start;gap:.4rem;}
+.reply-box{background:#eef5fa;border:1px solid #dceaf5;border-radius:8px;padding:.5rem .6rem;margin-top:.4rem;}
+.reply-shown{font-size:.75rem;color:#5a90a8;font-weight:600;display:flex;justify-content:space-between;align-items:flex-start;gap:.4rem;}
 .reply-shown-text{flex:1;}
-.reply-tag-badge{display:inline-block;background:#2980b9;color:#fff;font-size:.66rem;padding:1px 6px;border-radius:8px;font-weight:700;margin-right:.3rem;vertical-align:middle;}
+.reply-tag-badge{display:inline-block;background:#8fb8d4;color:#fff;font-size:.66rem;padding:1px 6px;border-radius:8px;font-weight:700;margin-right:.3rem;vertical-align:middle;}
 .reply-edit-link{font-size:.68rem;color:#888;cursor:pointer;text-decoration:underline;white-space:nowrap;}
 .reply-tags{display:flex;gap:.3rem;margin-bottom:.35rem;flex-wrap:wrap;}
-.reply-tag-btn{padding:.25rem .55rem;border:1px solid #c9ddf2;background:#fff;color:#2980b9;border-radius:12px;font-size:.7rem;cursor:pointer;font-family:inherit;font-weight:600;}
-.reply-tag-btn:hover{background:#eaf2f8;}
+.reply-tag-btn{padding:.25rem .55rem;border:1px solid #dceaf5;background:#fff;color:#8fb8d4;border-radius:12px;font-size:.7rem;cursor:pointer;font-family:inherit;font-weight:600;}
+.reply-tag-btn:hover{background:#f0f6fa;}
 .reply-input-row{display:flex;gap:.3rem;}
-.reply-input{flex:1;padding:.35rem .5rem;border:1px solid #d4e6fb;border-radius:5px;font-size:.75rem;font-family:inherit;}
-.btn-reply-save{background:#2980b9;}
+.reply-input{flex:1;padding:.35rem .5rem;border:1px solid #dceaf5;border-radius:5px;font-size:.75rem;font-family:inherit;}
+.btn-reply-save{background:#8fb8d4;}
 
 .order-actions{display:flex;gap:.4rem;margin-top:.4rem;}
 .btn-sm{padding:.35rem .7rem;border:none;border-radius:5px;font-size:.72rem;cursor:pointer;font-family:inherit;font-weight:700;color:#fff;}
@@ -92,7 +92,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .btn-cancel{background:var(--danger);}
 .btn-print{background:var(--primary);}
 
-.status-exported{background:#e8d5f5;color:#6c3483;}
+.status-exported{background:#f0e3f5;color:#a67cb8;}
 .new-dot{display:inline-block;width:7px;height:7px;background:var(--danger);border-radius:50%;margin-left:4px;vertical-align:middle;}
 </style>
 </head>
@@ -390,9 +390,9 @@ function renderCard(o) {
     '<div class="order-top">'+
       '<div class="order-client">'+escapeHtml(o.client)+(isNew&&o.status==='pending'?'<span class="new-dot"></span>':'')+
       '</div>'+
-      (o.memo?'<span style="background:#e74c3c;color:#fff;font-size:.75rem;font-weight:700;padding:3px 9px;border-radius:5px;">💬 '+escapeHtml(o.memo)+'</span>':'')+
-      (isUnknownClient?'<span style="background:#e74c3c;color:#fff;font-size:.68rem;padding:1px 6px;border-radius:4px;font-weight:700;">⚠️ 미등록 거래처</span>':'')+
-      (isAutoMapped?'<span style="background:#2980b9;color:#fff;font-size:.68rem;padding:1px 6px;border-radius:4px;font-weight:700;">🔗 '+escapeHtml(resolved.name)+'로 자동연동</span>':'')+
+      (o.memo?'<span style="background:#f0a5a0;color:#fff;font-size:.75rem;font-weight:700;padding:3px 9px;border-radius:5px;">💬 '+escapeHtml(o.memo)+'</span>':'')+
+      (isUnknownClient?'<span style="background:#f0a5a0;color:#fff;font-size:.68rem;padding:1px 6px;border-radius:4px;font-weight:700;">⚠️ 미등록 거래처</span>':'')+
+      (isAutoMapped?'<span style="background:#8fb8d4;color:#fff;font-size:.68rem;padding:1px 6px;border-radius:4px;font-weight:700;">🔗 '+escapeHtml(resolved.name)+'로 자동연동</span>':'')+
       (driver?'<span class="order-driver">'+escapeHtml(driver)+'</span>':'')+
       '<span class="order-time">'+timeStr+'</span>'+
       '<span class="status-badge '+statusClass+'">'+statusLabel+'</span>'+
@@ -400,8 +400,8 @@ function renderCard(o) {
     '<span class="items-toggle" onclick="toggleItems(this)">▶ 품목 보기 ('+(o.items||[]).length+'개 품목, '+total+'개)</span>'+
     '<div class="items-body">'+
       itemsHtml+
-      (isUnknownClient?'<div style="background:#fff3cd;color:#856404;padding:6px 10px;border-radius:6px;font-size:.78rem;margin-top:.4rem;">⚠️ "'+escapeHtml(o.client)+'"은 거래처 관리에 등록되지 않은 이름입니다. 정식 거래처명과 다르면 출고지시서에 중복 거래처가 생성될 수 있습니다. 등록 후 처리해 주세요.</div>':'')+
-      (isAutoMapped?'<div style="background:#eaf2f8;color:#1b5e7d;padding:6px 10px;border-radius:6px;font-size:.78rem;margin-top:.4rem;">🔗 "'+escapeHtml(o.client)+'"을 등록된 거래처 "'+escapeHtml(resolved.name)+'"로 자동 연동했어요 (유사도 '+Math.round(resolved.score*100)+'%). 다른 거래처라면 거래처 관리에서 별도 등록해 주세요.</div>':'')+
+      (isUnknownClient?'<div style="background:#fdf1dc;color:#a17b3f;padding:6px 10px;border-radius:6px;font-size:.78rem;margin-top:.4rem;">⚠️ "'+escapeHtml(o.client)+'"은 거래처 관리에 등록되지 않은 이름입니다. 정식 거래처명과 다르면 출고지시서에 중복 거래처가 생성될 수 있습니다. 등록 후 처리해 주세요.</div>':'')+
+      (isAutoMapped?'<div style="background:#f0f6fa;color:#5a90a8;padding:6px 10px;border-radius:6px;font-size:.78rem;margin-top:.4rem;">🔗 "'+escapeHtml(o.client)+'"을 등록된 거래처 "'+escapeHtml(resolved.name)+'"로 자동 연동했어요 (유사도 '+Math.round(resolved.score*100)+'%). 다른 거래처라면 거래처 관리에서 별도 등록해 주세요.</div>':'')+
       buildReplyBox(o)+
     '</div>'+
     '<div class="order-actions">'+
