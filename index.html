@@ -3208,44 +3208,56 @@ async function ecSend() {
   var rows=window._ecRows||[];
   var sendRows=rows.filter(function(r){return r.CUST;});
   if(sendRows.length===0){alert('전송할 데이터가 없습니다.\n거래처코드를 먼저 등록해주세요.');return;}
-  if(!confirm(sendRows.length+'건을 이카운트로 전송하시겠습니까?'))return;
+  if(!confirm(sendRows.length+'건을 이카운트로 전송하시겠습니까? (이카운트 1회 전송 한도인 300건씩 나눠서 순차 전송돼요)'))return;
   var el=document.getElementById('ec-preview');
-  el.insertAdjacentHTML('beforeend','<p id="ec-status" style="color:#2563eb;margin-top:.5rem;">전송 중...</p>');
-  var orderMap={};
-  sendRows.forEach(function(r){
-    var key=r.IO_DATE+'_'+r.CUST;
-    if(!orderMap[key])orderMap[key]={IO_DATE:r.IO_DATE,CUST:r.CUST,WH_CD:r.WH_CD,items:[]};
-    orderMap[key].items.push({PROD_CD:r.PROD_CD,QTY:r.QTY}); // PRICE는 일부러 안 보냄 - 이카운트에 등록된 거래처별 단가가 자동으로 채워지게 하기 위함
-  });
-  var orders=Object.values(orderMap);
-  try {
-    var res=await fetch(ECOUNT_PROXY+'/send-to-ecount',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':ECOUNT_API_KEY},
-      body:JSON.stringify({orders:orders})
+  el.insertAdjacentHTML('beforeend','<p id="ec-status" style="color:#2563eb;margin-top:.5rem;"></p>');
+  var statusEl=document.getElementById('ec-status');
+
+  var CHUNK_SIZE=300;
+  var chunks=[];
+  for(var i=0;i<sendRows.length;i+=CHUNK_SIZE){ chunks.push(sendRows.slice(i,i+CHUNK_SIZE)); }
+
+  var totalSent=0, totalFail=0;
+  for(var c=0;c<chunks.length;c++){
+    var chunkRows=chunks[c];
+    statusEl.style.color='#2563eb';
+    statusEl.textContent='전송 중... ('+(c+1)+'/'+chunks.length+' 묶음, '+chunkRows.length+'건)';
+    var orderMap={};
+    chunkRows.forEach(function(r){
+      var key=r.IO_DATE+'_'+r.CUST;
+      if(!orderMap[key])orderMap[key]={IO_DATE:r.IO_DATE,CUST:r.CUST,WH_CD:r.WH_CD,items:[]};
+      orderMap[key].items.push({PROD_CD:r.PROD_CD,QTY:r.QTY}); // PRICE는 일부러 안 보냄 - 이카운트에 등록된 거래처별 단가가 자동으로 채워지게 하기 위함
     });
-    var data=await res.json();
-    var statusEl=document.getElementById('ec-status');
-    if(data.success){
-      statusEl.style.color='#16a34a';statusEl.textContent='✅ 전송 완료! '+data.message+' - 전송 표시 저장 중...';
-      // 전송 성공한 로그들에 ecSent 표시를 남겨서 다음번엔 중복 전송되지 않게 함
-      var batch=db.batch();
-      sendRows.forEach(function(r){
-        if(!r.logId)return;
-        batch.update(db.collection('logs').doc(r.logId), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
+    var orders=Object.values(orderMap);
+    try {
+      var res=await fetch(ECOUNT_PROXY+'/send-to-ecount',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':ECOUNT_API_KEY},
+        body:JSON.stringify({orders:orders})
       });
-      try {
+      var data=await res.json();
+      if(data.success){
+        totalSent+=chunkRows.length;
+        var batch=db.batch();
+        chunkRows.forEach(function(r){
+          if(!r.logId)return;
+          batch.update(db.collection('logs').doc(r.logId), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
+        });
         await batch.commit();
-        statusEl.textContent='✅ 전송 완료! '+data.message+' (전송 표시 저장됨)';
-      } catch(be){
-        statusEl.textContent='⚠️ 이카운트 전송은 됐지만, 전송 표시 저장에 실패했어요: '+be.message+' (다음 전송 때 중복될 수 있으니 확인 필요)';
-        statusEl.style.color='#d97706';
+      } else {
+        totalFail+=chunkRows.length;
+        statusEl.style.color='#dc2626';
+        statusEl.textContent='❌ '+(c+1)+'번째 묶음 전송 실패 ('+chunkRows.length+'건): '+(data.message||JSON.stringify(data))+' — 여기서 중단, 앞서 성공한 '+totalSent+'건은 정상 반영됨';
+        return;
       }
+    } catch(e){
+      totalFail+=chunkRows.length;
+      statusEl.style.color='#dc2626';
+      statusEl.textContent='❌ '+(c+1)+'번째 묶음 전송 중 오류: '+e.message+' — 여기서 중단, 앞서 성공한 '+totalSent+'건은 정상 반영됨';
+      return;
     }
-    else{statusEl.style.color='#dc2626';statusEl.textContent='❌ 전송 실패: '+(data.error||JSON.stringify(data));}
-  } catch(e){
-    var s=document.getElementById('ec-status');
-    if(s){s.textContent='❌ 오류: '+e.message;s.style.color='#dc2626';}
   }
+  statusEl.style.color='#16a34a';
+  statusEl.textContent='✅ 전송 완료! 총 '+totalSent+'건 ('+chunks.length+'개 묶음으로 나눠 전송, 전송 표시 저장됨)';
 }
 </script>
