@@ -796,6 +796,13 @@ function computeStockShortages() {
   return list;
 }
 
+function toggleInvList(kind) {
+  var id = kind==='low' ? 'inv-low-list' : 'inv-zero-list';
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = (el.style.display==='none') ? 'block' : 'none';
+}
+
 function toggleShortageCard() {
   var body = document.getElementById('shortage-card-body');
   var icon = document.getElementById('shortage-toggle-icon');
@@ -810,6 +817,8 @@ function pgDash() {
   var totalInv = Object.values(S.inv).reduce(function(a,b){return a+b;},0);
   var low = S.prods.filter(function(p){return (S.inv[p.id]||0)<=15&&(S.inv[p.id]||0)>0;}).length;
   var zero = S.prods.filter(function(p){return (S.inv[p.id]||0)===0;}).length;
+  var lowList = S.prods.filter(function(p){return (S.inv[p.id]||0)<=15&&(S.inv[p.id]||0)>0;}).sort(function(a,b){return (S.inv[a.id]||0)-(S.inv[b.id]||0);});
+  var zeroList = S.prods.filter(function(p){return (S.inv[p.id]||0)===0;});
   var todayOrd = S.orders[S.ordDate] || {};
   var cnt = Object.keys(todayOrd).length;
   var wday = ['sun','mon','tue','wed','thu','fri','sat'][new Date().getDay()];
@@ -836,9 +845,19 @@ function pgDash() {
     '<div class="grid-4">'+
       '<div class="stat-card"><div class="stat-num">'+total+'</div><div class="stat-lbl">전체 제품</div></div>'+
       '<div class="stat-card"><div class="stat-num">'+totalInv+'</div><div class="stat-lbl">총 재고</div></div>'+
-      '<div class="stat-card" style="'+(low>0?'border:2px solid #ffc107':'')+'" ><div class="stat-num" style="'+(low>0?'color:#e67e22':'')+'">'+low+'</div><div class="stat-lbl">부족재고(15↓)</div></div>'+
-      '<div class="stat-card" style="'+(zero>0?'border:2px solid #e74c3c':'')+'"><div class="stat-num" style="'+(zero>0?'color:#e74c3c':'')+'">'+zero+'</div><div class="stat-lbl">재고없음</div></div>'+
+      '<div class="stat-card" style="'+(low>0?'border:2px solid #ffc107;cursor:pointer;':'')+'" onclick="toggleInvList(\'low\')"><div class="stat-num" style="'+(low>0?'color:#e67e22':'')+'">'+low+'</div><div class="stat-lbl">부족재고(15↓) '+(low>0?'<span style="font-size:.7rem;">▼</span>':'')+'</div></div>'+
+      '<div class="stat-card" style="'+(zero>0?'border:2px solid #e74c3c;cursor:pointer;':'')+'" onclick="toggleInvList(\'zero\')"><div class="stat-num" style="'+(zero>0?'color:#e74c3c':'')+'">'+zero+'</div><div class="stat-lbl">재고없음 '+(zero>0?'<span style="font-size:.7rem;">▼</span>':'')+'</div></div>'+
     '</div>'+
+    '<div id="inv-low-list" style="display:none;" class="card">'+
+      '<div class="card-title" style="color:#e67e22;">⚠️ 부족재고 목록 (15개 이하)</div>'+
+      '<table style="font-size:.85rem;"><thead><tr><th>제품명</th><th>분류</th><th style="text-align:right;">재고</th></tr></thead><tbody>'+
+      lowList.map(function(p){return '<tr><td>'+p.name+'</td><td>'+(p.cat||'')+'</td><td style="text-align:right;color:#e67e22;font-weight:bold;">'+(S.inv[p.id]||0)+'</td></tr>';}).join('')+
+      '</tbody></table></div>'+
+    '<div id="inv-zero-list" style="display:none;" class="card">'+
+      '<div class="card-title" style="color:#e74c3c;">🚫 재고없음 목록</div>'+
+      '<table style="font-size:.85rem;"><thead><tr><th>제품명</th><th>분류</th><th style="text-align:right;">재고</th></tr></thead><tbody>'+
+      zeroList.map(function(p){return '<tr><td>'+p.name+'</td><td>'+(p.cat||'')+'</td><td style="text-align:right;color:#e74c3c;font-weight:bold;">0</td></tr>';}).join('')+
+      '</tbody></table></div>'+
     (function(){
       if(cnt===0) return '<div class="card"><div class="card-title">오늘 출고지시서 ('+S.ordDate+')</div><p style="color:#aaa;">오늘 지시서 없음. <a href="#" onclick="go(\'orders\')">지시서 입력하기</a></p></div>';
       function makeRow(n) {
