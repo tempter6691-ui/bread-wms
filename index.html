@@ -535,7 +535,7 @@ var DRIVERS = ['A이운영','B남재만','C서영덕','F신종한','E정일혁']
 // ── STATE ─────────────────────────────────────────────────────
 var db = null;
 var S = {
-  page:'dashboard', prods:[], clients:[], inv:{}, todayInbound:{},
+  page:'dashboard', prods:[], clients:[], inv:{}, todayInbound:{}, priceHistory:{},
   orders:{}, templates:{}, outClient:null,
   ordDate:todayStr(), ordDriver:'전체'
 };
@@ -625,6 +625,10 @@ async function loadAll() {
 
     var tm = await db.collection('templates').get();
     S.templates = {}; tm.forEach(function(d){ S.templates[d.id] = d.data(); });
+
+    // 이카운트 판매현황에서 가져온 거래처+품목별 단가 이력 (이카운트 전송 시 자동 단가 채우기용)
+    var ph = await db.collection('priceHistory').get();
+    S.priceHistory = {}; ph.forEach(function(d){ var dd=d.data(); S.priceHistory[dd.clientDocId+'__'+dd.pid] = dd.price; });
 
     // Drivers
     var drv = await db.collection('drivers').get();
@@ -3167,14 +3171,16 @@ async function ecPreview() {
       var mult=prod.ecountQtyMultiplier||1;
       var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
       var custCode=client&&client.ecountCode?client.ecountCode:'';
-      rows.push({logId:doc.id,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100'});
+      var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
+      rows.push({logId:doc.id,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:price});
     });
     if(rows.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
+    var noPrice=rows.filter(function(r){return r.CUST&&!r.PRICE;});
     var html='<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
       '<span style="font-size:.85rem;color:#555;">총 <b>'+rows.length+'</b>건 (아직 전송 안 된 것만)</span>'+
       (noCust.length>0?'<span style="color:#dc2626;font-size:.8rem;">⚠️ 거래처코드 없음 '+noCust.length+'건 (전송 제외됨)</span>':'')+
-      '<span style="color:#888;font-size:.78rem;">💡 단가는 이카운트에 등록된 거래처별 단가로 자동 계산돼요</span>'+
+      (noPrice.length>0?'<span style="color:#d97706;font-size:.8rem;">💰 단가 확인 필요 '+noPrice.length+'건 (0원으로 전송됨)</span>':'')+
       '<button class="btn btn-success btn-sm" style="margin-left:auto;" onclick="ecSend()">📤 이카운트 전송</button>'+
     '</div>'+
     '<div style="overflow-x:auto;"><table style="font-size:.8rem;">'+
@@ -3185,9 +3191,10 @@ async function ecPreview() {
       '<th style="padding:.4rem .6rem;text-align:left;">제품</th>'+
       '<th style="padding:.4rem .6rem;text-align:left;">이카운트코드</th>'+
       '<th style="padding:.4rem .6rem;text-align:right;">수량</th>'+
+      '<th style="padding:.4rem .6rem;text-align:right;">단가</th>'+
     '</tr></thead><tbody>';
     rows.forEach(function(r){
-      var warn=!r.CUST?' style="background:#fff5f5;"':'';
+      var warn=!r.CUST?' style="background:#fff5f5;"':(!r.PRICE?' style="background:#fffbeb;"':'');
       var qtyDisp=r.mult>1?(r.origQty+' × '+r.mult+' = <b>'+r.QTY+'</b>'):r.QTY;
       html+='<tr'+warn+'>'+
         '<td style="padding:.35rem .6rem;">'+r.IO_DATE.slice(0,4)+'-'+r.IO_DATE.slice(4,6)+'-'+r.IO_DATE.slice(6,8)+'</td>'+
@@ -3196,6 +3203,7 @@ async function ecPreview() {
         '<td style="padding:.35rem .6rem;">'+r.prodName+'</td>'+
         '<td style="padding:.35rem .6rem;">'+r.PROD_CD+'</td>'+
         '<td style="padding:.35rem .6rem;text-align:right;">'+qtyDisp+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;color:'+(r.PRICE?'#333':'#d97706')+';">'+(r.PRICE?r.PRICE.toLocaleString():'확인필요')+'</td>'+
       '</tr>';
     });
     html+='</tbody></table></div>';
@@ -3226,7 +3234,7 @@ async function ecSend() {
     chunkRows.forEach(function(r){
       var key=r.IO_DATE+'_'+r.CUST;
       if(!orderMap[key])orderMap[key]={IO_DATE:r.IO_DATE,CUST:r.CUST,WH_CD:r.WH_CD,items:[]};
-      orderMap[key].items.push({PROD_CD:r.PROD_CD,QTY:r.QTY}); // PRICE는 일부러 안 보냄 - 이카운트에 등록된 거래처별 단가가 자동으로 채워지게 하기 위함
+      orderMap[key].items.push({PROD_CD:r.PROD_CD,QTY:r.QTY,PRICE:r.PRICE||0}); // 단가 이력(priceHistory)에서 찾은 값. 없으면 0 (수동 확인 필요)
     });
     var orders=Object.values(orderMap);
     try {
