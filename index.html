@@ -3299,12 +3299,14 @@ function ecExportExcel() {
   if (rows.length === 0) { alert('먼저 미리보기를 조회해주세요.'); return; }
   if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
 
-  // 같은 날짜+거래처 = 같은 전표(순번은 0부터 그 전표 안에서 품목 줄 번호)
-  var lineCounter = {};
+  // 같은 날짜+거래처 = 같은 전표(순번)로 묶기 — 이카운트는 "일자+순번"이 같은 행끼리 한 전표로 합칩니다.
+  // (품목마다 순번을 늘리면 전표가 쪼개져버려요 — 전표가 바뀔 때만 순번을 늘려야 해요)
+  var groupSeq = {};
+  var nextSeq = 0;
   var sheetRows = rows.map(function(r){
     var key = r.IO_DATE + '_' + r.CUST;
-    if (lineCounter[key] === undefined) lineCounter[key] = 0;
-    var line = lineCounter[key]++;
+    if (groupSeq[key] === undefined) groupSeq[key] = nextSeq++;
+    var line = groupSeq[key];
 
     var qty = r.QTY || 0;
     var price = r.PRICE || 0;
