@@ -2681,8 +2681,10 @@ function pgLogs() {
     '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
       '<input id="log-prod-q" list="log-prod-list" type="text" placeholder="제품명 검색..." style="flex:1;min-width:200px;padding:.45rem;" oninput="onLogProdInput()">'+
       '<datalist id="log-prod-list"></datalist>'+
+      '<label style="font-size:.82rem;color:var(--sub);white-space:nowrap;">날짜(선택): <input id="log-prod-date" type="date" style="padding:.4rem;margin-left:.3rem;" oninput="onLogProdInput()"></label>'+
       '<button class="btn btn-gray btn-sm" onclick="clearLogProdSearch()">초기화</button>'+
     '</div>'+
+    '<div style="font-size:.72rem;color:var(--sub);margin-top:.3rem;">날짜를 비워두면 전체 기간 날짜별 합계를, 날짜를 넣으면 그날 개별 로그(수정/삭제 가능)를 보여드려요.</div>'+
     '<div id="log-prod-result" style="margin-top:.75rem;"></div>'+
   '</div>'+
   '<div class="card"><div class="card-title">📦 입고 기록 (날짜별 합산)</div>'+
@@ -2702,32 +2704,36 @@ function fillLogProdList(){
 }
 
 function clearLogProdSearch(){
-  var q=document.getElementById('log-prod-q'), r=document.getElementById('log-prod-result');
+  var q=document.getElementById('log-prod-q'), r=document.getElementById('log-prod-result'), dt=document.getElementById('log-prod-date');
   if(q) q.value='';
+  if(dt) dt.value='';
   if(r) r.innerHTML='';
 }
 
 function onLogProdInput(){
   var v=(document.getElementById('log-prod-q')||{value:''}).value.trim();
+  var dateV=(document.getElementById('log-prod-date')||{value:''}).value||'';
   var el=document.getElementById('log-prod-result');
   if(!el) return;
   if(!v){ el.innerHTML=''; return; }
   var exact=S.prods.find(function(p){return p.name===v;});
-  if(exact){ searchProdLogs(exact.id, exact.name); return; }
+  if(exact){ searchProdLogs(exact.id, exact.name, dateV); return; }
   var partial=S.prods.filter(function(p){return p.name.toLowerCase().indexOf(v.toLowerCase())>=0;}).slice(0,8);
   if(partial.length){
     el.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:.4rem;">'+partial.map(function(p){
-      return '<button class="btn btn-gray btn-sm" onclick="document.getElementById(\'log-prod-q\').value=\''+esc(p.name)+'\';searchProdLogs(\''+p.id+'\',\''+esc(p.name)+'\');">'+p.name+'</button>';
+      return '<button class="btn btn-gray btn-sm" onclick="document.getElementById(\'log-prod-q\').value=\''+esc(p.name)+'\';searchProdLogs(\''+p.id+'\',\''+esc(p.name)+'\',(document.getElementById(\'log-prod-date\')||{}).value||\'\');">'+p.name+'</button>';
     }).join('')+'</div>';
   } else {
     el.innerHTML='<p style="color:#aaa;">일치하는 제품이 없어요.</p>';
   }
 }
 
-async function searchProdLogs(pid, pname){
+async function searchProdLogs(pid, pname, dateFilter){
   var el=document.getElementById('log-prod-result'); if(!el) return;
   el.innerHTML='<p style="color:#aaa;">로딩 중...</p>';
   try {
+    if (dateFilter) { await renderProdDayDetail(pid, pname, dateFilter, el); return; }
+
     var snap=await db.collection('logs').where('pid','==',pid).get();
     var dayMap={};
     snap.forEach(function(d){
@@ -2742,11 +2748,82 @@ async function searchProdLogs(pid, pname){
     if(!dates.length){ el.innerHTML='<p style="color:#aaa;">'+pname+' 입고 기록이 없어요.</p>'; return; }
     var total=dates.reduce(function(s,d){return s+dayMap[d];},0);
     var html='<div style="margin-bottom:.5rem;padding:.5rem;background:#f0f4ff;border-radius:4px;font-weight:bold;">'+pname+' — 누적 입고: '+total+'개</div>';
-    html+='<table><thead><tr><th>날짜</th><th>입고 수량</th></tr></thead><tbody>';
-    dates.forEach(function(d){ html+='<tr><td>'+d+'</td><td style="text-align:center;font-weight:bold;">'+dayMap[d]+'개</td></tr>'; });
+    html+='<table><thead><tr><th>날짜</th><th>입고 수량</th><th></th></tr></thead><tbody>';
+    dates.forEach(function(d){
+      var safeDate=(d==='날짜없음')?'':d;
+      html+='<tr><td>'+d+'</td><td style="text-align:center;font-weight:bold;">'+dayMap[d]+'개</td>'+
+        '<td style="text-align:right;">'+(safeDate?'<button class="btn btn-gray btn-sm" onclick="document.getElementById(\'log-prod-date\').value=\''+safeDate+'\';searchProdLogs(\''+pid+'\',\''+esc(pname)+'\',\''+safeDate+'\');">상세보기</button>':'')+'</td></tr>';
+    });
     html+='</tbody></table>';
     el.innerHTML=html;
   } catch(e){ el.innerHTML='<p style="color:red;">오류: '+e.message+'</p>'; }
+}
+
+// 특정 제품 x 특정 날짜의 개별 입고 로그를 보여주고, 그 자리에서 수정/삭제할 수 있게 함
+async function renderProdDayDetail(pid, pname, dateFilter, el){
+  el.innerHTML='<p style="color:#aaa;">로딩 중...</p>';
+  try {
+    var snap=await db.collection('logs').where('pid','==',pid).get();
+    var rows=[];
+    snap.forEach(function(d){
+      var r=d.data();
+      if(r.type!=='inbound') return;
+      var t=r.ts&&r.ts.toDate?r.ts.toDate():null;
+      var ds=t?(t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')):'';
+      if(ds!==dateFilter) return;
+      rows.push({id:d.id, qty:r.qty||1, manual:!!r.manual, ts:t});
+    });
+    rows.sort(function(a,b){ return (a.ts&&b.ts)?(a.ts-b.ts):0; });
+    var total=rows.reduce(function(s,r){return s+r.qty;},0);
+    var backBtn='<button class="btn btn-gray btn-sm" onclick="document.getElementById(\'log-prod-date\').value=\'\';searchProdLogs(\''+pid+'\',\''+esc(pname)+'\',\'\');">← 전체 날짜로</button>';
+    if(!rows.length){
+      el.innerHTML='<div style="margin-bottom:.5rem;">'+backBtn+'</div><p style="color:#aaa;">'+pname+' — '+dateFilter+' 입고 기록이 없어요.</p>';
+      return;
+    }
+    var html='<div style="margin-bottom:.5rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">'+backBtn+
+      '<span style="padding:.4rem .7rem;background:#f0f4ff;border-radius:4px;font-weight:bold;">'+pname+' — '+dateFilter+' 합계: '+total+'개 ('+rows.length+'건)</span></div>';
+    html+='<table><thead><tr><th>시각</th><th>수량</th><th>등록방식</th><th style="width:130px;">작업</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var timeStr=r.ts?(r.ts.getHours().toString().padStart(2,'0')+':'+r.ts.getMinutes().toString().padStart(2,'0')+':'+r.ts.getSeconds().toString().padStart(2,'0')):'-';
+      html+='<tr>'+
+        '<td>'+timeStr+'</td>'+
+        '<td style="text-align:center;font-weight:bold;">'+r.qty+'개</td>'+
+        '<td>'+(r.manual?'수동입력':'QR스캔')+'</td>'+
+        '<td style="text-align:right;white-space:nowrap;">'+
+          '<button class="btn btn-gray btn-sm" onclick="editProdLogQty(\''+r.id+'\',\''+pid+'\',\''+esc(pname)+'\',\''+dateFilter+'\')" style="padding:.15rem .5rem;">수정</button> '+
+          '<button class="btn btn-danger btn-sm" onclick="deleteProdLog(\''+r.id+'\',\''+pid+'\',\''+esc(pname)+'\',\''+dateFilter+'\')" style="padding:.15rem .5rem;">삭제</button>'+
+        '</td></tr>';
+    });
+    html+='</tbody></table>';
+    el.innerHTML=html;
+  } catch(e){ el.innerHTML='<p style="color:red;">오류: '+e.message+'</p>'; }
+}
+
+async function editProdLogQty(logId, pid, pname, dateFilter){
+  var cur=prompt('새 수량을 입력하세요 (숫자만):');
+  if(cur===null) return;
+  var n=parseInt(cur,10);
+  if(isNaN(n)||n<0){ alert('올바른 숫자를 입력해주세요.'); return; }
+  try {
+    await safeWrite(async function(){
+      await db.collection('logs').doc(logId).update({qty:n});
+    });
+    toast('수량이 '+n+'개로 수정됐어요','ok');
+    var el=document.getElementById('log-prod-result');
+    await renderProdDayDetail(pid, pname, dateFilter, el);
+  } catch(e){ alert('수정 오류: '+e.message); }
+}
+
+async function deleteProdLog(logId, pid, pname, dateFilter){
+  if(!confirm('이 입고 로그를 삭제할까요? 되돌릴 수 없어요.')) return;
+  try {
+    await safeWrite(async function(){
+      await db.collection('logs').doc(logId).delete();
+    });
+    toast('로그가 삭제됐어요','ok');
+    var el=document.getElementById('log-prod-result');
+    await renderProdDayDetail(pid, pname, dateFilter, el);
+  } catch(e){ alert('삭제 오류: '+e.message); }
 }
 
 async function loadLogs() {
