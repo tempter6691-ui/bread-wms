@@ -3338,6 +3338,9 @@ function ecExportExcel() {
     };
   });
 
+  // 같은 순번(=같은 전표) 행끼리 붙어있어야 이카운트가 한 전표로 합칩니다 — 정렬 안 하면 중간에 다른 전표 행이 끼어서 쪼개져요.
+  sheetRows.sort(function(a, b){ return a['순번'] - b['순번']; });
+
   var headers = ['일자','순번','거래처코드','거래처명','담당자','출하창고','거래유형','통화','환율','전일잔액','총미수','품목코드','품목명','수량','단가','단가(vat포함)','외화금액','공급가액','부가세','적요','생산전표생성'];
   var ws = XLSX.utils.json_to_sheet(sheetRows, { header: headers });
   ws['!cols'] = headers.map(function(){ return {wch:12}; });
