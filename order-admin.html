@@ -550,25 +550,8 @@ async function exportToOrder(id) {
           mergedMap[p.pid].qty = (mergedMap[p.pid].qty||0) - (p.qty||0);
         }
       });
-    } else if (existingItems.length > 0) {
-      // 이 주문은 처음 반영되는 건데, 이미 다른 내용이 들어있는 경우 -> 병합/덮어쓰기 확인
-      var reExportHint = (o.status==='exported') ? '\n\n💡 참고: 이 주문은 상태상 이미 등록된 적이 있어요. 예전 기록(재등록 추적용)이 없어서 정확히 구분이 안 되니, 단순히 다시 누른 거라면 [취소] 후 "덮어쓰기"를 선택하는 걸 권장해요.' : '';
-      var mergeChoice = confirm(
-        '⚠️ "'+dateStr+'" 날짜에 "'+resolvedClient+'"는 이미 출고지시서에 '+existingItems.length+'개 품목이 등록되어 있어요.\n\n'+
-        '[확인] → 기존 항목 + 이번 발주 내용을 합쳐요 (같은 제품은 수량을 더해요, 스캔 기록은 보존돼요)\n'+
-        '[취소] → 다른 선택지를 보여드려요'+reExportHint
-      );
-      if (!mergeChoice) {
-        var overwriteChoice = confirm(
-          '기존 '+existingItems.length+'개 품목을 지우고\n이번 발주 '+newItems.length+'개 품목으로 완전히 덮어쓸까요?\n\n'+
-          '[확인] = 덮어쓰기 (기존 내용은 삭제돼요)\n[취소] = 아무 작업도 하지 않아요'
-        );
-        if (!overwriteChoice) return;
-        mergedMap = {}; // 덮어쓰기: 기존 내용 전부 삭제
-        orderContributions = {}; // 다른 주문들의 기여분 기록도 함께 초기화
-        orderMemos = {}; // 다른 주문들의 메모 기록도 함께 초기화
-      }
     }
+    // 이미 등록된 다른 항목이 있어도 항상 합쳐서 반영합니다 (기존 항목은 절대 지우지 않음)
 
     // 이번 주문 내용 더하기 (재등록이면 위에서 뺀 다음 여기서 새로 더해지므로 결과적으로 "교체"가 됨)
     newItems.forEach(function(item){
