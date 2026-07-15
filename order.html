@@ -153,6 +153,87 @@ function toast(msg) {
   setTimeout(function(){t.classList.remove('show');},2000);
 }
 
+// ── 답변/확인 알림 (소리 + 탭 제목 깜빡임 + 내역 버튼 배지) ──────────
+var _origTitle = document.title;
+var _titleBlinkTimer = null;
+function blinkTitle(msg) {
+  if (_titleBlinkTimer) clearInterval(_titleBlinkTimer);
+  var on = true;
+  _titleBlinkTimer = setInterval(function(){
+    document.title = on ? msg : _origTitle;
+    on = !on;
+  }, 1000);
+  // 탭을 클릭(포커스)하면 깜빡임 멈추고 원래 제목으로
+  window.addEventListener('focus', function stopBlink(){
+    if (_titleBlinkTimer) { clearInterval(_titleBlinkTimer); _titleBlinkTimer = null; }
+    document.title = _origTitle;
+    window.removeEventListener('focus', stopBlink);
+  });
+}
+
+// 짧은 알림음 재생 (외부 파일 없이 코드로 생성)
+function playReplySound() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    function beep(startTime, freq) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.25);
+      osc.start(startTime); osc.stop(startTime + 0.25);
+    }
+    beep(ctx.currentTime, 660);
+    beep(ctx.currentTime + 0.3, 880);
+  } catch(e) { console.error('알림음 재생 실패:', e.message); }
+}
+
+function showHistoryBadge(show) {
+  var btn = document.querySelector('.hbtn-gray');
+  if (!btn) return;
+  var badge = document.getElementById('history-badge');
+  if (show) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.id = 'history-badge';
+      badge.style.cssText = 'display:inline-block;width:9px;height:9px;border-radius:50%;background:#e74c3c;margin-left:5px;vertical-align:middle;';
+      btn.appendChild(badge);
+    }
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+// 우리 거래처의 발주 상태/답글 변경을 실시간으로 감지해서 알림
+var _orderState = {};
+var _firstOrderSnap = true;
+function startOrderStatusListener() {
+  if (!S.client) return;
+  db.collection('orders_request').where('client','==',S.client)
+    .onSnapshot(function(snap){
+      var changed = false;
+      snap.forEach(function(d){
+        var o = d.data();
+        var prev = _orderState[d.id];
+        var curReplyKey = (o.reply||'') + '|' + (o.replyTag||'');
+        if (prev) {
+          var statusChanged = prev.status !== o.status && (o.status === 'confirmed' || o.status === 'cancelled');
+          var replyChanged = prev.reply !== curReplyKey && curReplyKey !== '|';
+          if (statusChanged || replyChanged) changed = true;
+        }
+        _orderState[d.id] = { status: o.status, reply: curReplyKey };
+      });
+      if (!_firstOrderSnap && changed) {
+        playReplySound();
+        blinkTitle('📩 새 알림 도착!');
+        showHistoryBadge(true);
+        toast('📩 브레드뱅크에서 확인/답변이 도착했어요!');
+      }
+      _firstOrderSnap = false;
+    });
+}
+
 function getParam(key) {
   return decodeURIComponent(new URLSearchParams(window.location.search).get(key)||'').trim();
 }
@@ -196,6 +277,7 @@ async function init() {
   document.getElementById('header-client').textContent=client;
   document.getElementById('main-wrap').style.display='block';
   renderCats(); renderProds(); updateCartCount();
+  startOrderStatusListener();
 }
 
 function renderCats() {
@@ -363,6 +445,8 @@ function resetOrder(){
 function openHistory(){
   document.getElementById('ov-history').classList.add('show');
   document.getElementById('modal-history').classList.add('show');
+  showHistoryBadge(false);
+  if (_titleBlinkTimer) { clearInterval(_titleBlinkTimer); _titleBlinkTimer = null; document.title = _origTitle; }
   loadHistory();
 }
 function closeHistory(){
