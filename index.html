@@ -3239,6 +3239,16 @@ function pgEcount() {
       '<label style="cursor:pointer;"><input type="checkbox" id="ec-from-orders"> 아직 출고 스캔 전이어도, 출고지시서(예정 수량) 기준으로 미리보기 — 실제 스캔 안 한 항목만 대상, 이 경우 엑셀 다운로드만 가능(중복 방지를 위해 직접전송/전송완료 버튼은 비활성화됨)</label>'+
     '</div>'+
     '<div id="ec-preview"></div>'+
+  '</div>'+
+  '<div class="card">'+
+    '<div class="card-title">📦 비즈모아(BizMore) 판매 전송</div>'+
+    '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">'+
+      '<label style="font-size:.85rem;font-weight:600;">시작일: <input type="date" id="bm-from" value="'+from7+'" style="padding:.4rem;margin-left:.3rem;"></label>'+
+      '<label style="font-size:.85rem;font-weight:600;">종료일: <input type="date" id="bm-to" value="'+today+'" style="padding:.4rem;margin-left:.3rem;"></label>'+
+      '<button class="btn btn-primary btn-sm" onclick="bmPreview()">📋 미리보기</button>'+
+    '</div>'+
+    '<div style="font-size:.72rem;color:var(--sub);margin-bottom:.5rem;">비즈모아 "매출전표 → Excel 가져오기" 양식(품목코드/No/품명/수량/규격/단가/금액/할인율/비고)에 맞춰 거래처별로 파일이 따로 생성돼요. 이카운트 전송 여부(ecSent)와는 별도로 관리돼요.</div>'+
+    '<div id="bm-preview"></div>'+
   '</div>';
 }
 
@@ -3254,6 +3264,7 @@ async function ecPreview() {
   var fromOrders=(document.getElementById('ec-from-orders')||{}).checked||false;
   try {
     var rows=[];
+    var noProdWarnings=[]; // pid는 있지만 products 컬렉션에서 못 찾은 로그 — 지금까지는 조용히 사라지던 케이스
     if(fromOrders) {
       // 출고지시서(orders) 기준 — 아직 스캔 안 한(done!==true) 항목만 대상. 실제 재고차감 안 된 "예정" 수량입니다.
       var d0=new Date(fromRaw), d1=new Date(toRaw);
@@ -3285,7 +3296,7 @@ async function ecPreview() {
       if(logDate<from||logDate>to)return;
       if(!d.client||!d.pid||!d.qty)return;
       var prod=S.prods.find(function(p){return p.id===d.pid;});
-      if(!prod)return;
+      if(!prod){ noProdWarnings.push((d.client||'?')+' - '+(d.pname||d.pid)+' ('+logDate.slice(0,4)+'-'+logDate.slice(4,6)+'-'+logDate.slice(6,8)+')'); return; }
       var ecCode=prod.ecountCode||prod.id;
       var mult=prod.ecountQtyMultiplier||1;
       var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
@@ -3294,10 +3305,13 @@ async function ecPreview() {
       rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:price});
     });
     }
-    if(rows.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
+    if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
     var noPrice=rows.filter(function(r){return r.CUST&&!r.PRICE;});
-    var html='<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
+    var noProdHtml=noProdWarnings.length>0?('<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:.5rem .75rem;margin-bottom:.6rem;font-size:.78rem;color:#b91c1c;">'+
+      '🚫 상품 정보를 못 찾아서 <b>완전히 누락된</b> 로그 '+noProdWarnings.length+'건 (엑셀에 아예 안 들어감 — products 컬렉션에 해당 pid가 없거나 삭제됨):<br>'+
+      noProdWarnings.join('<br>')+'</div>'):'';
+    var html=noProdHtml+'<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
       '<span style="font-size:.85rem;color:#555;">총 <b>'+rows.length+'</b>건 (아직 전송 안 된 것만)</span>'+
       (fromOrders?'<span style="color:#2563eb;font-size:.8rem;">📝 출고지시서(예정) 기준 — 아직 실물 출고 스캔 전</span>':'')+
       (noCust.length>0?'<span style="color:#dc2626;font-size:.8rem;">⚠️ 거래처코드 없음 '+noCust.length+'건 (전송 제외됨)</span>':'')+
@@ -3394,6 +3408,140 @@ function ecExportExcel() {
   var fromEl=document.getElementById('ec-from'), toEl=document.getElementById('ec-to');
   var fname = '이카운트_판매입력_'+((fromEl&&fromEl.value)||'')+'_'+((toEl&&toEl.value)||'')+'.xlsx';
   XLSX.writeFile(wb, fname);
+}
+
+// ── 비즈모아(BizMore) ERP 전송 ──────────────────────────────────
+// 이카운트와 별도 플래그(bmSent)로 관리 — 이카운트에 이미 보냈어도 비즈모아 쪽은 독립적으로 미전송 상태일 수 있음
+async function bmPreview() {
+  var fromRaw=(document.getElementById('bm-from')||{}).value||'';
+  var toRaw=(document.getElementById('bm-to')||{}).value||'';
+  if(!fromRaw||!toRaw){alert('날짜를 선택해주세요.');return;}
+  var from=fromRaw.replace(/-/g,'');
+  var to=toRaw.replace(/-/g,'');
+  if(from>to){alert('시작일이 종료일보다 늦습니다.');return;}
+  var el=document.getElementById('bm-preview');
+  el.innerHTML='<p style="color:#aaa;">데이터 불러오는 중...</p>';
+  try {
+    var rows=[];
+    var noProdWarnings=[];
+    var snap=await db.collection('logs').where('type','==','outbound').get();
+    snap.forEach(function(doc){
+      var d=doc.data();
+      if(d.bmSent)return; // 비즈모아로 이미 보낸 로그는 제외 (이카운트 ecSent와는 별개)
+      var logDate=''; if(d.date){logDate=d.date.replace(/-/g,'');} else if(d.ts&&d.ts.toDate){var dt=d.ts.toDate();logDate=dt.getFullYear()+''+String(dt.getMonth()+1).padStart(2,'0')+''+String(dt.getDate()).padStart(2,'0');}
+      if(logDate<from||logDate>to)return;
+      if(!d.client||!d.pid||!d.qty)return;
+      var prod=S.prods.find(function(p){return p.id===d.pid;});
+      if(!prod){ noProdWarnings.push((d.client||'?')+' - '+(d.pname||d.pid)+' ('+logDate.slice(0,4)+'-'+logDate.slice(4,6)+'-'+logDate.slice(6,8)+')'); return; }
+      var ecCode=prod.ecountCode||prod.id;
+      var mult=prod.ecountQtyMultiplier||1;
+      var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
+      var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
+      rows.push({logId:doc.id,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:prod.name||d.pid,unit:prod.unit||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,PRICE:price});
+    });
+    if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 비즈모아로 안 보낸 출고 데이터가 없습니다.</p>';return;}
+    var noPrice=rows.filter(function(r){return !r.PRICE;});
+    var noProdHtml=noProdWarnings.length>0?('<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:.5rem .75rem;margin-bottom:.6rem;font-size:.78rem;color:#b91c1c;">'+
+      '🚫 상품 정보를 못 찾아서 완전히 누락된 로그 '+noProdWarnings.length+'건:<br>'+noProdWarnings.join('<br>')+'</div>'):'';
+    var html=noProdHtml+'<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
+      '<span style="font-size:.85rem;color:#555;">총 <b>'+rows.length+'</b>건 (거래처 <b>'+(new Set(rows.map(function(r){return r.clientName;}))).size+'</b>곳)</span>'+
+      (noPrice.length>0?'<span style="color:#d97706;font-size:.8rem;">💰 단가 확인 필요 '+noPrice.length+'건 (0원으로 나감)</span>':'')+
+      '<button class="btn btn-gray btn-sm" style="margin-left:auto;" onclick="bmExportExcel()">📥 거래처별 엑셀 다운로드</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="bmMarkSent()">✅ 전송완료 처리</button>'+
+    '</div>'+
+    '<div style="font-size:.72rem;color:var(--sub);margin-bottom:.5rem;">비즈모아에 업로드 끝나면 "전송완료 처리"를 눌러주세요 (이카운트 전송 상태와는 별도로 관리돼요).</div>'+
+    '<div style="overflow-x:auto;"><table style="font-size:.8rem;">'+
+    '<thead><tr style="background:#f4f4f5;">'+
+      '<th style="padding:.4rem .6rem;text-align:left;">날짜</th>'+
+      '<th style="padding:.4rem .6rem;text-align:left;">거래처</th>'+
+      '<th style="padding:.4rem .6rem;text-align:left;">품목코드</th>'+
+      '<th style="padding:.4rem .6rem;text-align:left;">품명</th>'+
+      '<th style="padding:.4rem .6rem;text-align:right;">수량</th>'+
+      '<th style="padding:.4rem .6rem;text-align:right;">단가</th>'+
+    '</tr></thead><tbody>';
+    rows.forEach(function(r){
+      var warn=!r.PRICE?' style="background:#fffbeb;"':'';
+      var qtyDisp=r.mult>1?(r.origQty+' × '+r.mult+' = <b>'+r.QTY+'</b>'):r.QTY;
+      html+='<tr'+warn+'>'+
+        '<td style="padding:.35rem .6rem;">'+r.IO_DATE.slice(0,4)+'-'+r.IO_DATE.slice(4,6)+'-'+r.IO_DATE.slice(6,8)+'</td>'+
+        '<td style="padding:.35rem .6rem;">'+r.clientName+'</td>'+
+        '<td style="padding:.35rem .6rem;">'+r.PROD_CD+'</td>'+
+        '<td style="padding:.35rem .6rem;">'+r.prodName+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;">'+qtyDisp+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;color:'+(r.PRICE?'#333':'#d97706')+';">'+(r.PRICE?r.PRICE.toLocaleString():'확인필요')+'</td>'+
+      '</tr>';
+    });
+    html+='</tbody></table></div>';
+    el.innerHTML=html;
+    window._bmRows=rows;
+  } catch(e){el.innerHTML='<p style="color:#dc2626;">오류: '+e.message+'</p>';}
+}
+
+// 비즈모아 매출전표 Excel 가져오기 양식: 품목코드/No/품명/수량/규격/단가/금액/할인율/비고 — 거래처(전표) 1개당 파일 1개
+function bmExportExcel() {
+  var rows = window._bmRows || [];
+  if (rows.length === 0) { alert('먼저 미리보기를 조회해주세요.'); return; }
+  if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
+
+  var byClient = {};
+  rows.forEach(function(r){ (byClient[r.clientName]=byClient[r.clientName]||[]).push(r); });
+
+  var fromEl=document.getElementById('bm-from'), toEl=document.getElementById('bm-to');
+  var dateTag = ((fromEl&&fromEl.value)||'')+'_'+((toEl&&toEl.value)||'');
+  var fileCount = 0;
+
+  Object.keys(byClient).forEach(function(clientName){
+    var no = 1;
+    var sheetRows = byClient[clientName].map(function(r){
+      var qty = r.QTY || 0, price = r.PRICE || 0;
+      return {
+        '품목코드': r.PROD_CD,
+        'No': no++,
+        '품명': r.prodName,
+        '수량': qty,
+        '규격': r.unit || '',
+        '단가': price,
+        '금액': Math.round(qty * price),
+        '할인율': 0,
+        '비고': (!r.PRICE ? '⚠단가확인필요' : '')
+      };
+    });
+    var headers = ['품목코드','No','품명','수량','규격','단가','금액','할인율','비고'];
+    var ws = XLSX.utils.json_to_sheet(sheetRows, { header: headers });
+    ws['!cols'] = headers.map(function(){ return {wch:12}; });
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '품목내역');
+    XLSX.writeFile(wb, '비즈모아_'+clientName+'_'+dateTag+'.xlsx');
+    fileCount++;
+  });
+  toast(fileCount+'개 거래처 파일 다운로드 완료!','ok');
+}
+
+// 비즈모아 업로드 완료 후 중복 방지용 표시만 (실제 전송은 안 함) — ecSent와 별도 필드(bmSent) 사용
+async function bmMarkSent() {
+  var rows = window._bmRows || [];
+  if (rows.length === 0) { alert('전송완료 처리할 데이터가 없습니다.'); return; }
+  if (!confirm(rows.length+'건을 비즈모아 "전송완료"로 표시할까요?\n(비즈모아에 실제로 엑셀 업로드를 이미 마치신 경우에만 눌러주세요.)')) return;
+
+  var el=document.getElementById('bm-preview');
+  el.insertAdjacentHTML('beforeend','<p id="bm-status" style="color:#2563eb;margin-top:.5rem;"></p>');
+  var statusEl=document.getElementById('bm-status');
+  statusEl.textContent='표시하는 중...';
+  try {
+    var batch=db.batch();
+    var n=0;
+    rows.forEach(function(r){
+      if(!r.logId)return;
+      batch.update(db.collection('logs').doc(r.logId), {bmSent:true, bmSentAt:firebase.firestore.FieldValue.serverTimestamp()});
+      n++;
+    });
+    await batch.commit();
+    statusEl.style.color='#16a34a';
+    statusEl.textContent='✅ '+n+'건 전송완료로 표시했어요.';
+  } catch(e){
+    statusEl.style.color='#dc2626';
+    statusEl.textContent='❌ 오류: '+e.message;
+  }
 }
 
 // 엑셀로 수동 업로드 완료 후, 중복 방지를 위해 전송완료 표시만 해주는 함수 (실제 이카운트 전송은 안 함)
