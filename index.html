@@ -735,6 +735,29 @@ async function safeWrite(fn) {
   finally { setTimeout(function(){ _writing = false; }, 1500); }
 }
 
+// ── 콘솔용 안전 입출고 함수 ──────────────────────────────────────
+// logs와 inventory를 항상 같이 갱신해서, 콘솔에서 직접 logs.add()만 하다가
+// 재고 반영을 빠뜨리는 사고(예: 망고파나코타/망고무스2호 케이스)를 원천 차단.
+// 사용법(콘솔에서): manualLog('P100', 'inbound', 65, '실사 반영')
+async function manualLog(pid, type, qty, memo) {
+  if(type !== 'inbound' && type !== 'outbound') { console.error('❌ type은 "inbound" 또는 "outbound"만 가능'); return; }
+  qty = Number(qty);
+  if(!qty || qty <= 0) { console.error('❌ qty는 0보다 큰 숫자여야 함'); return; }
+  var prodSnap = await db.collection('products').doc(pid).get();
+  if(!prodSnap.exists) { console.error('❌ 상품 없음:', pid); return; }
+  var pname = prodSnap.data().name;
+  var delta = type === 'inbound' ? qty : -qty;
+  await safeWrite(async function(){
+    await db.collection('logs').add({
+      type: type, pid: pid, pname: pname, qty: qty,
+      manual: true, memo: memo||'', ts: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(delta)}, {merge:true});
+  });
+  console.log('✅', pname, (type==='inbound'?'입고':'출고'), qty, '처리 완료 (logs+inventory 동시 반영됨)');
+}
+window.manualLog = manualLog;
+
 // ── NAVIGATION ────────────────────────────────────────────────
 var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고 (부장님)',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',ecount:'📤 이카운트 전송'};
 
