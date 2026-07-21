@@ -3255,6 +3255,17 @@ function pgEcount() {
   '</div>';
 }
 
+// 이카운트 전송용 품목명/단가 보정: "N단" 접미사 제거 + 마카롱 1단은 단가 절반
+function ecAdjustNamePrice(prod, price) {
+  var tierMatch = prod.name.match(/(\d+)단$/);
+  var cleanName = prod.name.replace(/\d+단$/, '').trim();
+  var adjPrice = price;
+  if (tierMatch && tierMatch[1] === '1' && prod.name.indexOf('마카롱') !== -1 && price) {
+    adjPrice = Math.round(price / 2);
+  }
+  return {name: cleanName, price: adjPrice};
+}
+
 async function ecPreview() {
   var fromRaw=(document.getElementById('ec-from')||{}).value||'';
   var toRaw=(document.getElementById('ec-to')||{}).value||'';
@@ -3286,7 +3297,8 @@ async function ecPreview() {
             var client=S.clients.find(function(c){return c.name===clientName||(c.aliases&&c.aliases.indexOf(clientName)!==-1);});
             var custCode=client&&client.ecountCode?client.ecountCode:'';
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||item.pid,QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:price});
+            var adj=ecAdjustNamePrice(prod, price);
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
           });
         });
       }
@@ -3305,7 +3317,8 @@ async function ecPreview() {
       var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
       var custCode=client&&client.ecountCode?client.ecountCode:'';
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:prod.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:price});
+      var adj=ecAdjustNamePrice(prod, price);
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
     });
     }
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
