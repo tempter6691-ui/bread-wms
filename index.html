@@ -3283,7 +3283,9 @@ function ecAdjustNamePrice(prod, price) {
   var tierMatch = prod.name.match(/(\d+)단$/);
   var cleanName = prod.name.replace(/\d+단$/, '').trim();
   var adjPrice = price;
-  if (tierMatch && tierMatch[1] === '1' && prod.name.indexOf('마카롱') !== -1 && price) {
+  // 마카롱 1단 절반 보정: 가격이 이미 정상 등록된 색상은 제외 목록에 추가
+  var macaronHalvingExceptions = ['마카롱퍼플1단'];
+  if (tierMatch && tierMatch[1] === '1' && prod.name.indexOf('마카롱') !== -1 && price && macaronHalvingExceptions.indexOf(prod.name) === -1) {
     adjPrice = Math.round(price / 2);
   }
   return {name: cleanName, price: adjPrice};
