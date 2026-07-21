@@ -3416,6 +3416,12 @@ function ecExportExcel() {
 // ── 비즈모아(BizMore) ERP 전송 ──────────────────────────────────
 // 이카운트와 별도 플래그(bmSent)로 관리 — 이카운트에 이미 보냈어도 비즈모아 쪽은 독립적으로 미전송 상태일 수 있음
 async function bmPreview() {
+  // "(N개/box)" 또는 "(N개/박스)" 표기가 있는 상품은 이카운트는 "판" 단위지만 비즈모아는 "개" 단위로 넣어야 함
+  // → 수량은 N배, 단가는 N분의 1로 환산
+  function bmBoxMult(name){
+    var m = (name||'').match(/\((\d+)\s*개\s*\/\s*(box|박스)\)/i);
+    return m ? parseInt(m[1],10) : 1;
+  }
   var fromRaw=(document.getElementById('bm-from')||{}).value||'';
   var toRaw=(document.getElementById('bm-to')||{}).value||'';
   if(!fromRaw||!toRaw){alert('날짜를 선택해주세요.');return;}
@@ -3445,7 +3451,8 @@ async function bmPreview() {
             var mult=prod.ecountQtyMultiplier||1;
             var client=S.clients.find(function(c){return c.name===clientName||(c.aliases&&c.aliases.indexOf(clientName)!==-1);});
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:prod.name||item.pid,unit:prod.unit||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,PRICE:price});
+            var boxMult=bmBoxMult(prod.name);
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:prod.name||item.pid,unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&price?Math.round(price/boxMult):price});
           });
         });
       }
@@ -3463,7 +3470,8 @@ async function bmPreview() {
       var mult=prod.ecountQtyMultiplier||1;
       var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:prod.name||d.pid,unit:prod.unit||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,PRICE:price});
+      var boxMult=bmBoxMult(prod.name);
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:prod.name||d.pid,unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&price?Math.round(price/boxMult):price});
     });
     }
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 비즈모아로 안 보낸 출고 데이터가 없습니다.</p>';return;}
@@ -3497,7 +3505,7 @@ async function bmPreview() {
         '<td style="padding:.35rem .6rem;">'+r.PROD_CD+'</td>'+
         '<td style="padding:.35rem .6rem;">'+r.prodName+'</td>'+
         '<td style="padding:.35rem .6rem;text-align:right;">'+qtyDisp+'</td>'+
-        '<td style="padding:.35rem .6rem;text-align:right;color:'+(r.PRICE?'#333':'#d97706')+';">'+(r.PRICE?r.PRICE.toLocaleString():'확인필요')+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;color:'+(r.PRICE?'#333':'#d97706')+';">'+(r.PRICE?r.PRICE.toLocaleString():'확인필요')+(r.boxMult>1?' <span style="color:#2563eb;font-size:.7rem;">(개환산)</span>':'')+'</td>'+
       '</tr>';
     });
     html+='</tbody></table></div>';
