@@ -3432,8 +3432,10 @@ async function bmPreview() {
   // "(N개/box)" 또는 "(N개/박스)" 표기가 있는 상품은 이카운트는 "판" 단위지만 비즈모아는 "개" 단위로 넣어야 함
   // → 수량은 N배, 단가는 N분의 1로 환산
   function bmBoxMult(name){
-    var m = (name||'').match(/\((\d+)\s*개\s*\/\s*(box|박스|봉)\)/i);
-    return m ? parseInt(m[1],10) : 1;
+    var m = (name||'').match(/\((\d+)\s*개\s*\/\s*(box|박스)\)/i);
+    if(m) return parseInt(m[1],10);
+    var m2 = (name||'').match(/\(2\s*개\s*\/\s*봉\)/i);
+    return m2 ? 2 : 1;
   }
   var fromRaw=(document.getElementById('bm-from')||{}).value||'';
   var toRaw=(document.getElementById('bm-to')||{}).value||'';
