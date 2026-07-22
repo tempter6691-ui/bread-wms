@@ -531,7 +531,7 @@ var CLIENTS_DEFAULT = [
   {id:'C166',name:'제이에스앤에이치(구파티엘하우스)',driver:'',code:'522'},
 ];
 
-var DRIVERS = ['A이운영','B남재만','C서영덕','F신종한','E정일혁'];
+var DRIVERS = ['A이운영','B남재만','C서영덕','F신종한'];
 
 // ── STATE ─────────────────────────────────────────────────────
 var db = null;
@@ -920,7 +920,7 @@ function pgDash() {
           '<span class="badge '+(allDone?'bg-green':'bg-yellow')+'" style="margin-right:.3rem;">'+doneKinds+'/'+totalKinds+'종</span>'+
           badges+'</div>';
       }
-      var driverColors={'A이운영':'#3b82f6','B남재만':'#10b981','C서영덕':'#f59e0b','F신종한':'#8b5cf6','E정일혁':'#ef4444'};
+      var driverColors={'A이운영':'#3b82f6','B남재만':'#10b981','C서영덕':'#f59e0b','F신종한':'#8b5cf6'};
       var driverOrder=DRIVERS.concat(['미배정']);
       var grouped={};
       driverOrder.forEach(function(drv){ grouped[drv]=[]; });
