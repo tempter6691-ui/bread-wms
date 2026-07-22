@@ -550,16 +550,7 @@ function todayStr() {
 }
 
 // ── FIREBASE ──────────────────────────────────────────────────
-// ── Firebase 설정 고정 ──────────────────────────────────────
-var FIXED_FB_CFG = {
-  apiKey: "AIzaSyAI5VBBXB2dUS5kk5IE--xfCe_C2r0PrIA",
-  authDomain: "bread-wms.firebaseapp.com",
-  projectId: "bread-wms",
-  storageBucket: "bread-wms.firebasestorage.app",
-  messagingSenderId: "310262595402",
-  appId: "1:310262595402:web:49e8df8647cd8258bf0bb3",
-  measurementId: "G-CXYZLFJBXS"
-};
+// (실제 접속 설정은 파일 맨 아래 IIFE의 defaultCfg에서 사용됨)
 
 function saveConfig() {
   var raw = document.getElementById('fb-cfg-input').value.trim();
@@ -862,7 +853,7 @@ function pgDash() {
         '<div id="shortage-card-body" style="display:none;">'+
         '<table style="font-size:.85rem;"><thead><tr><th>제품명</th><th style="text-align:right;">현재재고</th><th style="text-align:right;">누적예정출고</th><th>부족해지는 날짜</th></tr></thead><tbody>'+
         shortages.slice(0,10).map(function(s){
-          return '<tr><td>'+s.name+'</td><td style="text-align:right;">'+s.stock+'</td><td style="text-align:right;color:#c0392b;font-weight:bold;">'+s.pending+'</td><td>'+s.date+(s.date===new Date().toISOString().slice(0,10)?' (오늘)':'')+'</td></tr>';
+          return '<tr><td>'+s.name+'</td><td style="text-align:right;">'+s.stock+'</td><td style="text-align:right;color:#c0392b;font-weight:bold;">'+s.pending+'</td><td>'+s.date+(s.date===todayStr()?' (오늘)':'')+'</td></tr>';
         }).join('')+
         '</tbody></table>'+
         (shortages.length>10?'<div style="font-size:.8rem;color:#888;margin-top:.4rem;">외 '+(shortages.length-10)+'개 더 있음 (제품 관리 화면에서 예정출고 조회로 전체 확인 가능)</div>':'')+
@@ -2210,7 +2201,7 @@ function drawClients() {
   el.innerHTML='<div style="color:#888;font-size:.82rem;margin-bottom:.5rem;">총 '+f.length+'개 거래처</div>'+
     '<table><thead><tr><th>거래처명</th><th style="width:70px;">코드</th><th>담당기사</th><th>요일</th><th></th></tr></thead><tbody>'+
     f.map(function(c){
-      return '<tr><td><input type="text" value="'+c.name+'" style="width:100%;padding:.25rem;border:1px solid #ddd;border-radius:4px;font-size:.85rem;" onchange="updClientName(\''+c.id+'\',this.value)"></td>'+
+      return '<tr><td><input type="text" value="'+c.name.replace(/"/g,'&quot;')+'" style="width:100%;padding:.25rem;border:1px solid #ddd;border-radius:4px;font-size:.85rem;" onchange="updClientName(\''+c.id+'\',this.value)"></td>'+
         '<td><input type="text" value="'+(c.code||'')+'" style="width:60px;padding:.25rem;border:1px solid #ddd;border-radius:4px;font-size:.8rem;" onchange="updCode(\''+c.id+'\',this.value)"></td>'+
         '<td><select onchange="updDriver(\''+c.id+'\',this.value)" style="padding:.3rem;">'+
           '<option value="">미배정</option>'+DRIVERS.map(function(d){return '<option'+(c.driver===d?' selected':'')+'>'+d+'</option>';}).join('')+
@@ -3120,14 +3111,7 @@ async function doRestore(input) {
 }
 
 // ── SCANNER TIMER (엔터 없는 스캐너 자동 처리) ────────────────
-var _ibTimer=null;
-function ibScanTimer(){
-  clearTimeout(_ibTimer);
-  _ibTimer=setTimeout(function(){
-    var el=document.getElementById('ib-scan');
-    if(el&&el.value.trim()) doScanIn();
-  },500);
-}
+// ib-scan(입고)은 startIbPoll()이 같은 역할을 하고 있어서 여기선 ob-scan(출고)용만 둠
 var _obTimer=null;
 function obScanTimer(){
   clearTimeout(_obTimer);
