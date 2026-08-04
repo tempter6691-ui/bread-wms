@@ -3609,9 +3609,14 @@ function bmExportExcel() {
 
   var fromEl=document.getElementById('bm-from'), toEl=document.getElementById('bm-to');
   var dateTag = ((fromEl&&fromEl.value)||'')+'_'+((toEl&&toEl.value)||'');
+  var clientNames = Object.keys(byClient);
   var fileCount = 0;
 
-  Object.keys(byClient).forEach(function(clientName){
+  // 한꺼번에 여러 파일을 순식간에 다운로드시키면 브라우저(특히 크롬)가 뒤쪽 몇 개를
+  // 조용히 막아버리는 경우가 있어서, 파일 사이에 약간의 간격을 두고 하나씩 처리함
+  function downloadOne(i){
+    if(i>=clientNames.length){ toast(fileCount+'개 거래처 파일 다운로드 완료!','ok'); return; }
+    var clientName = clientNames[i];
     var no = 1;
     var sheetRows = byClient[clientName].map(function(r){
       var qty = r.QTY || 0, price = r.PRICE || 0;
@@ -3634,8 +3639,9 @@ function bmExportExcel() {
     XLSX.utils.book_append_sheet(wb, ws, '품목내역');
     XLSX.writeFile(wb, '비즈모아_'+clientName+'_'+dateTag+'.xlsx');
     fileCount++;
-  });
-  toast(fileCount+'개 거래처 파일 다운로드 완료!','ok');
+    setTimeout(function(){ downloadOne(i+1); }, 350);
+  }
+  downloadOne(0);
 }
 
 // 비즈모아 업로드 완료 후 중복 방지용 표시만 (실제 전송은 안 함) — ecSent와 별도 필드(bmSent) 사용
