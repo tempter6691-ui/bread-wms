@@ -3357,6 +3357,14 @@ async function ecPreview() {
       rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
     });
     }
+    // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 제품명 순으로 정렬
+    // (Firestore에서 가져오는 순서는 날짜/거래처 순서를 보장 안 해서, 정렬 없이는 뒤섞여 보일 수 있음)
+    rows.sort(function(a,b){
+      if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
+      var ca=a.clientName||'', cb=b.clientName||'';
+      if(ca!==cb) return ca.localeCompare(cb,'ko');
+      return (a.prodName||'').localeCompare(b.prodName||'','ko');
+    });
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
     var noPrice=rows.filter(function(r){return r.CUST&&!r.PRICE;});
