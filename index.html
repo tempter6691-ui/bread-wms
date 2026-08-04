@@ -1378,6 +1378,22 @@ async function undoOb(pid) {
   await safeWrite(async function() {
     await db.collection('inventory').doc(item.pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
     await db.collection('orders').doc(S.ordDate).set({[S.outClient]: S.orders[S.ordDate][S.outClient]}, {merge:true});
+    // 스캔할 때 남긴 출고 로그를 찾아서 지움 (안 지우면 이카운트 전송/제품 내역에서
+    // 취소된 것도 나간 걸로 계속 잡힘 — 상쇄 로그를 추가하는 것만으론 안 없어짐)
+    try {
+      var logSnap = await db.collection('logs')
+        .where('type','==','outbound').where('pid','==',item.pid)
+        .where('client','==',S.outClient).where('date','==',S.ordDate).get();
+      var candidates = logSnap.docs.filter(function(d){ return !d.data().ecSent; });
+      if(candidates.length){
+        candidates.sort(function(a,b){
+          var ta=a.data().ts&&a.data().ts.toMillis?a.data().ts.toMillis():0;
+          var tb=b.data().ts&&b.data().ts.toMillis?b.data().ts.toMillis():0;
+          return tb-ta; // 최신 것부터
+        });
+        await candidates[0].ref.delete();
+      }
+    } catch(e){ console.error('출고 로그 삭제 실패(취소는 정상 처리됨):', e); }
     toast('1개 취소됨','ok'); var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
   });
 }
@@ -3535,6 +3551,13 @@ async function bmPreview() {
       rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price});
     });
     }
+    // ecPreview와 동일하게, 거래처별로 묶여 보이도록 날짜 → 거래처 → 제품명 순 정렬
+    rows.sort(function(a,b){
+      if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
+      var ca=a.clientName||'', cb=b.clientName||'';
+      if(ca!==cb) return ca.localeCompare(cb,'ko');
+      return (a.prodName||'').localeCompare(b.prodName||'','ko');
+    });
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 비즈모아로 안 보낸 출고 데이터가 없습니다.</p>';return;}
     var noPrice=rows.filter(function(r){return !r.PRICE;});
     var noProdHtml=noProdWarnings.length>0?('<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:.5rem .75rem;margin-bottom:.6rem;font-size:.78rem;color:#b91c1c;">'+
