@@ -3389,7 +3389,7 @@ function ecAdjustNamePrice(prod, price) {
   var cleanName = rawName.replace(/\s*\d+\s*단\s*$/, '').trim();
   var adjPrice = price;
   // 마카롱 1단 절반 보정: 가격이 이미 정상 등록된 색상은 제외 목록에 추가
-  var macaronHalvingExceptions = ['마카롱퍼플1단', '마카롱엘로우1단', '마카롱초코1단'];
+  var macaronHalvingExceptions = ['마카롱퍼플1단', '마카롱옐로우1단', '마카롱초코1단'];
   if (tierMatch && tierMatch[1] === '1' && rawName.indexOf('마카롱') !== -1 && price && macaronHalvingExceptions.indexOf(rawName) === -1) {
     adjPrice = Math.round(price / 2);
   }
