@@ -3495,7 +3495,11 @@ async function bmPreview() {
     var m = (name||'').match(/\((\d+)\s*개\s*\/\s*(box|박스)\)/i);
     if(m) return parseInt(m[1],10);
     var m2 = (name||'').match(/\(2\s*개\s*\/\s*봉\)/i);
-    return m2 ? 2 : 1;
+    if(m2) return 2;
+    // 이름에 괄호표기가 없지만 "판 1개 = N개"로 환산해야 하는 제품들 (WMS는 판 단위, 비즈모아는 개당 단위)
+    var NAME_BOX_MULT = { '바나나3JWG호': 2, '녹차3JWG호': 2, '3호생크림케익(화이트아이씽JWG용)': 2, '3호생크림아이씽컷팅JWG': 2, '당근3호JWG': 2 };
+    if(NAME_BOX_MULT[name]) return NAME_BOX_MULT[name];
+    return 1;
   }
   var fromRaw=(document.getElementById('bm-from')||{}).value||'';
   var toRaw=(document.getElementById('bm-to')||{}).value||'';
