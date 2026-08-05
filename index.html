@@ -749,6 +749,24 @@ async function manualLog(pid, type, qty, memo) {
 }
 window.manualLog = manualLog;
 
+// "N개로 맞춰줘" 식으로 재고를 목표값에 딱 맞출 때 쓰는 함수. 내부적으로 manualLog를 호출해서
+// logs+inventory가 항상 같이 반영되도록 함 (재고만 직접 set 하는 실수 방지용).
+// 사용법(콘솔에서): manualSetInventory('P100', 65, '실사 반영')
+async function manualSetInventory(pid, targetQty, memo) {
+  targetQty = Number(targetQty);
+  if(isNaN(targetQty) || targetQty < 0) { console.error('❌ targetQty는 0 이상의 숫자여야 함'); return; }
+  var current = S.inv[pid];
+  if(current === undefined) {
+    var invSnap = await db.collection('inventory').doc(pid).get();
+    current = invSnap.exists ? (invSnap.data().qty||0) : 0;
+  }
+  var delta = targetQty - current;
+  if(delta === 0) { console.log('이미 '+targetQty+'개로 일치함 (변경 없음)'); return; }
+  await manualLog(pid, delta > 0 ? 'inbound' : 'outbound', Math.abs(delta), (memo||'')+' ('+current+'→'+targetQty+')');
+  S.inv[pid] = targetQty;
+}
+window.manualSetInventory = manualSetInventory;
+
 // ── NAVIGATION ────────────────────────────────────────────────
 var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고 (부장님)',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',ecount:'📤 이카운트 전송'};
 
@@ -3110,12 +3128,35 @@ async function changeLogDate(oldDate, docIds) {
   if(!confirm(oldDate+' → '+newDate+' 로 변경할까요?\n총 '+docIds.length+'개 기록이 변경돼요.')) return;
   try {
     var newTs = new Date(newDate+'T12:00:00');
+    // dailyInbound 캐시도 같이 옮기기 위해, 먼저 각 로그의 내용을 읽어옴
+    var docs = await Promise.all(docIds.map(function(id){ return db.collection('logs').doc(id).get(); }));
+    var dibDelta = {}; // pid -> {old: -N, new: +N} 식으로 누적
+    docs.forEach(function(snap){
+      if(!snap.exists) return;
+      var d = snap.data();
+      var qty = d.qty||1;
+      var isInboundCount = d.type==='inbound'; // via 상관없이 입고로 집계되는 것
+      var isInboundCancel = d.type==='outbound' && d.via==='inboundCancel'; // 입고취소(오늘입고 차감분)
+      if(!isInboundCount && !isInboundCancel) return; // 실제 출고(고객 배송)는 dailyInbound랑 무관
+      var sign = isInboundCount ? 1 : -1; // 입고취소는 dailyInbound에서 반대 부호로 반영돼 있었음
+      if(!dibDelta[d.pid]) dibDelta[d.pid] = {pname: d.pname, delta: 0};
+      dibDelta[d.pid].delta += sign * qty;
+    });
+
     var batch = db.batch();
     docIds.forEach(function(id){
       batch.update(db.collection('logs').doc(id), {ts: firebase.firestore.Timestamp.fromDate(newTs)});
     });
+    Object.keys(dibDelta).forEach(function(pid){
+      var info = dibDelta[pid];
+      if(info.delta === 0) return;
+      var oldDib = db.collection('dailyInbound').doc(oldDate+'_'+pid);
+      var newDib = db.collection('dailyInbound').doc(newDate+'_'+pid);
+      batch.set(oldDib, {qty: firebase.firestore.FieldValue.increment(-info.delta)}, {merge:true});
+      batch.set(newDib, {date:newDate, pid:pid, pname:info.pname, qty: firebase.firestore.FieldValue.increment(info.delta)}, {merge:true});
+    });
     await batch.commit();
-    alert('날짜 변경 완료!');
+    alert('날짜 변경 완료! (오늘입고 캐시도 같이 옮겼어요)');
     loadLogs();
   } catch(e){alert('오류: '+e.message);}
 }
