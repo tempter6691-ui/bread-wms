@@ -2631,7 +2631,10 @@ async function showProdHistory(pid, pname) {
     var inTotal = inDates.reduce(function(s,d){return s+inDayMap[d];},0);
     var outTotal = outRows.reduce(function(s,r){return s+r.qty;},0);
 
-    var html = '<div style="font-weight:bold;margin-bottom:.5rem;">📥 입고 내역</div>';
+    window._prodHistData = { pname: pname, inDates: inDates, inDayMap: inDayMap, outRows: outRows, inTotal: inTotal, outTotal: outTotal };
+
+    var html = '<button class="btn btn-success btn-sm" style="margin-bottom:.75rem;" onclick="exportProdHistory()">📊 엑셀 다운로드</button>';
+    html += '<div style="font-weight:bold;margin-bottom:.5rem;">📥 입고 내역</div>';
     if(inDates.length){
       html += '<div style="margin-bottom:.5rem;padding:.5rem;background:#f0f4ff;border-radius:4px;font-weight:bold;">누적 총 입고: '+inTotal+'개</div>';
       html += '<table><thead><tr><th>날짜</th><th>입고 수량</th></tr></thead><tbody>';
@@ -2659,6 +2662,31 @@ async function showProdHistory(pid, pname) {
   } catch(e) {
     document.getElementById('modal-body').innerHTML = '<p style="color:red;">오류: '+e.message+'</p>';
   }
+}
+
+function exportProdHistory() {
+  var d = window._prodHistData;
+  if (!d) { alert('먼저 내역을 조회해주세요.'); return; }
+  if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
+
+  var inRows = d.inDates.map(function(dt){ return { '날짜': dt, '입고 수량': d.inDayMap[dt] }; });
+  inRows.push({ '날짜': '누적 총 입고', '입고 수량': d.inTotal });
+
+  var outRows = d.outRows.map(function(r){ return { '날짜': r.date, '거래처': r.client, '출고 수량': r.qty }; });
+  outRows.push({ '날짜': '누적 총 출고', '거래처': '', '출고 수량': d.outTotal });
+
+  var wb = XLSX.utils.book_new();
+  var wsIn = XLSX.utils.json_to_sheet(inRows, { header: ['날짜','입고 수량'] });
+  wsIn['!cols'] = [{wch:14},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsIn, '입고내역');
+
+  var wsOut = XLSX.utils.json_to_sheet(outRows, { header: ['날짜','거래처','출고 수량'] });
+  wsOut['!cols'] = [{wch:14},{wch:18},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsOut, '출고내역');
+
+  var today = new Date();
+  var dateTag = today.getFullYear()+'-'+(today.getMonth()+1).toString().padStart(2,'0')+'-'+today.getDate().toString().padStart(2,'0');
+  XLSX.writeFile(wb, d.pname+'_입출고내역_'+dateTag+'.xlsx');
 }
 
 function showAddProd() {
