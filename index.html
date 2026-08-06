@@ -3259,13 +3259,20 @@ function startIbPoll(){
 
 // ── HELPERS ──────────────────────────────────────────────────
 function findByQR(qr){return S.prods.find(function(p){return p.qr===qr||p.id===qr;});}
-var CAT_ORDER=['원형케익','사각케익','사각무스케익','조각케익','타르트','미니케익','롤케익','마카롱','크레이프트','머핀','파이','빵','쿠키','일반제과','기타'];
-function catRank(cat){ var i=CAT_ORDER.indexOf(cat); return i<0?CAT_ORDER.length:i; }
+function catRank(cat){
+  if(!cat) return 999;
+  var m = String(cat).match(/\(([A-Za-z])\)\s*$/);
+  if(m) return m[1].toUpperCase().charCodeAt(0);
+  return 999;
+}
 function uniqueCats(){
-  var fixed=CAT_ORDER;
-  var fromProds=[...new Set(S.prods.map(function(p){return p.cat;}))];
-  var extra=fromProds.filter(function(c){return fixed.indexOf(c)<0;});
-  return fixed.concat(extra);
+  var all=[...new Set(S.prods.map(function(p){return p.cat;}))].filter(Boolean);
+  all.sort(function(a,b){
+    var ra=catRank(a), rb=catRank(b);
+    if(ra!==rb) return ra-rb;
+    return String(a).localeCompare(String(b),'ko');
+  });
+  return all;
 }
 function safeid(s){var r='';for(var i=0;i<(s||'').length;i++)r+=s.charCodeAt(i).toString(36);return 'n'+r;}
 function esc(s){return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
