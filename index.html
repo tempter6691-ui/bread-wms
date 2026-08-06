@@ -1449,11 +1449,11 @@ async function manualCompleteOb(pid) {
       await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
     }
     await db.collection('orders').doc(S.ordDate).set({[S.outClient]: S.orders[S.ordDate][S.outClient]}, {merge:true});
-    // 로그에는 "요청한 수량(remaining)"이 아니라 "실제로 재고에서 빠진 수량(deduct)"을 기록해야
-    // logs 순증감과 inventory가 계속 일치함 (재고 부족 시 deduct < remaining이 됨)
-    if(deduct>0) {
-      await db.collection('logs').add({type:'outbound',pid:pid,pname:pname,client:S.outClient,qty:deduct,requestedQty:remaining,manual:true,date:S.ordDate,ts:firebase.firestore.FieldValue.serverTimestamp()});
-    }
+    // 로그는 실제 판매(출고)량인 remaining 기준으로 항상 남긴다.
+    // 예전엔 deduct(재고에서 실제 차감된 양)가 0이면(=재고가 이미 0이었으면) 로그 자체를 안 남겨서,
+    // 수동완료 처리된 마카롱/슈가도넛 등이 이카운트 전송 목록에서 통째로 빠지는 버그가 있었음 (2026-08-06 발견).
+    // deduct는 재고 정합성 확인용으로 별도 필드(invDeduct)에 남겨둔다.
+    await db.collection('logs').add({type:'outbound',pid:pid,pname:pname,client:S.outClient,qty:remaining,invDeduct:deduct,manual:true,date:S.ordDate,ts:firebase.firestore.FieldValue.serverTimestamp()});
     toast(pname+' 수동 완료!','ok');
     var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
     restoreScroll();
@@ -3398,7 +3398,7 @@ function ecAdjustNamePrice(prod, price) {
   var cleanName = rawName.replace(/\s*\d+\s*단\s*$/, '').trim();
   var adjPrice = price;
   // 마카롱 1단 절반 보정: 가격이 이미 정상 등록된 색상은 제외 목록에 추가
-  var macaronHalvingExceptions = ['마카롱퍼플1단', '마카롱옐로우1단', '마카롱초코1단'];
+  var macaronHalvingExceptions = ['마카롱퍼플1단', '마카롱옐로우1단', '마카롱초코1단', '마카롱로즈1단', '마카롱그린1단'];
   if (tierMatch && tierMatch[1] === '1' && rawName.indexOf('마카롱') !== -1 && price && macaronHalvingExceptions.indexOf(rawName) === -1) {
     adjPrice = Math.round(price / 2);
   }
