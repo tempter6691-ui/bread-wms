@@ -3259,8 +3259,10 @@ function startIbPoll(){
 
 // ── HELPERS ──────────────────────────────────────────────────
 function findByQR(qr){return S.prods.find(function(p){return p.qr===qr||p.id===qr;});}
+var CAT_ORDER=['원형케익','사각케익','사각무스케익','조각케익','타르트','미니케익','롤케익','마카롱','크레이프트','머핀','파이','빵','쿠키','일반제과','기타'];
+function catRank(cat){ var i=CAT_ORDER.indexOf(cat); return i<0?CAT_ORDER.length:i; }
 function uniqueCats(){
-  var fixed=['원형케익','사각케익','사각무스케익','조각케익','타르트','미니케익','롤케익','마카롱','크레이프트','머핀','파이','빵','쿠키','일반제과','기타'];
+  var fixed=CAT_ORDER;
   var fromProds=[...new Set(S.prods.map(function(p){return p.cat;}))];
   var extra=fromProds.filter(function(c){return fixed.indexOf(c)<0;});
   return fixed.concat(extra);
@@ -3428,7 +3430,7 @@ async function ecPreview() {
             var custCode=client&&client.ecountCode?client.ecountCode:'';
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
           });
         });
       }
@@ -3448,15 +3450,17 @@ async function ecPreview() {
       var custCode=client&&client.ecountCode?client.ecountCode:'';
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
     });
     }
-    // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 제품명 순으로 정렬
+    // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순으로 정렬
     // (Firestore에서 가져오는 순서는 날짜/거래처 순서를 보장 안 해서, 정렬 없이는 뒤섞여 보일 수 있음)
     rows.sort(function(a,b){
       if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
       var ca=a.clientName||'', cb=b.clientName||'';
       if(ca!==cb) return ca.localeCompare(cb,'ko');
+      var ra=catRank(a.cat), rb=catRank(b.cat);
+      if(ra!==rb) return ra-rb;
       return (a.prodName||'').localeCompare(b.prodName||'','ko');
     });
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
@@ -3610,7 +3614,7 @@ async function bmPreview() {
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
             var boxMult=bmBoxMult(prod.name);
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price});
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price});
           });
         });
       }
@@ -3630,14 +3634,16 @@ async function bmPreview() {
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
       var boxMult=bmBoxMult(prod.name);
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price});
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price});
     });
     }
-    // ecPreview와 동일하게, 거래처별로 묶여 보이도록 날짜 → 거래처 → 제품명 순 정렬
+    // ecPreview와 동일하게, 거래처별로 묶여 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순 정렬
     rows.sort(function(a,b){
       if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
       var ca=a.clientName||'', cb=b.clientName||'';
       if(ca!==cb) return ca.localeCompare(cb,'ko');
+      var ra=catRank(a.cat), rb=catRank(b.cat);
+      if(ra!==rb) return ra-rb;
       return (a.prodName||'').localeCompare(b.prodName||'','ko');
     });
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 비즈모아로 안 보낸 출고 데이터가 없습니다.</p>';return;}
