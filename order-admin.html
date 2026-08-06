@@ -409,6 +409,8 @@ function renderCard(o) {
         '<button class="btn-sm btn-confirm" onclick="confirmOrder(\''+o.id+'\')">✅ 확인</button>'+
         '<button class="btn-sm btn-cancel" onclick="cancelOrder(\''+o.id+'\')">❌ 취소</button>':'')+
       (o.status==='confirmed'||o.status==='exported'?
+        '<span style="font-size:.68rem;color:var(--sub);margin-right:.2rem;">배송일</span>'+
+        '<input type="date" id="edate_'+o.id+'" value="'+(o.exportDate||(t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')))+'" style="padding:.3rem .4rem;border:1px solid var(--border);border-radius:5px;font-size:.72rem;font-family:inherit;margin-right:.3rem;" onchange="updateExportDate(\''+o.id+'\',this.value)">'+
         '<button class="btn-sm" style="background:#8e44ad;" onclick="exportToOrder(\''+o.id+'\')">📋 출고지시서 '+(o.status==='exported'?'재등록':'등록')+'</button>':'')+
       '<button class="btn-sm btn-print" onclick="printOrder(\''+o.id+'\')">🖨️ 출력</button>'+
     '</div>'+
@@ -500,6 +502,12 @@ function refreshOrderCard(id) {
 
 var exportInProgress = {}; // 같은 주문 버튼 빠르게 연타할 때 동시처리(레이스 컨디션) 방지
 
+function updateExportDate(id, val) {
+  var o = allOrders.find(function(x){return x.id===id;});
+  if (o) o.exportDate = val;
+  db.collection('orders_request').doc(id).update({exportDate: val}).catch(function(e){ console.error('배송일 저장 실패:', e.message); });
+}
+
 async function exportToOrder(id) {
   if (exportInProgress[id]) return; // 이미 처리 중이면 중복 클릭 무시
   var o = allOrders.find(function(x){return x.id===id;}); if(!o) return;
@@ -515,9 +523,10 @@ async function exportToOrder(id) {
     // 90%+ 유사도로 자동 매핑된 경우는 별도 확인창 없이 진행 (등록된 정식 이름으로 저장)
   }
 
-  // 날짜 결정 (발주 날짜 or 오늘)
+  // 날짜 결정: 관리자가 배송일 입력란에서 지정한 날짜 우선, 없으면 접수 시각 날짜로 대체
   var t = o.ts&&o.ts.toDate?o.ts.toDate():new Date();
-  var dateStr = t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0');
+  var dateInputEl = document.getElementById('edate_'+id);
+  var dateStr = (dateInputEl && dateInputEl.value) || o.exportDate || (t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0'));
   
   // 거래처 담당기사 찾기 (정식 거래처명 기준)
   var driver = clients[resolvedClient] || '';
