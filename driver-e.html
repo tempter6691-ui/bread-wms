@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>📋 정일혁 출고지시서</title>
+<title>📋 신종한 출고지시서</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:#f0f4f8;min-height:100vh;padding:1rem;}
@@ -136,8 +136,8 @@ tr:last-child td{border-bottom:none;}
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script>
-var DRIVER_FULL = 'E정일혁';
-var DRIVER_NAME = localStorage.getItem('driverName_E정일혁') || '정일혁';
+var DRIVER_FULL = 'F신종한';
+var DRIVER_NAME = localStorage.getItem('driverName_F신종한') || '신종한';
 
 var fbCfg = {
   apiKey: "AIzaSyAI5VBBXB2dUS5kk5IE--xfCe_C2r0PrIA",
@@ -172,7 +172,7 @@ function closeNameModal(){document.getElementById('name-modal').classList.remove
 function saveName(){
   var v=document.getElementById('name-input').value.trim(); if(!v) return;
   DRIVER_NAME=v;
-  localStorage.setItem('driverName_E정일혁',v);
+  localStorage.setItem('driverName_F신종한',v);
   document.getElementById('title-name').textContent='📋 '+v+' 출고지시서';
   document.title='📋 '+v+' 출고지시서';
   closeNameModal();
@@ -234,7 +234,7 @@ function updateCardTotals(clientName) {
     var pid=r.dataset.pid;
     var confirmed=(localConfirmed[clientName]||{})[pid];
     var fbDone=r.dataset.fbdone==='1';
-    var rem=confirmed||fbDone?0:parseInt(r.dataset.rem)||0;
+    var rem=confirmed?0:parseInt(r.dataset.rem)||0; // fbDone 무시
     if(totals[unit]){totals[unit].qty+=qty;totals[unit].rem+=rem;}
   });
   ['판','봉','개','박스'].forEach(function(u){
@@ -256,7 +256,7 @@ function updateCardHeader(clientName) {
     var pid=r.dataset.pid;
     var confirmed=(localConfirmed[clientName]||{})[pid];
     var fbDone=r.dataset.fbdone==='1';
-    if(!confirmed&&!fbDone) allDone=false;
+    if(!confirmed) allDone=false; // fbDone 무시
   });
   var header=card.querySelector('.client-header');
   var badge=card.querySelector('.client-status-badge');
@@ -279,7 +279,7 @@ function updateSummary(){
       var cname=r.dataset.client;
       var confirmed=(localConfirmed[cname]||{})[pid];
       var fbDone=r.dataset.fbdone==='1';
-      if(!confirmed&&!fbDone) allDone=false;
+      if(!confirmed) allDone=false; // fbDone 무시
     });
     if(allDone) done++;
   });
@@ -298,19 +298,19 @@ function buildItemRows(items, clientName) {
     var remaining=item.qty-scanned;
     var fbDone=scanned>=item.qty;
     var localDone=(localConfirmed[clientName]||{})[item.pid];
-    var isDone=fbDone||localDone;
-    var rc=isDone?'remain done':'remain pend';
-    var displayRem=isDone?0:remaining;
-    var sb=isDone
+    var isDone=localDone; // 기사가 확인 버튼 눌러야만 완료
+    var rc=localDone?'remain done':'remain pend';
+    var displayRem=localDone?0:remaining;
+    var sb=localDone
       ?'<span class="status-done">✅완료</span>'
       :scanned>0?'<span class="status-scan">'+scanned+'/'+item.qty+'</span>'
       :'<span class="status-wait">대기</span>';
-    var confirmBtn=(!isDone&&remaining>0)
+    var confirmBtn=(!isDone)
       ?'<button class="confirm-btn" onclick="confirmItem(\''+esc(clientName)+'\',\''+item.pid+'\')">확인</button>'
       :'';
-    if(unit==='판'){totalPan+=item.qty;remPan+=(isDone?0:remaining);}
-    else if(unit==='봉'){totalBong+=item.qty;remBong+=(isDone?0:remaining);}
-    else if(unit==='개'){totalGea+=item.qty;remGea+=(isDone?0:remaining);}
+    if(unit==='판'){totalPan+=item.qty;remPan+=(localDone?0:remaining);}
+    else if(unit==='봉'){totalBong+=item.qty;remBong+=(localDone?0:remaining);}
+    else if(unit==='개'){totalGea+=item.qty;remGea+=(localDone?0:remaining);}
     else if(unit==='박스'){totalBox+=item.qty;remBox+=(isDone?0:remaining);}
     var rowId='row_'+safeid(clientName)+'_'+safeid(item.pid);
     rows+='<tr id="'+rowId+'" data-client="'+esc(clientName)+'" data-pid="'+item.pid+'" data-unit="'+unit+'" data-qty="'+item.qty+'" data-rem="'+remaining+'" data-fbdone="'+(fbDone?'1':'0')+'">';
