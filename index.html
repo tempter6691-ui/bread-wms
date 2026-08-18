@@ -481,7 +481,7 @@ var CLIENTS_DEFAULT = [
   {id:'C114',name:'아이벡스컨벤션',driver:'',day:'수',code:'659'},
   {id:'C115',name:'규수당운정',driver:'',day:'수',code:'69'},
   {id:'C116',name:'W힐스더부페',driver:'',day:'금',code:'8'},
-  {id:'C117',name:'본사해군호텔',driver:'',day:'수',code:'90'},
+
   {id:'C118',name:'만나하우스',driver:'',code:'271'},
   {id:'C119',name:'파티하우스더엘',driver:'',day:'수',code:'636'},
   {id:'C120',name:'희연푸드',driver:'',code:''},
@@ -595,13 +595,9 @@ async function loadAll() {
     var cs = await db.collection('clients').get();
     if (!cs.empty) { S.clients = []; cs.forEach(function(d){ S.clients.push(Object.assign({id:d.id},d.data())); }); }
     else {
-      var confirmInitC = confirm('⚠ 거래처 데이터가 비어있는 것으로 확인됩니다.\n네트워크 문제로 일시적으로 그렇게 보일 수도 있습니다.\n\n정말로 기본 거래처 목록으로 초기화하시겠습니까?\n(취소하면 빈 목록으로 표시되며, 새로고침으로 다시 확인할 수 있습니다)');
-      if (confirmInitC) {
-        S.clients = JSON.parse(JSON.stringify(CLIENTS_DEFAULT)); var b2=db.batch(); S.clients.forEach(function(c){ b2.set(db.collection('clients').doc(c.id),{name:c.name,driver:c.driver||'',code:c.code||'',day:c.day||''}); }); await b2.commit();
-      } else {
-        S.clients = [];
-        toast('거래처 목록을 불러오지 못했습니다. 새로고침해주세요.','err');
-      }
+      // 거래처가 비어있을 때 자동 초기화 하지 않음 — 새로고침 안내만
+      S.clients = [];
+      toast('⚠ 거래처 목록을 불러오지 못했습니다. 새로고침해주세요.','err');
     }
 
     var iv = await db.collection('inventory').get();
@@ -3261,14 +3257,8 @@ function startIbPoll(){
 function findByQR(qr){return S.prods.find(function(p){return p.qr===qr||p.id===qr;});}
 function catRank(cat){
   if(!cat) return 999;
-  // 카테고리 고정 순서: A B C D E F M G H I J K L N O...
-  // M(조각케익류) 바로 뒤에 G(사각무스케익류)가 오도록 설정
-  var ORDER = {A:1,B:2,C:3,D:4,E:5,F:6,M:7,G:8,H:9,I:10,J:11,K:12,L:13,N:14,O:15,P:16};
   var m = String(cat).match(/\(([A-Za-z])\)\s*$/);
-  if(m){
-    var k = m[1].toUpperCase();
-    return ORDER[k] !== undefined ? ORDER[k] : 50 + k.charCodeAt(0);
-  }
+  if(m) return m[1].toUpperCase().charCodeAt(0);
   return 999;
 }
 function uniqueCats(){
