@@ -3261,8 +3261,14 @@ function startIbPoll(){
 function findByQR(qr){return S.prods.find(function(p){return p.qr===qr||p.id===qr;});}
 function catRank(cat){
   if(!cat) return 999;
+  // 카테고리 고정 순서: A B C D E F M G H I J K L N O...
+  // M(조각케익류) 바로 뒤에 G(사각무스케익류)가 오도록 설정
+  var ORDER = {A:1,B:2,C:3,D:4,E:5,F:6,M:7,G:8,H:9,I:10,J:11,K:12,L:13,N:14,O:15,P:16};
   var m = String(cat).match(/\(([A-Za-z])\)\s*$/);
-  if(m) return m[1].toUpperCase().charCodeAt(0);
+  if(m){
+    var k = m[1].toUpperCase();
+    return ORDER[k] !== undefined ? ORDER[k] : 50 + k.charCodeAt(0);
+  }
   return 999;
 }
 function uniqueCats(){
