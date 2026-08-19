@@ -722,6 +722,29 @@ async function safeWrite(fn) {
   finally { setTimeout(function(){ _writing = false; }, 1500); }
 }
 
+// ── 출고 스캔 동시성 안전 업데이트 (2026-08-19 추가) ──────────────────
+// 예전 방식은 스캔/취소/수동완료 1건마다 해당 거래처의 items 배열 전체를
+// 로컬 상태 기준으로 통째로 덮어썼음 → 두 사람(두 기기)이 같은 거래처를
+// 동시에 처리하면 나중에 저장한 쪽이 먼저 저장된 스캔 기록을 지워버리는
+// 문제가 있었음. 트랜잭션으로 매번 서버의 최신 상태를 다시 읽어서 그 위에만
+// 반영하도록 변경 — Firestore 트랜잭션은 충돌 시 자동 재시도됨.
+async function updateOrderItemTx(dateStr, clientName, pid, mutate) {
+  var ordRef = db.collection('orders').doc(dateStr);
+  var result;
+  await db.runTransaction(async function(tx) {
+    var snap = await tx.get(ordRef);
+    var data = snap.exists ? snap.data() : {};
+    var clientData = data[clientName] ? JSON.parse(JSON.stringify(data[clientName])) : {items:[]};
+    var items = clientData.items || [];
+    var idx = items.findIndex(function(i){ return i.pid === pid; });
+    result = mutate(idx>=0 ? items[idx] : null, items, idx);
+    if(!result || !result.ok) return;
+    clientData.items = items;
+    tx.set(ordRef, {[clientName]: clientData}, {merge:true});
+  });
+  return result || {ok:false};
+}
+
 // ── 콘솔용 안전 입출고 함수 ──────────────────────────────────────
 // logs와 inventory를 항상 같이 갱신해서, 콘솔에서 직접 logs.add()만 하다가
 // 재고 반영을 빠뜨리는 사고(예: 망고파나코타/망고무스2호 케이스)를 원천 차단.
@@ -1349,31 +1372,50 @@ async function doScanOut() {
   if(!p){resEl.innerHTML='<div class="res-err">❌ 코드 없음: '+qr+'</div>';return;}
   var curQ=S.inv[p.id]||0;
   if(curQ<=0){resEl.innerHTML='<div class="res-err">⚠️ <strong>'+p.name+'</strong> 재고 없음!</div>';return;}
-  var d=S.ordDate; if(!S.orders[d]) S.orders[d]={};
-  if(!S.orders[d][S.outClient]) S.orders[d][S.outClient]={items:[]};
-  var items=S.orders[d][S.outClient].items;
-  var idx=items.findIndex(function(i){return i.pid===p.id;});
-  if(idx>=0){
-    var item=items[idx];
-    var scanned=(item.scanned||0)+1;
-    if(scanned>item.qty){
-      resEl.innerHTML='<div class="res-err">⛔ <strong>'+p.name+'</strong> 이미 완료! ('+item.qty+'개 다 스캔됨)</div>';
-      return;
-    }
-    item.scanned=scanned;
-    item.done=scanned>=item.qty;
-  } else {
-    // 출고지시서에 없는 제품 스캔 시 추가하지 않고 경고
-    resEl.innerHTML='<div class="res-err">🚨 <strong>'+p.name+'</strong> 은(는) 출고지시서에 없는 제품이에요!</div>';
-    playBeep('wrongItem');
+  var d=S.ordDate, client=S.outClient;
+
+  var txResult;
+  try {
+    txResult = await updateOrderItemTx(d, client, p.id, function(item){
+      if(!item) return {ok:false, reason:'NOT_IN_ORDER'};
+      var scanned=(item.scanned||0)+1;
+      if(scanned>item.qty) return {ok:false, reason:'ALREADY_DONE', qty:item.qty};
+      item.scanned=scanned;
+      item.done=scanned>=item.qty;
+      return {ok:true, scanned:scanned, qty:item.qty};
+    });
+  } catch(e) {
+    resEl.innerHTML='<div class="res-err">❌ 저장 오류: '+e.message+'</div>';
     return;
   }
+
+  if(!txResult.ok){
+    if(txResult.reason==='NOT_IN_ORDER'){
+      resEl.innerHTML='<div class="res-err">🚨 <strong>'+p.name+'</strong> 은(는) 출고지시서에 없는 제품이에요!</div>';
+      playBeep('wrongItem');
+    } else {
+      resEl.innerHTML='<div class="res-err">⛔ <strong>'+p.name+'</strong> 이미 완료! ('+(txResult.qty||'')+'개 다 스캔됨)</div>';
+    }
+    return;
+  }
+
+  // 로컬 캐시(S.orders) 갱신 — 화면 표시용
+  if(!S.orders[d]) S.orders[d]={};
+  if(!S.orders[d][client]) S.orders[d][client]={items:[]};
+  var localItems=S.orders[d][client].items;
+  var localIdx=localItems.findIndex(function(i){return i.pid===p.id;});
+  if(localIdx>=0){ localItems[localIdx].scanned=txResult.scanned; localItems[localIdx].done=txResult.scanned>=txResult.qty; }
+  else { localItems.push({pid:p.id,qty:txResult.qty,scanned:txResult.scanned,done:txResult.scanned>=txResult.qty}); }
+
   var estQ=curQ-1; S.inv[p.id]=estQ;
   await safeWrite(async function() {
-    await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
-    await db.collection('orders').doc(d).set({[S.outClient]: S.orders[d][S.outClient]}, {merge:true});
-    await db.collection('logs').add({type:'outbound',pid:p.id,pname:p.name,client:S.outClient,qty:1,date:d,ts:firebase.firestore.FieldValue.serverTimestamp()});
-    resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> 출고! 남은재고: '+estQ+'</div>';
+    try {
+      await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+      await db.collection('logs').add({type:'outbound',pid:p.id,pname:p.name,client:client,qty:1,date:d,ts:firebase.firestore.FieldValue.serverTimestamp()});
+      resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> 출고! 남은재고: '+estQ+'</div>';
+    } catch(e) {
+      resEl.innerHTML='<div class="res-err">⚠️ 스캔은 반영됐지만 재고/로그 기록 중 오류: '+e.message+'</div>';
+    }
     var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
     restoreScroll();
     watchScroll();
@@ -1381,24 +1423,37 @@ async function doScanOut() {
 }
 
 async function undoOb(pid) {
-  // pid 기준으로 취소 (인덱스는 동시 수정 시 어긋날 수 있음)
+  // pid 기준으로 취소, 트랜잭션으로 서버 최신 상태 위에서만 반영 (동시 스캔 유실 방지)
   if(!S.outClient) return;
-  var items=((S.orders[S.ordDate]||{})[S.outClient]||{}).items; if(!items) return;
-  var item=items.find(function(i){return i.pid===pid;}); if(!item) return;
-  if((item.scanned||0)<=0) return;
-  item.scanned=(item.scanned||1)-1;
-  item.done=item.scanned>=item.qty;
-  S.inv[item.pid]=(S.inv[item.pid]||0)+1;
+  var d=S.ordDate, client=S.outClient;
+
+  var txResult;
+  try {
+    txResult = await updateOrderItemTx(d, client, pid, function(item){
+      if(!item) return {ok:false};
+      if((item.scanned||0)<=0) return {ok:false};
+      item.scanned=(item.scanned||1)-1;
+      item.done=item.scanned>=item.qty;
+      return {ok:true};
+    });
+  } catch(e) { toast('오류:'+e.message,'err'); return; }
+  if(!txResult.ok) return;
+
+  S.inv[pid]=(S.inv[pid]||0)+1;
+  if(S.orders[d] && S.orders[d][client] && S.orders[d][client].items){
+    var it=S.orders[d][client].items.find(function(i){return i.pid===pid;});
+    if(it){ it.scanned=Math.max(0,(it.scanned||1)-1); it.done=it.scanned>=it.qty; }
+  }
+
   await safeWrite(async function() {
-    await db.collection('inventory').doc(item.pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
-    await db.collection('orders').doc(S.ordDate).set({[S.outClient]: S.orders[S.ordDate][S.outClient]}, {merge:true});
+    await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
     // 스캔할 때 남긴 출고 로그를 찾아서 지움 (안 지우면 이카운트 전송/제품 내역에서
     // 취소된 것도 나간 걸로 계속 잡힘 — 상쇄 로그를 추가하는 것만으론 안 없어짐)
     try {
       var logSnap = await db.collection('logs')
-        .where('type','==','outbound').where('pid','==',item.pid)
-        .where('client','==',S.outClient).where('date','==',S.ordDate).get();
-      var candidates = logSnap.docs.filter(function(d){ return !d.data().ecSent; });
+        .where('type','==','outbound').where('pid','==',pid)
+        .where('client','==',client).where('date','==',d).get();
+      var candidates = logSnap.docs.filter(function(dd){ return !dd.data().ecSent; });
       if(candidates.length){
         candidates.sort(function(a,b){
           var ta=a.data().ts&&a.data().ts.toMillis?a.data().ts.toMillis():0;
@@ -1433,23 +1488,38 @@ async function manualCompleteOb(pid) {
   setTimeout(restoreScroll,150);
   if(!ok) return;
 
-  item.scanned=item.qty;
-  item.done=true;
+  var d=S.ordDate, client=S.outClient;
+  var txResult;
+  try {
+    txResult = await updateOrderItemTx(d, client, pid, function(it){
+      if(!it || it.done) return {ok:false};
+      var rem=it.qty-(it.scanned||0);
+      it.scanned=it.qty;
+      it.done=true;
+      return {ok:true, remaining:rem};
+    });
+  } catch(e) { toast('오류:'+e.message,'err'); return; }
+  if(!txResult.ok) return;
+
+  var actualRemaining=txResult.remaining;
+  if(S.orders[d] && S.orders[d][client] && S.orders[d][client].items){
+    var it2=S.orders[d][client].items.find(function(i){return i.pid===pid;});
+    if(it2){ it2.scanned=it2.qty; it2.done=true; }
+  }
 
   await safeWrite(async function() {
     // 재고가 있는 만큼만 차감 (미니와플·피자도우처럼 재고 관리 안 되는 품목은 0 이하로 안 떨어지게)
     var curInv=S.inv[pid]||0;
-    var deduct=Math.min(remaining, curInv);
+    var deduct=Math.min(actualRemaining, curInv);
     if(deduct>0) {
       S.inv[pid]=curInv-deduct;
       await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
     }
-    await db.collection('orders').doc(S.ordDate).set({[S.outClient]: S.orders[S.ordDate][S.outClient]}, {merge:true});
     // 로그는 실제 판매(출고)량인 remaining 기준으로 항상 남긴다.
     // 예전엔 deduct(재고에서 실제 차감된 양)가 0이면(=재고가 이미 0이었으면) 로그 자체를 안 남겨서,
     // 수동완료 처리된 마카롱/슈가도넛 등이 이카운트 전송 목록에서 통째로 빠지는 버그가 있었음 (2026-08-06 발견).
     // deduct는 재고 정합성 확인용으로 별도 필드(invDeduct)에 남겨둔다.
-    await db.collection('logs').add({type:'outbound',pid:pid,pname:pname,client:S.outClient,qty:remaining,invDeduct:deduct,manual:true,date:S.ordDate,ts:firebase.firestore.FieldValue.serverTimestamp()});
+    await db.collection('logs').add({type:'outbound',pid:pid,pname:pname,client:client,qty:actualRemaining,invDeduct:deduct,manual:true,date:d,ts:firebase.firestore.FieldValue.serverTimestamp()});
     toast(pname+' 수동 완료!','ok');
     var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
     restoreScroll();
@@ -2708,11 +2778,18 @@ async function doAddProd() {
   var id='P'+Date.now().toString().slice(-6);
   try {
     await safeWrite(async function() {
+      // 서버 기준으로 한 번 더 확인 (동시 등록 시 QR 중복 방지 — 로컬 캐시만 믿으면
+      // 두 기기가 동시에 다른 QR을 등록할 때 중복을 못 잡을 수 있음)
+      var dup = await db.collection('products').where('qr','==',qr).limit(1).get();
+      if(!dup.empty) { throw new Error('DUPLICATE_QR'); }
       await db.collection('products').doc(id).set({qr:qr,name:name,cat:cat,unit:unit});
     });
     S.prods.push({id:id,qr:qr,name:name,cat:cat,unit:unit});
     closeModal(); toast(name+' 추가됨','ok'); drawProducts();
-  } catch(e){toast('오류:'+e.message,'err');}
+  } catch(e){
+    if(e.message==='DUPLICATE_QR'){ toast('이미 다른 곳에서 등록된 QR코드예요','err'); }
+    else { toast('오류:'+e.message,'err'); }
+  }
 }
 
 function editProd(pid) {
@@ -2747,12 +2824,24 @@ async function doEditProd(pid) {
   var emult=parseFloat((document.getElementById('ep-emult')||{value:1}).value)||1;
   var orderdiv=parseInt((document.getElementById('ep-orderdiv')||{value:1}).value)||1;
   var oldInv=S.inv[p.id]||0;
+  if(qr && S.prods.some(function(x){return x.id!==pid && x.qr===qr;})){
+    toast('이미 다른 상품이 쓰고 있는 QR코드예요','err'); return;
+  }
   try {
+    var actualDiff=0;
     await safeWrite(async function() {
+      if(qr){
+        // 서버 기준으로 한 번 더 확인 (수정 화면엔 원래 중복 체크가 아예 없었음)
+        var dup = await db.collection('products').where('qr','==',qr).limit(1).get();
+        if(!dup.empty && dup.docs[0].id!==pid){ throw new Error('DUPLICATE_QR'); }
+      }
       await db.collection('products').doc(p.id).update({name:name,cat:cat,qr:qr,unit:unit,ecountCode:ecode,ecountQtyMultiplier:emult,orderUnitDivisor:orderdiv});
-      await db.collection('inventory').doc(p.id).set({qty:inv});
-      if(inv !== oldInv) {
-        var diff = inv - oldInv;
+      var diff = inv - oldInv;
+      if(diff !== 0) {
+        actualDiff=diff;
+        // 절대값(set)으로 덮어쓰지 않고 차이만큼 증분(increment) — 수정 화면을 열어둔 사이에
+        // 다른 곳에서 입출고 스캔이 일어나도 그 변화가 사라지지 않도록 함
+        await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(diff)}, {merge:true});
         await db.collection('logs').add({
           type: diff > 0 ? 'inbound' : 'outbound',
           pid: p.id,
@@ -2763,10 +2852,15 @@ async function doEditProd(pid) {
         });
       }
     });
-    // Firestore 저장 성공 후에만 메모리 반영
-    p.name=name; p.cat=cat; p.qr=qr; p.unit=unit; p.ecountCode=ecode; p.ecountQtyMultiplier=emult; p.orderUnitDivisor=orderdiv; S.inv[p.id]=inv;
+    // Firestore 저장 성공 후에만 메모리 반영 (증분만큼만 반영 — 그 사이 실시간 리스너가
+    // 이미 갱신했을 수도 있는 최신값을 절대값으로 덮어쓰지 않도록)
+    p.name=name; p.cat=cat; p.qr=qr; p.unit=unit; p.ecountCode=ecode; p.ecountQtyMultiplier=emult; p.orderUnitDivisor=orderdiv;
+    S.inv[p.id]=(S.inv[p.id]||0)+actualDiff;
     closeModal(); toast(name+' 수정됨','ok'); drawProducts();
-  } catch(e){toast('오류:'+e.message,'err');}
+  } catch(e){
+    if(e.message==='DUPLICATE_QR'){ toast('이미 다른 상품이 쓰고 있는 QR코드예요','err'); }
+    else { toast('오류:'+e.message,'err'); }
+  }
 }
 
 async function delProd(pid) {
