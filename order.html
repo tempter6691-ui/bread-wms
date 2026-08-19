@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>브레드뱅크 발주</title>
+<title>더브레드뱅크 발주</title>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 <style>
@@ -84,7 +84,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 <!-- 링크 없이 접속시 -->
 <div class="no-link" id="no-link">
   <div style="font-size:3rem;margin-bottom:1rem;">🥐</div>
-  <div style="font-size:1.1rem;font-weight:700;color:var(--primary);margin-bottom:.5rem;">브레드뱅크 발주 시스템</div>
+  <div style="font-size:1.1rem;font-weight:700;color:var(--primary);margin-bottom:.5rem;">더브레드뱅크 발주 시스템</div>
   <div style="font-size:.85rem;color:#888;line-height:1.7;">전용 링크로만 접속 가능합니다.<br>담당자에게 링크를 요청해 주세요.</div>
 </div>
 
@@ -93,7 +93,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
   <div class="header">
     <div class="header-logo">🥐</div>
     <div class="header-info">
-      <div class="header-title">브레드뱅크 발주</div>
+      <div class="header-title">더브레드뱅크 발주</div>
       <div class="header-client" id="header-client"></div>
     </div>
     <button class="hbtn hbtn-gray" onclick="openHistory()">📋 내역</button>
@@ -228,7 +228,7 @@ function startOrderStatusListener() {
         playReplySound();
         blinkTitle('📩 새 알림 도착!');
         showHistoryBadge(true);
-        toast('📩 브레드뱅크에서 확인/답변이 도착했어요!');
+        toast('📩 더브레드뱅크에서 확인/답변이 도착했어요!');
       }
       _firstOrderSnap = false;
     });
@@ -422,7 +422,7 @@ async function submitOrder(){
     });
     closeCart();
     var total=items.reduce(function(s,i){return s+i.qty;},0);
-    document.getElementById('done-sub').innerHTML='<strong>'+S.client+'</strong> 발주 접수 완료<br>'+items.length+'개 품목, '+total+'개<br><br>브레드뱅크에서 확인 후 처리해 드릴게요!';
+    document.getElementById('done-sub').innerHTML='<strong>'+S.client+'</strong> 발주 접수 완료<br>'+items.length+'개 품목, '+total+'개<br><br>더브레드뱅크에서 확인 후 처리해 드릴게요!';
     document.getElementById('done-wrap').classList.add('show');
   } catch(e){
     toast('오류: '+e.message);
@@ -486,7 +486,7 @@ async function loadHistory(){
           }).join('')+
           (o.memo?'<div style="font-size:.75rem;color:#888;margin-top:.3rem;font-style:italic;">💬 '+o.memo+'</div>':'')+
           ((o.reply||o.replyTag)?'<div style="font-size:.75rem;color:#1b5e7d;margin-top:.3rem;background:#f0f7ff;border-radius:6px;padding:.4rem .5rem;">'+
-            '<strong>📩 브레드뱅크 답변</strong>'+
+            '<strong>📩 더브레드뱅크 답변</strong>'+
             (o.replyTag?' <span style="background:#2980b9;color:#fff;font-size:.66rem;padding:1px 6px;border-radius:8px;font-weight:700;">'+o.replyTag+'</span>':'')+
             (o.reply?'<div style="margin-top:.2rem;">'+o.reply+'</div>':'')+
           '</div>':'')+
