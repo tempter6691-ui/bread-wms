@@ -608,7 +608,18 @@ async function loadAll() {
     var dib = await db.collection('dailyInbound').where('date','==',today).get();
     S.todayInbound = {}; dib.forEach(function(d){ var dd=d.data(); S.todayInbound[dd.pid] = dd.qty || 0; });
 
-    var od = await db.collection('orders').get();
+    // 예전엔 지금까지 쌓인 모든 날짜의 출고지시서를 페이지 열 때마다 통째로
+    // 읽어왔음 → 최근 14일 ~ 앞으로 21일 범위만 미리 읽어오도록 좁힘
+    // (Quota 절약, 2026-08-21). 이 범위 밖 날짜를 조회하면 loadOrdersForDate()가
+    // 그때그때 그 날짜 1건만 추가로 읽어옴.
+    var odStart=new Date(); odStart.setDate(odStart.getDate()-14);
+    var odEnd=new Date(); odEnd.setDate(odEnd.getDate()+21);
+    var odStartStr=odStart.getFullYear()+'-'+String(odStart.getMonth()+1).padStart(2,'0')+'-'+String(odStart.getDate()).padStart(2,'0');
+    var odEndStr=odEnd.getFullYear()+'-'+String(odEnd.getMonth()+1).padStart(2,'0')+'-'+String(odEnd.getDate()).padStart(2,'0');
+    var od = await db.collection('orders')
+      .where(firebase.firestore.FieldPath.documentId(),'>=',odStartStr)
+      .where(firebase.firestore.FieldPath.documentId(),'<=',odEndStr)
+      .get();
     S.orders = {}; od.forEach(function(d){ S.orders[d.id] = d.data(); });
 
     var tm = await db.collection('templates').get();
@@ -720,6 +731,17 @@ async function safeWrite(fn) {
   _writing = true;
   try { await fn(); }
   finally { setTimeout(function(){ _writing = false; }, 1500); }
+}
+
+// 초기 로딩 범위(최근 14일~향후 21일) 밖의 날짜를 조회할 때 그 날짜 1건만
+// 추가로 읽어옴 (Quota 절약, 2026-08-21)
+async function ensureOrdersLoaded(dateStr) {
+  if(S.orders[dateStr]) return;
+  try {
+    var doc = await db.collection('orders').doc(dateStr).get();
+    S.orders[dateStr] = doc.exists ? doc.data() : {};
+    render();
+  } catch(e) { console.error('날짜별 출고지시서 조회 실패:', e); }
 }
 
 // ── 출고 스캔 동시성 안전 업데이트 (2026-08-19 추가, 2026-08-21 최적화) ──
@@ -1186,7 +1208,7 @@ function pgOutbound() {
 
   return '<div class="card">'+
     '<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem;">'+
-      '<label style="font-weight:600;font-size:.85rem;">📅 날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;S.outClient=null;go(\'outbound\');" style="padding:.45rem;margin-left:.3rem;"></label>'+
+      '<label style="font-weight:600;font-size:.85rem;">📅 날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;S.outClient=null;ensureOrdersLoaded(this.value);go(\'outbound\');" style="padding:.45rem;margin-left:.3rem;"></label>'+
     '</div>'+
     '<div class="card-title">기사 선택</div>'+
     '<div class="driver-tabs">'+
@@ -1570,7 +1592,7 @@ function pgOrders() {
   });
   return '<div class="card">'+
     '<div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;">'+
-      '<label>날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;render();" style="padding:.45rem;"></label>'+
+      '<label>날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;ensureOrdersLoaded(this.value);render();" style="padding:.45rem;"></label>'+
       '<button class="btn btn-gray btn-sm" onclick="clearOrders()">초기화</button>'+
       '<button class="btn btn-success btn-sm" onclick="exportExcel()">📊 엑셀 다운로드</button>'+
       '<button class="btn btn-primary btn-sm" onclick="printOrders()">🖨️ 인쇄</button>'+
@@ -2506,7 +2528,12 @@ async function exportProductsExcelWithRange() {
   toast('출고 데이터 조회 중...','ok');
 
   try {
-    var snap = await db.collection('logs').where('type','==','outbound').get();
+    // 전체 로그를 다 읽어온 뒤 날짜로 걸러내던 방식 → Firestore 쿼리 단계에서
+    // 미리 기간으로 좁혀서 읽어옴 (Quota 절약, 2026-08-21)
+    var startTs = firebase.firestore.Timestamp.fromDate(new Date(start+'T00:00:00'));
+    var endTs = firebase.firestore.Timestamp.fromDate(new Date(end+'T23:59:59.999'));
+    var snap = await db.collection('logs').where('type','==','outbound')
+      .where('ts','>=',startTs).where('ts','<=',endTs).get();
     var outMap = {};
     snap.forEach(function(d){
       var r = d.data();
@@ -2618,7 +2645,10 @@ async function loadProductOutbound() {
   if(!start||!end){ toast('날짜를 선택해주세요','err'); return; }
   toast('출고 데이터 조회 중...','ok');
   try {
-    var snap = await db.collection('logs').where('type','==','outbound').get();
+    var startTs = firebase.firestore.Timestamp.fromDate(new Date(start+'T00:00:00'));
+    var endTs = firebase.firestore.Timestamp.fromDate(new Date(end+'T23:59:59.999'));
+    var snap = await db.collection('logs').where('type','==','outbound')
+      .where('ts','>=',startTs).where('ts','<=',endTs).get();
     _prodOutMap = {};
     snap.forEach(function(d){
       var r = d.data();
@@ -3047,12 +3077,31 @@ async function loadLogs() {
   var el=document.getElementById('logs-content'); if(!el) return;
   var filterDate=(document.getElementById('log-date')||{}).value||'';
   try {
-    var snap=await db.collection('logs').where('type','in',['inbound','outbound']).get();
+    // 전체 로그 기록을 통째로 읽어온 뒤 날짜로 걸러내던 방식 → Firestore 쿼리
+    // 단계에서 미리 기간으로 좁혀서 읽어옴 (Quota 절약, 2026-08-21).
+    // 특정 날짜를 골랐으면 그 하루만, 안 골랐으면(전체보기) 최근 30일만 조회
+    // ('in' 연산자 + 범위 필터를 같이 쓰면 복합 인덱스가 필요해서, type별로
+    // 나눠서 각각 조회 후 합침)
+    var rangeStart, rangeEnd;
+    if(filterDate){
+      rangeStart = new Date(filterDate+'T00:00:00');
+      rangeEnd = new Date(filterDate+'T23:59:59.999');
+    } else {
+      rangeEnd = new Date();
+      rangeStart = new Date(); rangeStart.setDate(rangeStart.getDate()-30);
+    }
+    var rangeStartTs = firebase.firestore.Timestamp.fromDate(rangeStart);
+    var rangeEndTs = firebase.firestore.Timestamp.fromDate(rangeEnd);
+    var snapArr = await Promise.all(['inbound','outbound'].map(function(tp){
+      return db.collection('logs').where('type','==',tp)
+        .where('ts','>=',rangeStartTs).where('ts','<=',rangeEndTs).get();
+    }));
 
     // 날짜+제품별로 입고는 더하고, "입고 취소"(via:inboundCancel)인 출고만 빼서 순수 입고량을 계산
     // (거래처로 나가는 진짜 출고는 별도 영역이라 여기서는 건드리지 않음)
     var dayProd = {}; // 'YYYY-MM-DD' -> { productName: qty }
     var dayDocIds = {}; // 'YYYY-MM-DD' -> [docId, ...] (입고 기록만, 날짜수정은 입고 기준)
+    snapArr.forEach(function(snap){
     snap.forEach(function(d){
       var r=d.data();
       var t=r.ts&&r.ts.toDate?r.ts.toDate():null;
@@ -3070,6 +3119,7 @@ async function loadLogs() {
       } else {
         dayProd[dateStr][pname]-=(r.qty||1);
       }
+    });
     });
 
     var dates=Object.keys(dayProd).sort(function(a,b){return b.localeCompare(a);});
@@ -3534,7 +3584,12 @@ async function ecPreview() {
         });
       }
     } else {
-    var snap=await db.collection('logs').where('type','==','outbound').get();
+    // 전체 로그를 다 읽어온 뒤 날짜로 걸러내던 방식 → Firestore 쿼리 단계에서
+    // 미리 기간으로 좁혀서 읽어옴 (Quota 절약, 2026-08-21)
+    var ecStartTs = firebase.firestore.Timestamp.fromDate(new Date(fromRaw+'T00:00:00'));
+    var ecEndTs = firebase.firestore.Timestamp.fromDate(new Date(toRaw+'T23:59:59.999'));
+    var snap=await db.collection('logs').where('type','==','outbound')
+      .where('ts','>=',ecStartTs).where('ts','<=',ecEndTs).get();
     snap.forEach(function(doc){
       var d=doc.data();
       if(d.ecSent)return; // 이미 이카운트로 전송 완료된 로그는 제외 (중복 전송 방지)
@@ -3718,7 +3773,12 @@ async function bmPreview() {
         });
       }
     } else {
-    var snap=await db.collection('logs').where('type','==','outbound').get();
+    // 전체 로그를 다 읽어온 뒤 날짜로 걸러내던 방식 → Firestore 쿼리 단계에서
+    // 미리 기간으로 좁혀서 읽어옴 (Quota 절약, 2026-08-21)
+    var bmStartTs = firebase.firestore.Timestamp.fromDate(new Date(fromRaw+'T00:00:00'));
+    var bmEndTs = firebase.firestore.Timestamp.fromDate(new Date(toRaw+'T23:59:59.999'));
+    var snap=await db.collection('logs').where('type','==','outbound')
+      .where('ts','>=',bmStartTs).where('ts','<=',bmEndTs).get();
     snap.forEach(function(doc){
       var d=doc.data();
       if(d.bmSent)return; // 비즈모아로 이미 보낸 로그는 제외 (이카운트 ecSent와는 별개)
