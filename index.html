@@ -722,27 +722,29 @@ async function safeWrite(fn) {
   finally { setTimeout(function(){ _writing = false; }, 1500); }
 }
 
-// ── 출고 스캔 동시성 안전 업데이트 (2026-08-19 추가) ──────────────────
+// ── 출고 스캔 동시성 안전 업데이트 (2026-08-19 추가, 2026-08-21 최적화) ──
 // 예전 방식은 스캔/취소/수동완료 1건마다 해당 거래처의 items 배열 전체를
 // 로컬 상태 기준으로 통째로 덮어썼음 → 두 사람(두 기기)이 같은 거래처를
 // 동시에 처리하면 나중에 저장한 쪽이 먼저 저장된 스캔 기록을 지워버리는
-// 문제가 있었음. 트랜잭션으로 매번 서버의 최신 상태를 다시 읽어서 그 위에만
-// 반영하도록 변경 — Firestore 트랜잭션은 충돌 시 자동 재시도됨.
+// 문제가 있었음.
+// 처음엔 Firestore 트랜잭션(매 스캔마다 서버 재조회 후 반영)으로 고쳤는데,
+// 스캔마다 읽기(read)가 1건씩 추가로 발생해서 하루 사용량이 크게 늘어나
+// "Quota exceeded" 오류로 이어짐. orders 컬렉션은 이미 실시간 리스너
+// (ordUnsub)로 항상 최신 상태가 S.orders에 반영되고 있으므로, 서버를 다시
+// 읽지 않고 로컬 캐시(S.orders) 기준으로 반영 — 읽기 비용 없이 쓰기 1건만 발생.
+// (두 기기가 정확히 같은 순간에 같은 거래처를 스캔하는 극히 드문 경우에는
+// 다시 유실 가능성이 아주 작게 남지만, 우선 사용량부터 줄이기 위한 조치)
 async function updateOrderItemTx(dateStr, clientName, pid, mutate) {
-  var ordRef = db.collection('orders').doc(dateStr);
-  var result;
-  await db.runTransaction(async function(tx) {
-    var snap = await tx.get(ordRef);
-    var data = snap.exists ? snap.data() : {};
-    var clientData = data[clientName] ? JSON.parse(JSON.stringify(data[clientName])) : {items:[]};
-    var items = clientData.items || [];
-    var idx = items.findIndex(function(i){ return i.pid === pid; });
-    result = mutate(idx>=0 ? items[idx] : null, items, idx);
-    if(!result || !result.ok) return;
-    clientData.items = items;
-    tx.set(ordRef, {[clientName]: clientData}, {merge:true});
-  });
-  return result || {ok:false};
+  if(!S.orders[dateStr]) S.orders[dateStr]={};
+  var clientData = S.orders[dateStr][clientName] ? S.orders[dateStr][clientName] : {items:[]};
+  var items = clientData.items || [];
+  var idx = items.findIndex(function(i){ return i.pid === pid; });
+  var result = mutate(idx>=0 ? items[idx] : null, items, idx);
+  if(!result || !result.ok) return result || {ok:false};
+  clientData.items = items;
+  S.orders[dateStr][clientName] = clientData;
+  await db.collection('orders').doc(dateStr).set({[clientName]: clientData}, {merge:true});
+  return result;
 }
 
 // ── 콘솔용 안전 입출고 함수 ──────────────────────────────────────
