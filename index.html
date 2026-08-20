@@ -3092,18 +3092,19 @@ async function loadLogs() {
     }
     var rangeStartTs = firebase.firestore.Timestamp.fromDate(rangeStart);
     var rangeEndTs = firebase.firestore.Timestamp.fromDate(rangeEnd);
-    var snapArr = await Promise.all(['inbound','outbound'].map(function(tp){
-      return db.collection('logs').where('type','==',tp)
-        .where('ts','>=',rangeStartTs).where('ts','<=',rangeEndTs).get();
-    }));
+    // type 조건까지 같이 걸면 복합 인덱스를 미리 만들어둬야 해서(인덱스 없인 오류 발생),
+    // ts 범위 하나만 걸어서 조회하고 type(inbound/outbound)은 아래에서 걸러냄
+    // (2026-08-21: 위 방식으로 바꿨다가 실제로 "복합 인덱스 필요" 오류가 나서 재수정)
+    var snap = await db.collection('logs')
+      .where('ts','>=',rangeStartTs).where('ts','<=',rangeEndTs).get();
 
     // 날짜+제품별로 입고는 더하고, "입고 취소"(via:inboundCancel)인 출고만 빼서 순수 입고량을 계산
     // (거래처로 나가는 진짜 출고는 별도 영역이라 여기서는 건드리지 않음)
     var dayProd = {}; // 'YYYY-MM-DD' -> { productName: qty }
     var dayDocIds = {}; // 'YYYY-MM-DD' -> [docId, ...] (입고 기록만, 날짜수정은 입고 기준)
-    snapArr.forEach(function(snap){
     snap.forEach(function(d){
       var r=d.data();
+      if(r.type!=='inbound' && r.type!=='outbound') return;
       var t=r.ts&&r.ts.toDate?r.ts.toDate():null;
       if(!t) return;
       var dateStr=t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0');
@@ -3119,7 +3120,6 @@ async function loadLogs() {
       } else {
         dayProd[dateStr][pname]-=(r.qty||1);
       }
-    });
     });
 
     var dates=Object.keys(dayProd).sort(function(a,b){return b.localeCompare(a);});
