@@ -1995,15 +1995,13 @@ async function moveOrdClientConfirm() {
       S.orders[fromDate][name] = data;
       toast(name+' → '+targetDriver+' 이동 완료!', 'ok');
     } else {
-      // 날짜 다름 → 새 날짜에 복사 후 원본 삭제 (batch로 원자적 처리: 둘 다 성공하거나 둘 다 실패)
-      await safeWrite(async function() {
-        var batch = db.batch();
-        batch.set(db.collection('orders').doc(targetDate), {[name]: data}, {merge:true});
-        batch.set(db.collection('orders').doc(fromDate), {[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
-        await batch.commit();
-      });
+      // 날짜 다름 → 새 날짜에 복사 후 원본 삭제
       if(!S.orders[targetDate]) S.orders[targetDate] = {};
       S.orders[targetDate][name] = data;
+      await safeWrite(async function() {
+        await db.collection('orders').doc(targetDate).set({[name]: data}, {merge:true});
+        await db.collection('orders').doc(fromDate).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+      });
       delete S.orders[fromDate][name];
       toast(name+' → '+targetDate+' ('+targetDriver+') 이동 완료!', 'ok');
     }
@@ -3361,8 +3359,19 @@ async function doRestore(input) {
   try {
     var data=JSON.parse(text);
     if(!confirm('복원할까요? 현재 데이터가 덮어씌워집니다.')) return;
-    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){var pCopy=Object.assign({},p);delete pCopy.id;b.set(db.collection('products').doc(p.id),pCopy,{merge:true});});await b.commit();}
-    if(data.clients){S.clients=data.clients;var b2=db.batch();S.clients.forEach(function(c){var cCopy=Object.assign({},c);delete cCopy.id;b2.set(db.collection('clients').doc(c.id),cCopy,{merge:true});});await b2.commit();}
+    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){
+      // 상품의 ecountCode/ecountQtyMultiplier/orderUnitDivisor(이카운트·비즈모아 연동용)도
+      // 거래처 코드와 같은 이유로 복원 대상에서 제외 (2026-08-21)
+      var pCopy=Object.assign({},p);delete pCopy.id;delete pCopy.ecountCode;delete pCopy.ecountQtyMultiplier;delete pCopy.orderUnitDivisor;
+      b.set(db.collection('products').doc(p.id),pCopy,{merge:true});
+    });await b.commit();}
+    if(data.clients){S.clients=data.clients;var b2=db.batch();S.clients.forEach(function(c){
+      // 거래처의 code/ecountCode(이카운트·비즈모아 연동 코드)는 백업 시점 이후 새로 입력/수정됐을 수 있어서
+      // 복원 대상에서 제외 — 예전 백업을 복원해도 최근에 등록한 코드가 되돌아가지 않도록 함
+      // (2026-08-21 추가: "코드가 자꾸 바뀌는 것 같다"는 문의로 원인 조사 중 발견한 위험 요소를 사전 차단)
+      var cCopy=Object.assign({},c);delete cCopy.id;delete cCopy.code;delete cCopy.ecountCode;
+      b2.set(db.collection('clients').doc(c.id),cCopy,{merge:true});
+    });await b2.commit();}
     if(data.inv){S.inv=data.inv;var b3=db.batch();Object.keys(data.inv).forEach(function(id){b3.set(db.collection('inventory').doc(id),{qty:data.inv[id]});});await b3.commit();}
     if(data.orders){S.orders=data.orders;var b4=db.batch();Object.keys(data.orders).forEach(function(d){b4.set(db.collection('orders').doc(d),data.orders[d]);});await b4.commit();}
     if(data.templates){S.templates=data.templates;var b5=db.batch();Object.keys(data.templates).forEach(function(k){b5.set(db.collection('templates').doc(k),data.templates[k]);});await b5.commit();}
