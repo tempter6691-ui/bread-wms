@@ -1995,13 +1995,15 @@ async function moveOrdClientConfirm() {
       S.orders[fromDate][name] = data;
       toast(name+' → '+targetDriver+' 이동 완료!', 'ok');
     } else {
-      // 날짜 다름 → 새 날짜에 복사 후 원본 삭제
+      // 날짜 다름 → 새 날짜에 복사 후 원본 삭제 (batch로 원자적 처리: 둘 다 성공하거나 둘 다 실패)
+      await safeWrite(async function() {
+        var batch = db.batch();
+        batch.set(db.collection('orders').doc(targetDate), {[name]: data}, {merge:true});
+        batch.set(db.collection('orders').doc(fromDate), {[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
+        await batch.commit();
+      });
       if(!S.orders[targetDate]) S.orders[targetDate] = {};
       S.orders[targetDate][name] = data;
-      await safeWrite(async function() {
-        await db.collection('orders').doc(targetDate).set({[name]: data}, {merge:true});
-        await db.collection('orders').doc(fromDate).set({[name]: firebase.firestore.FieldValue.delete()}, {merge:true});
-      });
       delete S.orders[fromDate][name];
       toast(name+' → '+targetDate+' ('+targetDriver+') 이동 완료!', 'ok');
     }
