@@ -2716,12 +2716,21 @@ async function showProdHistory(pid, pname) {
       if(data.type === 'inbound'){
         if(!inDayMap[tsDateStr]) inDayMap[tsDateStr] = 0;
         inDayMap[tsDateStr] += (data.qty||1);
+      } else if(data.type === 'outbound' && data.via === 'inboundCancel'){
+        // 입고 취소용 보정 기록 — 취소 대상 날짜(adjustedDate, 없으면 기록된 날짜)의 입고 합계에서 차감
+        // (2026-08-21: 예전엔 여기서 반영 안 돼서 취소해도 입고 내역 화면 숫자가 안 줄어드는 버그가 있었음)
+        var cancelDateStr = data.adjustedDate || tsDateStr;
+        if(!inDayMap[cancelDateStr]) inDayMap[cancelDateStr] = 0;
+        inDayMap[cancelDateStr] -= (data.qty||1);
       } else if(data.type === 'outbound' && data.via !== 'inboundCancel'){
         // via==='inboundCancel'은 입고 취소용 보정 기록이라 실제 출고가 아니라서 제외
         var dateStr = data.date || tsDateStr;
         outRows.push({ date: dateStr, client: data.client || '(미지정)', qty: data.qty||1 });
       }
     });
+
+    // 취소로 0개가 된 날짜는 목록에서 빼기 (0개 줄이 화면에 계속 남지 않도록)
+    Object.keys(inDayMap).forEach(function(d){ if(inDayMap[d]<=0) delete inDayMap[d]; });
 
     var inDates = Object.keys(inDayMap).sort(function(a,b){return b.localeCompare(a);});
     outRows.sort(function(a,b){ return b.date.localeCompare(a.date); });
@@ -2974,12 +2983,20 @@ async function searchProdLogs(pid, pname, dateFilter){
     var dayMap={};
     snap.forEach(function(d){
       var r=d.data();
-      if(r.type!=='inbound') return;
       var t=r.ts&&r.ts.toDate?r.ts.toDate():null;
       var ds=t?(t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')):'날짜없음';
-      if(!dayMap[ds]) dayMap[ds]=0;
-      dayMap[ds]+=(r.qty||1);
+      if(r.type==='inbound'){
+        if(!dayMap[ds]) dayMap[ds]=0;
+        dayMap[ds]+=(r.qty||1);
+      } else if(r.type==='outbound' && r.via==='inboundCancel'){
+        // 입고 취소 보정 기록 — 취소 대상 날짜(adjustedDate)의 입고 합계에서 차감
+        // (2026-08-21: 예전엔 반영 안 돼서 취소해도 숫자가 안 줄어드는 버그가 있었음)
+        var cds=r.adjustedDate||ds;
+        if(!dayMap[cds]) dayMap[cds]=0;
+        dayMap[cds]-=(r.qty||1);
+      }
     });
+    Object.keys(dayMap).forEach(function(d){ if(dayMap[d]<=0) delete dayMap[d]; });
     var dates=Object.keys(dayMap).sort(function(a,b){return b.localeCompare(a);});
     if(!dates.length){ el.innerHTML='<p style="color:#aaa;">'+pname+' 입고 기록이 없어요.</p>'; return; }
     var total=dates.reduce(function(s,d){return s+dayMap[d];},0);
