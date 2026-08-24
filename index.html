@@ -576,6 +576,15 @@ function startApp(cfg) {
   }
 }
 
+// 출고지시서(orders)를 다룰 때 쓰는 공통 날짜 범위: 최근 14일 ~ 앞으로 21일.
+// loadAll()의 초기 로드와 startListeners()의 실시간 구독이 같은 범위를 쓰도록 공유.
+function getOrderDateRange() {
+  var start=new Date(); start.setDate(start.getDate()-14);
+  var end=new Date(); end.setDate(end.getDate()+21);
+  var toStr=function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  return { start: toStr(start), end: toStr(end) };
+}
+
 async function loadAll() {
   try {
     var ps = await db.collection('products').get();
@@ -615,13 +624,10 @@ async function loadAll() {
     // 읽어왔음 → 최근 14일 ~ 앞으로 21일 범위만 미리 읽어오도록 좁힘
     // (Quota 절약, 2026-08-21). 이 범위 밖 날짜를 조회하면 loadOrdersForDate()가
     // 그때그때 그 날짜 1건만 추가로 읽어옴.
-    var odStart=new Date(); odStart.setDate(odStart.getDate()-14);
-    var odEnd=new Date(); odEnd.setDate(odEnd.getDate()+21);
-    var odStartStr=odStart.getFullYear()+'-'+String(odStart.getMonth()+1).padStart(2,'0')+'-'+String(odStart.getDate()).padStart(2,'0');
-    var odEndStr=odEnd.getFullYear()+'-'+String(odEnd.getMonth()+1).padStart(2,'0')+'-'+String(odEnd.getDate()).padStart(2,'0');
+    var odRange = getOrderDateRange();
     var od = await db.collection('orders')
-      .where(firebase.firestore.FieldPath.documentId(),'>=',odStartStr)
-      .where(firebase.firestore.FieldPath.documentId(),'<=',odEndStr)
+      .where(firebase.firestore.FieldPath.documentId(),'>=',odRange.start)
+      .where(firebase.firestore.FieldPath.documentId(),'<=',odRange.end)
       .get();
     S.orders = {}; od.forEach(function(d){ S.orders[d.id] = d.data(); });
 
@@ -629,8 +635,9 @@ async function loadAll() {
     S.templates = {}; tm.forEach(function(d){ S.templates[d.id] = d.data(); });
 
     // 이카운트 판매현황에서 가져온 거래처+품목별 단가 이력 (이카운트 전송 시 자동 단가 채우기용)
-    var ph = await db.collection('priceHistory').get();
-    S.priceHistory = {}; ph.forEach(function(d){ var dd=d.data(); S.priceHistory[dd.clientDocId+'__'+dd.pid] = dd.price; });
+    // 2026-08-25: priceHistory 전체(5,000건+)를 매번 통째로 읽던 것을 지연 로딩으로 전환
+    // (Quota 절약) — 실제로 미리보기하는 거래처 것만 ensurePriceHistoryLoaded()로 그때그때 불러옴
+    S.priceHistory = {}; S._phLoaded = {};
 
     // Drivers
     var drv = await db.collection('drivers').get();
@@ -667,7 +674,14 @@ function startListeners() {
   _listeners = [];
 
   // orders 컬렉션 실시간 감지
-  var ordUnsub = db.collection('orders').onSnapshot(function(snap) {
+  // 2026-08-25: 전체 기간을 무제한으로 계속 구독하던 것을, loadAll()과 같은
+  // 최근 14일~앞으로 21일 범위로 제한 (Quota 절약). 이 범위 밖 날짜는 실시간 갱신은
+  // 안 되지만, loadOrdersForDate()로 조회 시점에 그때그때 최신 데이터를 읽어옴.
+  var ordRange = getOrderDateRange();
+  var ordUnsub = db.collection('orders')
+    .where(firebase.firestore.FieldPath.documentId(),'>=',ordRange.start)
+    .where(firebase.firestore.FieldPath.documentId(),'<=',ordRange.end)
+    .onSnapshot(function(snap) {
     if(_writing) return; // 내가 쓰는 중이면 skip
     var changed = false;
     snap.docChanges().forEach(function(change) {
@@ -3594,6 +3608,25 @@ function pgEcount() {
   '</div>';
 }
 
+// priceHistory 지연 로딩: 필요한 거래처(clientDocId)분만 그때그때 불러와서 S.priceHistory에 캐시.
+// 이미 불러온 거래처는 다시 안 읽음 (세션 내 캐시). Firestore 'in' 쿼리는 한 번에 최대 10개라 10개씩 나눠서 조회.
+async function ensurePriceHistoryLoaded(clientIds) {
+  if (!S._phLoaded) S._phLoaded = {};
+  var toLoad = Array.from(clientIds).filter(function(id){ return id && !S._phLoaded[id]; });
+  if (toLoad.length === 0) return;
+  var chunks = [];
+  for (var i=0; i<toLoad.length; i+=10) chunks.push(toLoad.slice(i,i+10));
+  for (var c=0; c<chunks.length; c++) {
+    var chunk = chunks[c];
+    var snap = await db.collection('priceHistory').where('clientDocId','in',chunk).get();
+    snap.forEach(function(d){
+      var dd = d.data();
+      S.priceHistory[dd.clientDocId+'__'+dd.pid] = dd.price;
+    });
+    chunk.forEach(function(id){ S._phLoaded[id] = true; });
+  }
+}
+
 // 이카운트 전송용 품목명/단가 보정: "N단" 접미사 제거 + 마카롱 1단은 단가 절반
 function ecAdjustNamePrice(prod, price) {
   var rawName = (prod.name||'').trim();
@@ -3624,6 +3657,17 @@ async function ecPreview() {
     if(fromOrders) {
       // 출고지시서(orders) 기준 — 아직 스캔 안 한(done!==true) 항목만 대상. 실제 재고차감 안 된 "예정" 수량입니다.
       var d0=new Date(fromRaw), d1=new Date(toRaw);
+      // priceHistory 지연 로딩: 이 기간에 실제로 등장하는 거래처만 미리 파악해서 그만큼만 불러옴
+      var neededClientIds=new Set();
+      for(var dtN=new Date(d0); dtN<=d1; dtN.setDate(dtN.getDate()+1)) {
+        var dstrN=dtN.getFullYear()+'-'+String(dtN.getMonth()+1).padStart(2,'0')+'-'+String(dtN.getDate()).padStart(2,'0');
+        var dayOrdersN=S.orders[dstrN]; if(!dayOrdersN) continue;
+        Object.keys(dayOrdersN).forEach(function(clientName){
+          var c=S.clients.find(function(c){return c.name===clientName||(c.aliases&&c.aliases.indexOf(clientName)!==-1);});
+          if(c) neededClientIds.add(c.id);
+        });
+      }
+      await ensurePriceHistoryLoaded(neededClientIds);
       for(var dt=new Date(d0); dt<=d1; dt.setDate(dt.getDate()+1)) {
         var dstr=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
         var dayOrders=S.orders[dstr]; if(!dayOrders) continue;
@@ -3651,6 +3695,15 @@ async function ecPreview() {
     var ecEndTs = firebase.firestore.Timestamp.fromDate(new Date(toRaw+'T23:59:59.999'));
     var snap=await db.collection('logs').where('type','==','outbound')
       .where('ts','>=',ecStartTs).where('ts','<=',ecEndTs).get();
+    // priceHistory 지연 로딩: 이 기간 로그에 실제로 등장하는 거래처만 미리 파악해서 그만큼만 불러옴
+    var neededClientIds2=new Set();
+    snap.forEach(function(doc){
+      var d=doc.data();
+      if(!d.client) return;
+      var c=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
+      if(c) neededClientIds2.add(c.id);
+    });
+    await ensurePriceHistoryLoaded(neededClientIds2);
     snap.forEach(function(doc){
       var d=doc.data();
       if(d.ecSent)return; // 이미 이카운트로 전송 완료된 로그는 제외 (중복 전송 방지)
@@ -3813,6 +3866,17 @@ async function bmPreview() {
     if(fromOrders) {
       // 출고지시서(orders) 기준 — 아직 스캔 안 한(done!==true) 항목만 대상. 실제 재고차감 안 된 "예정" 수량입니다.
       var d0=new Date(fromRaw), d1=new Date(toRaw);
+      // priceHistory 지연 로딩: 이 기간에 실제로 등장하는 거래처만 미리 파악해서 그만큼만 불러옴
+      var bmNeededClientIds=new Set();
+      for(var dtN=new Date(d0); dtN<=d1; dtN.setDate(dtN.getDate()+1)) {
+        var dstrN=dtN.getFullYear()+'-'+String(dtN.getMonth()+1).padStart(2,'0')+'-'+String(dtN.getDate()).padStart(2,'0');
+        var dayOrdersN=S.orders[dstrN]; if(!dayOrdersN) continue;
+        Object.keys(dayOrdersN).forEach(function(clientName){
+          var c=S.clients.find(function(c){return c.name===clientName||(c.aliases&&c.aliases.indexOf(clientName)!==-1);});
+          if(c) bmNeededClientIds.add(c.id);
+        });
+      }
+      await ensurePriceHistoryLoaded(bmNeededClientIds);
       for(var dt=new Date(d0); dt<=d1; dt.setDate(dt.getDate()+1)) {
         var dstr=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
         var dayOrders=S.orders[dstr]; if(!dayOrders) continue;
@@ -3840,6 +3904,15 @@ async function bmPreview() {
     var bmEndTs = firebase.firestore.Timestamp.fromDate(new Date(toRaw+'T23:59:59.999'));
     var snap=await db.collection('logs').where('type','==','outbound')
       .where('ts','>=',bmStartTs).where('ts','<=',bmEndTs).get();
+    // priceHistory 지연 로딩: 이 기간 로그에 실제로 등장하는 거래처만 미리 파악해서 그만큼만 불러옴
+    var bmNeededClientIds2=new Set();
+    snap.forEach(function(doc){
+      var d=doc.data();
+      if(!d.client) return;
+      var c=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
+      if(c) bmNeededClientIds2.add(c.id);
+    });
+    await ensurePriceHistoryLoaded(bmNeededClientIds2);
     snap.forEach(function(doc){
       var d=doc.data();
       if(d.bmSent)return; // 비즈모아로 이미 보낸 로그는 제외 (이카운트 ecSent와는 별개)
