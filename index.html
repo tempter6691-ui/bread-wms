@@ -604,9 +604,12 @@ async function loadAll() {
     S.inv = {}; iv.forEach(function(d){ S.inv[d.id] = d.data().qty || 0; });
 
     // 오늘 날짜 기준 품목별 입고 스캔 누적량 (날짜가 바뀌면 자동으로 0부터 다시 시작)
+    // breakdown: 스캔당 수량(mult)별로 몇 번 찍었는지도 같이 기록 — "4(24)+20" 같은
+    // 형태로 표시하기 위함 (2026-08-28 추가)
     var today = todayStr();
     var dib = await db.collection('dailyInbound').where('date','==',today).get();
-    S.todayInbound = {}; dib.forEach(function(d){ var dd=d.data(); S.todayInbound[dd.pid] = dd.qty || 0; });
+    S.todayInbound = {}; S.todayInboundBreakdown = {};
+    dib.forEach(function(d){ var dd=d.data(); S.todayInbound[dd.pid] = dd.qty || 0; S.todayInboundBreakdown[dd.pid] = dd.breakdown || {}; });
 
     // 예전엔 지금까지 쌓인 모든 날짜의 출고지시서를 페이지 열 때마다 통째로
     // 읽어왔음 → 최근 14일 ~ 앞으로 21일 범위만 미리 읽어오도록 좁힘
@@ -1020,6 +1023,19 @@ async function applyTodayTmpl() {
 }
 
 // ── INBOUND ──────────────────────────────────────────────────
+// 스캔당 수량(mult)별 스캔 횟수 breakdown을 "4(24)+20" 같은 문자열로 변환
+// (2026-08-28 추가) — 스캔 횟수가 1회면 괄호 없이 그 수량만, 2회 이상이면
+// "횟수(수량)" 형태로 표시. 여러 그룹은 +로 이어붙임.
+function formatInboundBreakdown(breakdown) {
+  if(!breakdown) return '';
+  var keys = Object.keys(breakdown).filter(function(k){ return (breakdown[k]||0) > 0; });
+  if(!keys.length) return '';
+  return keys.map(function(mult){
+    var count = breakdown[mult];
+    return count > 1 ? (count+'('+mult+')') : mult;
+  }).join('+');
+}
+
 function pgInbound() {
   var cats = ['전체'].concat(uniqueCats());
   return '<div class="card">'+
@@ -1107,10 +1123,12 @@ function drawInbound() {
       grouped[cat].map(function(p){
         var q2=S.inv[p.id]||0, bc=q2===0?'bg-red':q2<=15?'bg-yellow':'bg-green';
         var todayQ=S.todayInbound[p.id]||0;
+        var breakdownStr=formatInboundBreakdown((S.todayInboundBreakdown||{})[p.id]);
+        var todayLabel = todayQ>0 ? (breakdownStr && breakdownStr!==(''+todayQ) ? breakdownStr+'=<strong>'+todayQ+'</strong>' : (''+todayQ)) : '';
         var lowLabel=q2<=15&&q2>0?'<span class="badge bg-yellow" style="margin-left:.3rem;">부족</span>':'';
         return '<tr><td>'+p.name+(q2===0?'<span class="badge bg-red" style="margin-left:.3rem;">품절</span>':lowLabel)+'</td><td><code>'+p.qr+'</code></td>'+
           '<td><span class="badge '+bc+'">'+q2+'</span></td>'+
-          '<td>'+(todayQ>0?'<span class="badge bg-green">'+todayQ+'</span>':'<span style="color:#bbb;">-</span>')+'</td>'+
+          '<td>'+(todayQ>0?'<span class="badge bg-green">'+todayLabel+'</span>':'<span style="color:#bbb;">-</span>')+'</td>'+
           '<td style="display:flex;gap:.3rem;align-items:center;">'+
           '<button class="btn btn-danger btn-sm" onclick="manualOut(\''+p.id+'\')" '+(q2<=0?'disabled style="opacity:.4"':'')+'>-1</button>'+
           '<button class="btn btn-success btn-sm" onclick="manualIn(\''+p.id+'\')">+1</button>'+
@@ -1140,11 +1158,14 @@ async function doScanIn() {
   var estQ=(S.inv[p.id]||0)+mult; S.inv[p.id]=estQ;
   var today = todayStr();
   var estTodayQ=(S.todayInbound[p.id]||0)+mult; S.todayInbound[p.id]=estTodayQ;
+  if(!S.todayInboundBreakdown) S.todayInboundBreakdown={};
+  if(!S.todayInboundBreakdown[p.id]) S.todayInboundBreakdown[p.id]={};
+  S.todayInboundBreakdown[p.id][mult]=(S.todayInboundBreakdown[p.id][mult]||0)+1;
   var dibId = today+'_'+p.id;
   try {
     await safeWrite(async function() {
       await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(mult)}, {merge:true});
-      await db.collection('dailyInbound').doc(dibId).set({date:today,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(mult)}, {merge:true});
+      await db.collection('dailyInbound').doc(dibId).set({date:today,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(mult),['breakdown.'+mult]:firebase.firestore.FieldValue.increment(1)}, {merge:true});
       await db.collection('logs').add({type:'inbound',pid:p.id,pname:p.name,qty:mult,ts:firebase.firestore.FieldValue.serverTimestamp()});
     });
     resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> '+(mult>1?'+'+mult+' 입고!':'입고!')+' 오늘 입고: '+estTodayQ+'개 <span style="color:#999;font-size:.85em;">(전체 재고 '+estQ+')</span></div>';
@@ -1159,13 +1180,22 @@ async function manualOut(pid) {
   var today = todayStr();
   var curTodayQ=S.todayInbound[pid]||0;
   var estTodayQ=Math.max(0, curTodayQ-1); S.todayInbound[pid]=estTodayQ;
+  // -1 버튼은 breakdown의 '1'(수동 단건) 그룹에서 우선 차감 (없으면 breakdown 건드리지 않음 —
+  // 스캔당 수량 24 같은 그룹에서 임의로 1개만 빼면 그룹 의미가 깨져서, 그런 경우는 총합만 조정)
+  var bdDelta = null;
+  if(S.todayInboundBreakdown && S.todayInboundBreakdown[pid] && (S.todayInboundBreakdown[pid][1]||0) > 0) {
+    S.todayInboundBreakdown[pid][1] -= 1;
+    bdDelta = 1;
+  }
   var dibId = today+'_'+pid;
   try {
     await safeWrite(async function() {
       await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
       // 오늘 입고량도 같이 차감 (0 밑으로는 내려가지 않도록 보호)
       if(curTodayQ > 0) {
-        await db.collection('dailyInbound').doc(dibId).set({date:today,pid:pid,pname:p.name,qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+        var dibUpdate = {date:today,pid:pid,pname:p.name,qty: firebase.firestore.FieldValue.increment(-1)};
+        if(bdDelta) dibUpdate['breakdown.1'] = firebase.firestore.FieldValue.increment(-1);
+        await db.collection('dailyInbound').doc(dibId).set(dibUpdate, {merge:true});
       }
       await db.collection('logs').add({type:'outbound',via:'inboundCancel',pid:pid,pname:p.name,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
     });
@@ -1178,11 +1208,14 @@ async function manualIn(pid) {
   var estQ=(S.inv[pid]||0)+1; S.inv[pid]=estQ;
   var today = todayStr();
   var estTodayQ=(S.todayInbound[pid]||0)+1; S.todayInbound[pid]=estTodayQ;
+  if(!S.todayInboundBreakdown) S.todayInboundBreakdown={};
+  if(!S.todayInboundBreakdown[pid]) S.todayInboundBreakdown[pid]={};
+  S.todayInboundBreakdown[pid][1]=(S.todayInboundBreakdown[pid][1]||0)+1;
   var dibId = today+'_'+pid;
   try {
     await safeWrite(async function() {
       await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
-      await db.collection('dailyInbound').doc(dibId).set({date:today,pid:pid,pname:p.name,qty:firebase.firestore.FieldValue.increment(1)}, {merge:true});
+      await db.collection('dailyInbound').doc(dibId).set({date:today,pid:pid,pname:p.name,qty:firebase.firestore.FieldValue.increment(1),['breakdown.1']:firebase.firestore.FieldValue.increment(1)}, {merge:true});
       await db.collection('logs').add({type:'inbound',pid:pid,pname:p.name,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
     });
     toast(p.name+' 오늘 입고: '+estTodayQ+'개 (전체 재고 '+estQ+')','ok'); drawInbound();
