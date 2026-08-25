@@ -1442,7 +1442,8 @@ async function doScanOut() {
   var p=findByQR(qr);
   if(!p){resEl.innerHTML='<div class="res-err">❌ 코드 없음: '+qr+'</div>';return;}
   var curQ=S.inv[p.id]||0;
-  if(curQ<=0){resEl.innerHTML='<div class="res-err">⚠️ <strong>'+p.name+'</strong> 재고 없음!</div>';return;}
+  // 2026-08-25: 재고가 0이어도 스캔/완료 자체는 막지 않도록 변경.
+  // (재고 수량은 0 밑으로 내려가지 않게 아래에서 Math.max(0, curQ-1)로 처리)
   var d=S.ordDate, client=S.outClient;
 
   var txResult;
