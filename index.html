@@ -1597,6 +1597,12 @@ async function manualCompleteOb(pid) {
     setTimeout(restoreScroll,0);
     setTimeout(restoreScroll,50);
     setTimeout(restoreScroll,150);
+    // 수동 완료 버튼을 누르면 커서가 QR 입력창에서 빠지는 문제 —
+    // 0.5초 후 자동으로 QR 스캔 입력창(ob-scan)에 다시 포커스를 줌 (2026-08-25)
+    setTimeout(function(){
+      var scanEl=document.getElementById('ob-scan');
+      if(scanEl) scanEl.focus();
+    }, 500);
   });
 }
 
