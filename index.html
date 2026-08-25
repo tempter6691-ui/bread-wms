@@ -585,10 +585,33 @@ function getOrderDateRange() {
   return { start: toStr(start), end: toStr(end) };
 }
 
+// 로컬 캐시: 자주 안 바뀌는 데이터(제품/거래처/템플릿/기사)는 브라우저에 잠깐 저장해뒀다가
+// 재사용 — 컴퓨터 여러 대/휴대폰에서 앱을 자주 껐다 켜도 매번 통째로 다시 안 읽도록 함
+// (Quota 절약, 2026-08-25). 재고/출고지시서/오늘입고처럼 실시간성이 중요한 데이터는 캐시 안 함.
+var CACHE_TTL_MS = 5*60*1000; // 5분 — 이 시간 안에 재접속하면 캐시 사용
+function saveCacheLS(key, data) {
+  try { localStorage.setItem('wmscache_'+key, JSON.stringify({t:Date.now(), d:data})); } catch(e){}
+}
+function loadCacheLS(key) {
+  try {
+    var raw = localStorage.getItem('wmscache_'+key);
+    if(!raw) return null;
+    var obj = JSON.parse(raw);
+    if(!obj || (Date.now()-obj.t) > CACHE_TTL_MS) return null;
+    return obj.d;
+  } catch(e){ return null; }
+}
+// 제품/거래처 관리 화면에서 뭔가 고치고 나면 캐시가 낡은 채로 남아있지 않도록 즉시 비움
+function clearCacheLS(key) { try { localStorage.removeItem('wmscache_'+key); } catch(e){} }
+
 async function loadAll() {
   try {
+    var cachedProds = loadCacheLS('products');
+    if (cachedProds && cachedProds.length) {
+      S.prods = cachedProds;
+    } else {
     var ps = await db.collection('products').get();
-    if (!ps.empty) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit||pd.unit.trim()==='') pd.unit='판'; else pd.unit=pd.unit.trim(); S.prods.push(Object.assign({id:d.id},pd)); }); }
+    if (!ps.empty) { S.prods = []; ps.forEach(function(d){ var pd=d.data(); if(!pd.unit||pd.unit.trim()==='') pd.unit='판'; else pd.unit=pd.unit.trim(); S.prods.push(Object.assign({id:d.id},pd)); }); saveCacheLS('products', S.prods); }
     else {
       // 제품 목록이 정말 비어있을 때만 진입. 네트워크 문제로 일시적으로 비어 보이는 경우를 막기 위해
       // 절대 자동으로 Firestore를 덮어쓰지 않고, 사용자에게 직접 확인을 받습니다.
@@ -600,13 +623,19 @@ async function loadAll() {
         toast('제품 목록을 불러오지 못했습니다. 새로고침해주세요.','err');
       }
     }
+    }
 
+    var cachedClients = loadCacheLS('clients');
+    if (cachedClients && cachedClients.length) {
+      S.clients = cachedClients;
+    } else {
     var cs = await db.collection('clients').get();
-    if (!cs.empty) { S.clients = []; cs.forEach(function(d){ S.clients.push(Object.assign({id:d.id},d.data())); }); }
+    if (!cs.empty) { S.clients = []; cs.forEach(function(d){ S.clients.push(Object.assign({id:d.id},d.data())); }); saveCacheLS('clients', S.clients); }
     else {
       // 거래처가 비어있을 때 자동 초기화 하지 않음 — 새로고침 안내만
       S.clients = [];
       toast('⚠ 거래처 목록을 불러오지 못했습니다. 새로고침해주세요.','err');
+    }
     }
 
     var iv = await db.collection('inventory').get();
@@ -631,8 +660,14 @@ async function loadAll() {
       .get();
     S.orders = {}; od.forEach(function(d){ S.orders[d.id] = d.data(); });
 
+    var cachedTm = loadCacheLS('templates');
+    if (cachedTm) {
+      S.templates = cachedTm;
+    } else {
     var tm = await db.collection('templates').get();
     S.templates = {}; tm.forEach(function(d){ S.templates[d.id] = d.data(); });
+    saveCacheLS('templates', S.templates);
+    }
 
     // 이카운트 판매현황에서 가져온 거래처+품목별 단가 이력 (이카운트 전송 시 자동 단가 채우기용)
     // 2026-08-25: priceHistory 전체(5,000건+)를 매번 통째로 읽던 것을 지연 로딩으로 전환
@@ -640,11 +675,16 @@ async function loadAll() {
     S.priceHistory = {}; S._phLoaded = {};
 
     // Drivers
+    var cachedDrv = loadCacheLS('drivers');
+    if (cachedDrv && cachedDrv.length) {
+      DRIVERS = cachedDrv;
+    } else {
     var drv = await db.collection('drivers').get();
     if (!drv.empty) {
       DRIVERS = [];
       drv.forEach(function(d){ DRIVERS.push(d.data().name); });
       DRIVERS.sort();
+      saveCacheLS('drivers', DRIVERS);
     } else {
       // Save default drivers to Firebase
       var bDrv = db.batch();
@@ -652,6 +692,7 @@ async function loadAll() {
         bDrv.set(db.collection('drivers').doc(name), {name:name});
       });
       await bDrv.commit();
+    }
     }
 
     document.getElementById('fb-status').textContent = '● 동기화됨';
@@ -2419,6 +2460,7 @@ async function doAddClient() {
       await db.collection('clients').doc(id).set({name:name,driver:drv,code:code,entity:'법인'});
       S.clients.push({id:id,name:name,driver:drv,code:code,entity:'법인'});
     });
+    saveCacheLS('clients', S.clients);
     closeModal(); toast(name+' 추가됨','ok'); drawClients();
   } catch(e){
     if(e.message==='DUPLICATE'){ toast('이미 다른 기기에서 추가된 거래처예요','err'); }
@@ -2433,6 +2475,7 @@ async function delClient(cid) {
   if(hasTmplRef) warnMsg += '\n\n⚠ 이 거래처는 요일 템플릿에도 등록되어 있어요. 거래처를 삭제해도 템플릿 안의 항목은 남아있으니, 필요하면 "요일 템플릿" 화면에서 따로 정리해주세요.';
   if(!confirm(warnMsg)) return;
   S.clients=S.clients.filter(function(x){return x.id!==cid;});
+  saveCacheLS('clients', S.clients);
   try {
     await db.collection('clients').doc(cid).delete();
     toast(c.name+' 삭제됨','ok'); drawClients();
@@ -2460,6 +2503,7 @@ async function updClientName(cid, newName) {
   var c=S.clients.find(function(x){return x.id===cid;}); if(!c) return;
   var oldName=c.name;
   c.name=newName;
+  saveCacheLS('clients', S.clients);
   try {
     // 1. clients 컬렉션 이름 업데이트
     await db.collection('clients').doc(cid).update({name:newName});
@@ -2880,6 +2924,7 @@ async function doAddProd() {
       await db.collection('products').doc(id).set({qr:qr,name:name,cat:cat,unit:unit});
     });
     S.prods.push({id:id,qr:qr,name:name,cat:cat,unit:unit});
+    saveCacheLS('products', S.prods);
     closeModal(); toast(name+' 추가됨','ok'); drawProducts();
   } catch(e){
     if(e.message==='DUPLICATE_QR'){ toast('이미 다른 곳에서 등록된 QR코드예요','err'); }
@@ -2951,6 +2996,7 @@ async function doEditProd(pid) {
     // 이미 갱신했을 수도 있는 최신값을 절대값으로 덮어쓰지 않도록)
     p.name=name; p.cat=cat; p.qr=qr; p.unit=unit; p.ecountCode=ecode; p.ecountQtyMultiplier=emult; p.orderUnitDivisor=orderdiv;
     S.inv[p.id]=(S.inv[p.id]||0)+actualDiff;
+    saveCacheLS('products', S.prods);
     closeModal(); toast(name+' 수정됨','ok'); drawProducts();
   } catch(e){
     if(e.message==='DUPLICATE_QR'){ toast('이미 다른 상품이 쓰고 있는 QR코드예요','err'); }
@@ -2969,6 +3015,7 @@ async function delProd(pid) {
       await db.collection('products').doc(pid).delete();
     });
     S.prods=S.prods.filter(function(x){return x.id!==pid;});
+    saveCacheLS('products', S.prods);
     toast(p.name+' 삭제됨','ok'); drawProducts();
   } catch(e){toast('오류:'+e.message,'err');}
 }
