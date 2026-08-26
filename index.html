@@ -1106,7 +1106,7 @@ function pgInbound() {
       '<button type="button" class="btn btn-sm" onclick="setIbMult(24)" style="padding:.4rem .7rem;">24</button>'+
       '<span style="font-size:.78rem;color:#999;">예: 300으로 설정 후 스캔하면 한 번에 300개씩 입고됩니다</span>'+
     '</div>'+
-    '<input id="ib-scan" type="text" class="scan-input" placeholder="🔍 QR 스캔 또는 코드 입력 후 Enter" onkeydown="if(event.key===\'Enter\')doScanIn()">'+
+    '<input id="ib-scan" type="text" inputmode="none" class="scan-input" placeholder="🔍 QR 스캔 또는 코드 입력 후 Enter" onkeydown="if(event.key===\'Enter\')doScanIn()">'+
     '<div id="ib-result" style="min-height:1.5rem;"></div></div>'+
     '<div id="ib-list"></div>';
 }
@@ -1325,7 +1325,7 @@ function pgOutbound() {
         '<p style="color:#aaa;font-size:.85rem;">이 기사의 오늘 출고지시서가 없습니다.</p>')+
     '</div></div>'+
     (S.outClient?'<div class="card" style="position:sticky;top:0;z-index:50;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.08);"><div class="card-title">🚚 '+S.outClient+' — 출고 스캔</div>'+
-      '<input id="ob-scan" type="text" class="scan-input" placeholder="🔍 QR 스캔 후 Enter" onkeydown="if(event.key===\'Enter\')doScanOut()" oninput="obScanTimer()">'+
+      '<input id="ob-scan" type="text" inputmode="none" class="scan-input" placeholder="🔍 QR 스캔 후 Enter" onkeydown="if(event.key===\'Enter\')doScanOut()" oninput="obScanTimer()">'+
       '<div id="ob-result" style="min-height:1.5rem;"></div>'+
       '</div>'+
       '<div class="card"><div id="ob-items">'+drawObItems()+'</div></div>':'');
