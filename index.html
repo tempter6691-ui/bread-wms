@@ -354,7 +354,7 @@ var PRODS_DEFAULT = [
   {id:'P115',qr:'J6',  name:'먹물모닝빵',         cat:'빵류(J)',unit:'봉'},
   {id:'P116',qr:'J7',  name:'모닝빵',             cat:'빵류(J)',unit:'봉'},
   {id:'P117',qr:'J8',  name:'식빵',               cat:'빵류(J)',unit:'봉'},
-  {id:'P118',qr:'J12', name:'흥국치즈롤빵',       cat:'빵류(J)',unit:'봉'},
+  {id:'P118',qr:'J12', name:'흥국치즈롤빵',       cat:'빵류(J)',unit:'판'},
   {id:'P119',qr:'J13', name:'치즈롤빵',           cat:'빵류(J)',unit:'봉'},
   {id:'P120',qr:'J14', name:'바게트300',          cat:'빵류(J)',unit:'봉'},
   {id:'P121',qr:'J15', name:'바게트190',          cat:'빵류(J)',unit:'봉'},
@@ -491,8 +491,8 @@ var CLIENTS_DEFAULT = [
   {id:'C124',name:'천년주안',driver:'D장재혁',day:'목',code:'124'},
   {id:'C125',name:'평택교회',driver:'',code:'559'},
   {id:'C126',name:'파티하우스(안양)',driver:'C서영덕',day:'수',code:''},
-  {id:'C127',name:'라페니체부평',driver:'A이운영',code:'95'},
-  {id:'C128',name:'공군',driver:'A이운영',day:'수',code:'409'},
+  {id:'C127',name:'라페니체부평',driver:'A김규현',code:'95'},
+  {id:'C128',name:'공군',driver:'A김규현',day:'수',code:'409'},
   {id:'C129',name:'빌라드지디',driver:'',day:'목',code:'447'},
   {id:'C130',name:'광명역사',driver:'B남재만',day:'수',code:'448'},
   {id:'C131',name:'더마리포사(구웨딩펠리스)',driver:'',day:'화',code:'496'},
@@ -504,7 +504,7 @@ var CLIENTS_DEFAULT = [
   {id:'C137',name:'루나미엘레',driver:'C서영덕',day:'금',code:'520'},
   {id:'C138',name:'라온제나분당',driver:'C서영덕',day:'금',code:'527'},
   {id:'C139',name:'하림각',driver:'',code:'539'},
-  {id:'C140',name:'규수당(문래)',driver:'A이운영',code:'596'},
+  {id:'C140',name:'규수당(문래)',driver:'A김규현',code:'596'},
   {id:'C141',name:'제이케이(문래)',driver:'C서영덕',day:'목',code:'602'},
   {id:'C142',name:'천년일산',driver:'B남재만',day:'목',code:''},
   {id:'C143',name:'컨벤션 더 힐',driver:'',day:'화',code:'616'},
@@ -512,26 +512,26 @@ var CLIENTS_DEFAULT = [
   {id:'C145',name:'엘비전',driver:'B남재만',day:'수',code:'619'},
   {id:'C147',name:'파로스(다산동)',driver:'',day:'금',code:'624'},
   {id:'C148',name:'더비앙(송도)',driver:'D장재혁',day:'목',code:'632'},
-  {id:'C149',name:'아르비아(지음웨딩)',driver:'A이운영',code:'638'},
+  {id:'C149',name:'아르비아(지음웨딩)',driver:'A김규현',code:'638'},
   {id:'C150',name:'세카이스시',driver:'',day:'화',code:'640'},
   {id:'C151',name:'스카이컨벤션(춘천)',driver:'',day:'화',code:'641'},
   {id:'C152',name:'더퀸',driver:'',code:'644'},
   {id:'C153',name:'문성지앤씨',driver:'',code:''},
   {id:'C154',name:'더블룸 하우스웨딩(구 트리니트)',driver:'',code:'563'},
   {id:'C156',name:'더부페(본사)',driver:'',day:'금',code:'84'},
-  {id:'C157',name:'해군호텔',driver:'A이운영',day:'수',code:'90'},
+  {id:'C157',name:'해군호텔',driver:'A김규현',day:'수',code:'90'},
   {id:'C158',name:'올웨이즈',driver:'C서영덕',day:'화',code:'650'},
   {id:'C159',name:'파티인하우스(시흥)',driver:'C서영덕',code:''},
   {id:'C160',name:'옐로우9',driver:'C서영덕',code:'532'},
   {id:'C161',name:'엘마리노',driver:'D장재혁',day:'목',code:'661'},
-  {id:'C162',name:'더혜움',driver:'A이운영',day:'화',code:''},
+  {id:'C162',name:'더혜움',driver:'A김규현',day:'화',code:''},
   {id:'C163',name:'하늘빛',driver:'',code:'163'},
   {id:'C164',name:'그레이스파티',driver:'',code:'634'},
   {id:'C165',name:'에프앤에스글로벌',driver:'',code:'599'},
   {id:'C166',name:'제이에스앤에이치(구파티엘하우스)',driver:'',code:'522'},
 ];
 
-var DRIVERS = ['A이운영','B남재만','C서영덕','F신종한'];
+var DRIVERS = ['A김규현','B남재만','C서영덕','F신종한'];
 
 // ── STATE ─────────────────────────────────────────────────────
 var db = null;
@@ -1030,7 +1030,7 @@ function pgDash() {
           '<span class="badge '+(allDone?'bg-green':'bg-yellow')+'" style="margin-right:.3rem;">'+doneKinds+'/'+totalKinds+'종</span>'+
           badges+'</div>';
       }
-      var driverColors={'A이운영':'#3b82f6','B남재만':'#10b981','C서영덕':'#f59e0b','F신종한':'#8b5cf6'};
+      var driverColors={'A김규현':'#3b82f6','B남재만':'#10b981','C서영덕':'#f59e0b','F신종한':'#8b5cf6'};
       var driverOrder=DRIVERS.concat(['미배정']);
       var grouped={};
       driverOrder.forEach(function(drv){ grouped[drv]=[]; });
