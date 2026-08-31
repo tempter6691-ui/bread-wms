@@ -60,6 +60,12 @@ tr:last-child td{border-bottom:none;}
 .total-row.bong td{background:#fff8ee;}
 .total-row.gea td{background:#f5f5ff;}
 .no-items{padding:.65rem .85rem;color:#aaa;font-size:.82rem;}
+.scan-wrap{padding:.5rem .85rem;background:#fafbfc;border-bottom:1px solid #eee;}
+.scan-mini{width:100%;box-sizing:border-box;padding:.4rem .6rem;border:1.5px solid #ddd;border-radius:6px;font-size:.8rem;}
+.scan-mini:focus{outline:none;border-color:#2d7dd2;}
+.scan-msg{font-size:.72rem;margin-top:.25rem;min-height:1em;}
+.scan-msg.ok{color:#166534;}
+.scan-msg.err{color:#dc2626;}
 .confirm-btn{background:#2d7dd2;color:#fff;border:none;border-radius:6px;padding:.18rem .5rem;font-size:.7rem;cursor:pointer;margin-left:.4rem;font-weight:600;}
 .confirm-btn:active{background:#1a5fa8;}
 .confirmed{color:#27ae60 !important;}
@@ -219,6 +225,71 @@ function confirmItem(clientName, pid) {
   updateSummary();
 }
 
+// ── QR 스캔 (2026-08-31 추가) ────────────────────────────
+async function scanInCard(clientName, inputId) {
+  var inp = document.getElementById(inputId);
+  if(!inp) return;
+  var qr = (inp.value||'').trim(); inp.value='';
+  if(!qr) return;
+
+  var p = prods.find(function(x){ return x.qr===qr || x.id===qr; });
+  if(!p){ showScanMsg(clientName, '❌ 코드 없음: '+qr, 'err'); return; }
+
+  var clientData = gAllOrders[clientName];
+  if(!clientData || !clientData.items){ showScanMsg(clientName, '❌ 데이터 오류', 'err'); return; }
+  var item = clientData.items.find(function(i){ return i.pid===p.id; });
+  if(!item){ showScanMsg(clientName, '🚨 '+p.name+' 은(는) 이 거래처 목록에 없어요!', 'err'); return; }
+
+  var scanned = (item.scanned||0)+1;
+  if(scanned>item.qty){ showScanMsg(clientName, '⛔ '+p.name+' 이미 완료!', 'err'); return; }
+  item.scanned = scanned;
+  item.done = scanned>=item.qty;
+
+  try {
+    await db.collection('orders').doc(gDate).set({[clientName]:{items: clientData.items}}, {merge:true});
+  } catch(e){ showScanMsg(clientName, '❌ 저장 오류: '+e.message, 'err'); return; }
+
+  try {
+    await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+    await db.collection('logs').add({type:'outbound',pid:p.id,pname:p.name,client:clientName,qty:1,date:gDate,ts:firebase.firestore.FieldValue.serverTimestamp()});
+  } catch(e){ showScanMsg(clientName, '⚠️ 스캔은 반영됐지만 재고/로그 기록 오류: '+e.message, 'err'); }
+
+  showScanMsg(clientName, (item.done?'✅ 완료: ':'✅ ')+p.name+' ('+scanned+'/'+item.qty+')', 'ok');
+
+  var rowId='row_'+safeid(clientName)+'_'+safeid(p.id);
+  var row=document.getElementById(rowId);
+  if(row){
+    var displayRem = item.done ? 0 : (item.qty-scanned);
+    row.dataset.rem = item.qty-scanned;
+    row.dataset.fbdone = item.done ? '1' : '0';
+    var remEl=row.querySelector('.remain');
+    if(remEl){ remEl.textContent=displayRem; remEl.className='remain '+(item.done?'done':'pend'); }
+    var lastTd=row.querySelector('td:last-child');
+    if(lastTd){
+      lastTd.innerHTML = item.done ? '<span class="status-done">✅완료</span>' : '<span class="status-scan">'+scanned+'/'+item.qty+'</span>';
+    }
+    if(item.done){
+      var confirmBtn=row.querySelector('.confirm-btn');
+      if(confirmBtn) confirmBtn.remove();
+      if(!localConfirmed[clientName]) localConfirmed[clientName]={};
+      localConfirmed[clientName][p.id]=true;
+    }
+  }
+  updateCardTotals(clientName);
+  updateCardHeader(clientName);
+  updateSummary();
+  inp.focus();
+}
+
+function showScanMsg(clientName, msg, kind) {
+  var el=document.getElementById('scanmsg_'+safeid(clientName));
+  if(!el) return;
+  el.textContent = msg;
+  el.className = 'scan-msg '+kind;
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.textContent=''; el.className='scan-msg'; }, 3000);
+}
+
 function safeid(str){ return str.replace(/[^a-zA-Z0-9가-힣]/g,'_'); }
 function esc(str){ return str.replace(/'/g,"\'"); }
 
@@ -347,26 +418,29 @@ function buildCard(name, data) {
 
   if(!items.length) {
     html += '<div class="no-items">품목 없음</div>';
-  } else if(isWide) {
-    // 품목 많은 카드: 내부 2열 분할
-    var half = Math.ceil(items.length/2);
-    var left = items.slice(0, half);
-    var right = items.slice(half);
-    var lResult = buildItemRows(left, name);
-    var rResult = buildItemRows(right, name);
-    // 합계는 전체 합산
-    var allResult = buildItemRows(items, name);
-    html += '<div class="wide-inner">';
-    html += '<div class="wide-col"><table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+lResult.rows+'</tbody></table></div>';
-    html += '<div class="wide-col wide-col-right"><table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+rResult.rows+'</tbody></table></div>';
-    html += '</div>';
-    if(allResult.foot) html += '<table><tfoot>'+allResult.foot+'</tfoot></table>';
   } else {
-    // 품목 적은 카드: 단일 열
-    var result = buildItemRows(items, name);
-    html += '<table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+result.rows+'</tbody>';
-    if(result.foot) html += '<tfoot>'+result.foot+'</tfoot>';
-    html += '</table>';
+    html += '<div class="scan-wrap"><input type="text" class="scan-mini" id="scan_'+sid2+'" placeholder="🔍 QR 스캔 후 Enter" inputmode="none" onkeydown="if(event.key===\'Enter\')scanInCard(\''+esc(name)+'\',\'scan_'+sid2+'\')"><div class="scan-msg" id="scanmsg_'+sid2+'"></div></div>';
+    if(isWide) {
+      // 품목 많은 카드: 내부 2열 분할
+      var half = Math.ceil(items.length/2);
+      var left = items.slice(0, half);
+      var right = items.slice(half);
+      var lResult = buildItemRows(left, name);
+      var rResult = buildItemRows(right, name);
+      // 합계는 전체 합산
+      var allResult = buildItemRows(items, name);
+      html += '<div class="wide-inner">';
+      html += '<div class="wide-col"><table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+lResult.rows+'</tbody></table></div>';
+      html += '<div class="wide-col wide-col-right"><table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+rResult.rows+'</tbody></table></div>';
+      html += '</div>';
+      if(allResult.foot) html += '<table><tfoot>'+allResult.foot+'</tfoot></table>';
+    } else {
+      // 품목 적은 카드: 단일 열
+      var result = buildItemRows(items, name);
+      html += '<table><thead><tr><th>제품명</th><th>수량</th><th>남은</th><th>상태</th></tr></thead><tbody>'+result.rows+'</tbody>';
+      if(result.foot) html += '<tfoot>'+result.foot+'</tfoot>';
+      html += '</table>';
+    }
   }
   html+='</div>';
   return html;
