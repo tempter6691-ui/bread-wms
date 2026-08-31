@@ -225,6 +225,42 @@ function confirmItem(clientName, pid) {
   updateSummary();
 }
 
+// ── 스캔 소리 (2026-08-31 추가) ──────────────────────────
+var _audioCtx=null;
+function _getAudioCtx(){
+  if(!_audioCtx){
+    try{ _audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  if(_audioCtx.state==='suspended'){ _audioCtx.resume(); }
+  return _audioCtx;
+}
+function playBeep(kind){
+  try{
+    var ctx=_getAudioCtx(); if(!ctx) return;
+    function tone(freq, start, dur, type, vol){
+      var osc=ctx.createOscillator(), gain=ctx.createGain();
+      osc.type=type||'sine'; osc.frequency.value=freq;
+      osc.connect(gain); gain.connect(ctx.destination);
+      var t0=ctx.currentTime+start;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(vol||0.25, t0+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+      osc.start(t0); osc.stop(t0+dur+0.02);
+    }
+    if(kind==='itemDone'){
+      // 품목 완료 — 경쾌한 상승 2음 (딩동)
+      tone(880, 0,    0.14, 'sine', 0.3);
+      tone(1318,0.12, 0.18, 'sine', 0.3);
+    } else if(kind==='wrongItem'){
+      // 출고지시서에 없는 물품 스캔 — 사이렌처럼 높낮이 반복되는 경고음
+      for(var i=0;i<3;i++){
+        tone(1200, i*0.22,     0.11, 'sawtooth', 0.28);
+        tone(600,  i*0.22+0.11,0.11, 'sawtooth', 0.28);
+      }
+    }
+  }catch(e){}
+}
+
 // ── QR 스캔 (2026-08-31 추가) ────────────────────────────
 async function scanInCard(clientName, inputId) {
   var inp = document.getElementById(inputId);
@@ -238,7 +274,7 @@ async function scanInCard(clientName, inputId) {
   var clientData = gAllOrders[clientName];
   if(!clientData || !clientData.items){ showScanMsg(clientName, '❌ 데이터 오류', 'err'); return; }
   var item = clientData.items.find(function(i){ return i.pid===p.id; });
-  if(!item){ showScanMsg(clientName, '🚨 '+p.name+' 은(는) 이 거래처 목록에 없어요!', 'err'); return; }
+  if(!item){ showScanMsg(clientName, '🚨 '+p.name+' 은(는) 이 거래처 목록에 없어요!', 'err'); playBeep('wrongItem'); return; }
 
   var scanned = (item.scanned||0)+1;
   if(scanned>item.qty){ showScanMsg(clientName, '⛔ '+p.name+' 이미 완료!', 'err'); return; }
@@ -255,6 +291,7 @@ async function scanInCard(clientName, inputId) {
   } catch(e){ showScanMsg(clientName, '⚠️ 스캔은 반영됐지만 재고/로그 기록 오류: '+e.message, 'err'); }
 
   showScanMsg(clientName, (item.done?'✅ 완료: ':'✅ ')+p.name+' ('+scanned+'/'+item.qty+')', 'ok');
+  if(item.done) playBeep('itemDone');
 
   var rowId='row_'+safeid(clientName)+'_'+safeid(p.id);
   var row=document.getElementById(rowId);
