@@ -450,43 +450,31 @@ function resetOrder(){
 }
 
 // 공지사항
-var NOTICE_HTML =
-  '<div class="history-item">'+
-    '<div class="history-header">'+
-      '<div class="history-date">2026년 추석(한가위) 연휴 휴무안내</div>'+
-    '</div>'+
-    '<div class="history-rows">'+
-      '<div class="history-row"><span>휴무 기간</span><strong>2026-09-21(월) ~ 09-25(금) [5일간]</strong></div>'+
-    '</div>'+
-    '<div style="padding:.3rem .8rem .9rem;">'+
-      '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:.72rem;margin-top:.4rem;">'+
-        '<div style="padding:.35rem 0;color:var(--sub);">9/18(금)</div>'+
-        '<div style="padding:.35rem 0;color:var(--sub);">9/21(월)</div>'+
-        '<div style="padding:.35rem 0;color:var(--sub);">9/22(화)</div>'+
-        '<div style="padding:.35rem 0;color:var(--sub);">9/23(수)</div>'+
-        '<div style="padding:.35rem 0;color:var(--sub);">9/24(목)</div>'+
-        '<div style="padding:.35rem 0;color:var(--sub);">9/25(금)</div>'+
-        '<div style="padding:.35rem 0;color:var(--sub);">9/28(월)</div>'+
-        '<div style="padding:.35rem 0;border-radius:6px;background:#eef3ee;color:var(--success);font-weight:700;">정상근무</div>'+
-        '<div style="padding:.35rem 0;border-radius:6px;background:#fdecea;color:#e74c3c;font-weight:700;">휴무</div>'+
-        '<div style="padding:.35rem 0;border-radius:6px;background:#fdecea;color:#e74c3c;font-weight:700;">휴무</div>'+
-        '<div style="padding:.35rem 0;border-radius:6px;background:#fdecea;color:#e74c3c;font-weight:700;">휴무</div>'+
-        '<div style="padding:.35rem 0;border-radius:6px;background:#fdecea;color:#e74c3c;font-weight:700;">휴무</div>'+
-        '<div style="padding:.35rem 0;border-radius:6px;background:#fdecea;color:#e74c3c;font-weight:700;">휴무</div>'+
-        '<div style="padding:.35rem 0;border-radius:6px;background:#eef3ee;color:var(--success);font-weight:700;">정상근무</div>'+
-      '</div>'+
-      '<div style="font-size:.78rem;color:var(--sub);line-height:1.7;margin-top:.9rem;">'+
-        '귀사의 무궁화 발전을 기원합니다.<br>'+
-        '당사는 금년 추석(한가위) 연휴를 위와 같이 휴무를 실시하오니 발주업무에 참고하시기 바랍니다.'+
-      '</div>'+
-      '<div style="font-size:.72rem;color:#bbb;text-align:right;margin-top:.8rem;">2026년 09월 09일 · (주)더브레드뱅크 대표이사</div>'+
-    '</div>'+
-  '</div>';
-
-function openNotice(){
-  document.getElementById('notice-list').innerHTML = NOTICE_HTML;
+function escNotice(str){
+  return String(str==null?'':str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\n/g,'<br>');
+}
+async function openNotice(){
+  document.getElementById('notice-list').innerHTML = '<div style="text-align:center;padding:1.5rem;color:#aaa;font-size:.85rem;">로딩 중...</div>';
   document.getElementById('ov-notice').classList.add('show');
   document.getElementById('modal-notice').classList.add('show');
+  try {
+    var doc = await db.collection('settings').doc('notice').get();
+    var d = doc.exists ? (doc.data()||{}) : {};
+    if (d.active && d.text && d.text.trim()) {
+      document.getElementById('notice-list').innerHTML =
+        '<div class="history-item"><div class="history-rows" style="padding:.9rem .8rem;font-size:.85rem;line-height:1.8;">'+
+        escNotice(d.text)+
+        '</div></div>';
+    } else {
+      document.getElementById('notice-list').innerHTML =
+        '<div class="cart-empty">현재 등록된 공지사항이 없습니다.</div>';
+    }
+  } catch(e) {
+    document.getElementById('notice-list').innerHTML =
+      '<div class="cart-empty">공지사항을 불러오지 못했어요.</div>';
+  }
 }
 function closeNotice(){
   document.getElementById('ov-notice').classList.remove('show');
