@@ -1515,6 +1515,7 @@ async function doScanOut() {
       playBeep('wrongItem');
     } else {
       resEl.innerHTML='<div class="res-err">⛔ <strong>'+p.name+'</strong> 이미 완료! ('+(txResult.qty||'')+'개 다 스캔됨)</div>';
+      playBeep('alreadyDone');
     }
     return;
   }
@@ -3601,6 +3602,13 @@ function playBeep(kind){
         tone(1200, i*0.22,     0.11, 'sawtooth', 0.28);
         tone(600,  i*0.22+0.11,0.11, 'sawtooth', 0.28);
       }
+    }
+    if(kind==='alreadyDone'){
+      // 2026-09-10: 이미 완료된 제품을 실수로 한번 더 스캔했을 때 나는 경고음.
+      // (예전엔 화면 메시지만 뜨고 소리가 없어서, 스캔하는 사람이 화면을 안 보면
+      //  놓치기 쉬웠음 — 이제 "삑삑" 두 번 짧게 울려서 확실히 알아채게 함)
+      tone(880, 0,    0.13, 'square', 0.22);
+      tone(880, 0.16, 0.13, 'square', 0.22);
     }
   }catch(e){}
 }
