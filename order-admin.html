@@ -269,21 +269,29 @@ function findBestClientMatch(orderClientName) {
 }
 
 // 주문에 찍힌 거래처명을 실제 등록 거래처명으로 해석.
-// 정확히 일치하면 그대로, 아니면 90%+ 유사한 이름이 있으면 그걸로 자동 매핑, 없으면 null.
+// 1순위: 정확히 일치 → 그대로
+// 2순위: 거래처에 등록된 별칭(aliases)과 정확히 일치 → 그 거래처로 매핑 (유사도 계산 없이 확정)
+// 3순위: 90%+ 유사한 이름이 있으면 자동 매핑, 없으면 null.
 function resolveClientName(orderClientName) {
   if (orderClientName in clients) return { name: orderClientName, autoMapped: false };
+  if (orderClientName in clientAliases) return { name: clientAliases[orderClientName], autoMapped: true, aliasMapped: true };
   var m = findBestClientMatch(orderClientName);
   if (m.name && m.score >= AUTO_MAP_THRESHOLD) return { name: m.name, autoMapped: true, score: m.score };
   return { name: null, autoMapped: false };
 }
 
 // 거래처 목록 로드
+var clientAliases = {}; // 별칭명 -> 정식 거래처명
 async function loadClients() {
   try {
     var snap = await db.collection('clients').get();
+    clientAliases = {};
     snap.forEach(function(d){
       var data = d.data();
       if(data.name) clients[data.name] = data.driver || '';
+      (data.aliases||[]).forEach(function(alias){
+        if(alias && data.name) clientAliases[alias] = data.name;
+      });
     });
   } catch(e) {}
 }
