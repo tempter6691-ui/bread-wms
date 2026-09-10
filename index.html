@@ -788,6 +788,13 @@ function startListeners() {
 async function safeWrite(fn) {
   _writing = true;
   try { await fn(); }
+  catch(e) {
+    // 2026-09-10: 여기서 오류가 나면 예전엔 아무 표시 없이 조용히 묻혀서,
+    // 출고완료 처리는 됐는데 재고차감/로그기록이 안 되는 사고가 있었음.
+    // 이제부터는 반드시 알림을 띄워서 담당자가 바로 알고 재시도하게 함.
+    console.error('safeWrite 실패:', e);
+    alert('⚠️ 저장 중 오류가 발생했어요!\n\n방금 처리한 내용(재고차감/기록)이 실제로 반영되지 않았을 수 있습니다.\n\n오류: ' + e.message + '\n\n다시 한번 같은 작업을 시도해 주시고, 계속 반복되면 관리자에게 알려주세요.');
+  }
   finally { setTimeout(function(){ _writing = false; }, 1500); }
 }
 
@@ -2250,9 +2257,9 @@ function printOrders() {
           var lNameStyle=cellStyle(lu,true), lQtyStyle=cellStyle(lu,false);
           var rNameStyle=cellStyle(ru,true), rQtyStyle=cellStyle(ru,false);
           html += '<tr>'+
-            '<td style="'+lNameStyle+'">'+(lp?(lp.cat&&lp.cat.indexOf("마카롱")>=0||lp.id==="P110"||lp.id==="P111"?lp.name:lp.name.replace(/\([^)]*\d[^)]*\)\s*$/,"")):left[i].pid)+'</td>'+
+            '<td style="'+lNameStyle+'">'+(lp?(lp.cat&&lp.cat.indexOf("마카롱")>=0||lp.id==="P110"||lp.id==="P111"?lp.name:lp.name.replace(/\(.*$/,"")):left[i].pid)+'</td>'+
             '<td class="qty" style="'+lQtyStyle+'">'+(left[i].qty)+'</td>'+
-            '<td style="'+rNameStyle+'">'+(rItem?(rp?(rp.cat&&rp.cat.indexOf("마카롱")>=0||rp.id==="P110"||rp.id==="P111"?rp.name:rp.name.replace(/\([^)]*\d[^)]*\)\s*$/,"")):rItem.pid):"")+'</td>'+
+            '<td style="'+rNameStyle+'">'+(rItem?(rp?(rp.cat&&rp.cat.indexOf("마카롱")>=0||rp.id==="P110"||rp.id==="P111"?rp.name:rp.name.replace(/\(.*$/,"")):rItem.pid):"")+'</td>'+
             '<td class="qty" style="'+rQtyStyle+'">'+(rItem?rItem.qty:'')+'</td>'+
           '</tr>';
         }
