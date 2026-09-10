@@ -1157,7 +1157,7 @@ function startIbMultPoll(){
     var v=el.value;
     if(v!=='' && v===_ibMultLastVal){
       _ibMultStableCount++;
-      if(_ibMultStableCount>=5){ // 500ms x 5 = 2.5초 동안 값이 안 바뀌면 자동 이동
+      if(_ibMultStableCount>=2){ // 500ms x 2 = 1초 동안 값이 안 바뀌면 자동 이동 (2026-09-10: 2.5초→1초로 단축)
         focusIbScan();
         _ibMultLastVal=null; _ibMultStableCount=0;
       }
