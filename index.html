@@ -2258,9 +2258,9 @@ function printOrders() {
           var lNameStyle=cellStyle(lu,true), lQtyStyle=cellStyle(lu,false);
           var rNameStyle=cellStyle(ru,true), rQtyStyle=cellStyle(ru,false);
           html += '<tr>'+
-            '<td style="'+lNameStyle+'">'+(lp?(lp.cat&&lp.cat.indexOf("마카롱")>=0||lp.id==="P110"||lp.id==="P111"?lp.name:lp.name.replace(/\(.*$/,"")):left[i].pid)+'</td>'+
+            '<td style="'+lNameStyle+'">'+printItemName(lp, left[i].pid)+'</td>'+
             '<td class="qty" style="'+lQtyStyle+'">'+(left[i].qty)+'</td>'+
-            '<td style="'+rNameStyle+'">'+(rItem?(rp?(rp.cat&&rp.cat.indexOf("마카롱")>=0||rp.id==="P110"||rp.id==="P111"?rp.name:rp.name.replace(/\(.*$/,"")):rItem.pid):"")+'</td>'+
+            '<td style="'+rNameStyle+'">'+(rItem?printItemName(rp, rItem.pid):"")+'</td>'+
             '<td class="qty" style="'+rQtyStyle+'">'+(rItem?rItem.qty:'')+'</td>'+
           '</tr>';
         }
@@ -3733,6 +3733,14 @@ function boxUnitMult(name){
   return 1;
 }
 
+// 배송 출력용지용 이름 축약 — "(2개/box)"류 포장단위 표기만 지우고, "(생지)"처럼 의미있는 설명은 남김
+// (예전엔 "(" 이후 전부 잘라버려서 새 상품에 괄호 설명이 붙을 때마다 매번 재발하던 버그를 근본적으로 고침)
+function printItemName(p, fallbackId){
+  if(!p) return fallbackId;
+  if((p.cat&&p.cat.indexOf('마카롱')>=0)||p.id==='P110'||p.id==='P111') return p.name;
+  return (p.name||'').replace(/\s*\(\s*\d+\s*(개|kg|g)\s*\/\s*(box|박스|봉|판)\s*\)\s*$/i,'').trim();
+}
+
 async function ecPreview() {
   var fromRaw=(document.getElementById('ec-from')||{}).value||'';
   var toRaw=(document.getElementById('ec-to')||{}).value||'';
@@ -3823,6 +3831,9 @@ async function ecPreview() {
       if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
       var ca=a.clientName||'', cb=b.clientName||'';
       if(ca!==cb) return ca.localeCompare(cb,'ko');
+      // 미니와플은 거래처 불문하고 항상 해당 거래처 품목 맨 끝에 오도록 (카테고리 정렬보다 우선)
+      var aMW=(a.prodName||'').indexOf('미니와플')!==-1, bMW=(b.prodName||'').indexOf('미니와플')!==-1;
+      if(aMW!==bMW) return aMW?1:-1;
       var ra=catRank(a.cat), rb=catRank(b.cat);
       if(ra!==rb) return ra-rb;
       return (a.prodName||'').localeCompare(b.prodName||'','ko');
@@ -4021,6 +4032,9 @@ async function bmPreview() {
       if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
       var ca=a.clientName||'', cb=b.clientName||'';
       if(ca!==cb) return ca.localeCompare(cb,'ko');
+      // 미니와플은 거래처 불문하고 항상 해당 거래처 품목 맨 끝에 오도록 (카테고리 정렬보다 우선)
+      var aMW=(a.prodName||'').indexOf('미니와플')!==-1, bMW=(b.prodName||'').indexOf('미니와플')!==-1;
+      if(aMW!==bMW) return aMW?1:-1;
       var ra=catRank(a.cat), rb=catRank(b.cat);
       if(ra!==rb) return ra-rb;
       return (a.prodName||'').localeCompare(b.prodName||'','ko');
