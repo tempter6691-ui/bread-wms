@@ -77,6 +77,9 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .toast.show{opacity:1;}
 .qty-ctrl-sm{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);background:#fff;cursor:pointer;font-size:.9rem;color:var(--primary);font-weight:700;display:inline-flex;align-items:center;justify-content:center;}
 .qty-input-sm{width:38px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px;font-size:.85rem;font-family:inherit;}
+.history-toolbar{display:flex;justify-content:flex-end;margin-bottom:.6rem;}
+.excel-btn{background:#1d6f42;color:#fff;border:none;border-radius:6px;padding:.5rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:.35rem;}
+.excel-btn:disabled{background:var(--sub);cursor:default;}
 </style>
 </head>
 <body>
@@ -118,6 +121,9 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 <div class="overlay" id="ov-history" onclick="closeHistory()"></div>
 <div class="modal" id="modal-history">
   <div class="modal-title">📋 발주 내역</div>
+  <div class="history-toolbar">
+    <button class="excel-btn" id="excel-btn" onclick="downloadHistoryExcel()">⬇️ 엑셀 다운로드</button>
+  </div>
   <div id="history-list"></div>
 </div>
 
@@ -142,6 +148,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 <!-- 토스트 -->
 <div class="toast" id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 firebase.initializeApp({
   apiKey:"AIzaSyAI5VBBXB2dUS5kk5IE--xfCe_C2r0PrIA",
@@ -496,6 +503,8 @@ function closeHistory(){
 
 async function loadHistory(){
   document.getElementById('history-list').innerHTML='<div style="text-align:center;padding:1.5rem;color:#aaa;font-size:.85rem;">로딩 중...</div>';
+  var excelBtn = document.getElementById('excel-btn');
+  if (excelBtn) excelBtn.disabled = true;
   try {
     var snap=await db.collection('orders_request').where('client','==',S.client).get();
     var orders=[];
@@ -505,7 +514,7 @@ async function loadHistory(){
       var tb=b.ts&&b.ts.toDate?b.ts.toDate().getTime():0;
       return tb-ta;
     });
-    if(!orders.length){document.getElementById('history-list').innerHTML='<p style="text-align:center;color:#aaa;padding:2rem;font-size:.85rem;">발주 내역이 없어요</p>';return;}
+    if(!orders.length){document.getElementById('history-list').innerHTML='<p style="text-align:center;color:#aaa;padding:2rem;font-size:.85rem;">발주 내역이 없어요</p>';window._historyOrders=[];return;}
     var html='';
     orders.forEach(function(o,idx){
       var t=o.ts&&o.ts.toDate?o.ts.toDate():new Date();
@@ -513,7 +522,6 @@ async function loadHistory(){
       var statusLabel=o.status==='confirmed'?'✅ 확인완료':o.status==='cancelled'?'❌ 취소':'⏳ 대기중';
       var statusColor=o.status==='confirmed'?'#d4edda':o.status==='cancelled'?'#f8d7da':'#fff3cd';
       var total=(o.items||[]).reduce(function(s,i){return s+i.qty;},0);
-      var itemsStr=JSON.stringify(o.items||[]);
       html+='<div class="history-item">'+
         '<div class="history-header">'+
           '<div><div class="history-date">📅 '+dateStr+'</div>'+
@@ -536,9 +544,48 @@ async function loadHistory(){
     });
     document.getElementById('history-list').innerHTML=html;
     window._historyOrders=orders;
+    if (excelBtn) excelBtn.disabled = false;
   } catch(e){
     document.getElementById('history-list').innerHTML='<p style="color:red;font-size:.82rem;">오류: '+e.message+'</p>';
   }
+}
+
+// 발주 내역 엑셀 다운로드
+function downloadHistoryExcel(){
+  var orders = window._historyOrders || [];
+  if(!orders.length){ toast('다운로드할 발주 내역이 없어요'); return; }
+  if(typeof XLSX === 'undefined'){ toast('엑셀 기능을 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.'); return; }
+
+  var statusText = { confirmed:'확인완료', cancelled:'취소', pending:'대기중' };
+  var rows = [];
+  orders.forEach(function(o){
+    var t = o.ts && o.ts.toDate ? o.ts.toDate() : null;
+    var dateStr = t ? (t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')) : '';
+    var timeStr = t ? (t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0')) : '';
+    var items = o.items || [];
+    if(!items.length){
+      rows.push({
+        '발주일자': dateStr, '발주시간': timeStr, '거래처': S.client, '제품명': '', '수량': '',
+        '상태': statusText[o.status]||o.status||'', '요청사항': o.memo||'', '답변': o.reply||''
+      });
+      return;
+    }
+    items.forEach(function(item){
+      rows.push({
+        '발주일자': dateStr, '발주시간': timeStr, '거래처': S.client, '제품명': item.pname||item.pid||'', '수량': item.qty||'',
+        '상태': statusText[o.status]||o.status||'', '요청사항': o.memo||'', '답변': o.reply||''
+      });
+    });
+  });
+
+  var ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [ {wch:11}, {wch:8}, {wch:16}, {wch:24}, {wch:8}, {wch:10}, {wch:24}, {wch:24} ];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '발주내역');
+
+  var today = new Date();
+  var fname = S.client + '_발주내역_' + today.getFullYear()+ (today.getMonth()+1).toString().padStart(2,'0') + today.getDate().toString().padStart(2,'0') + '.xlsx';
+  XLSX.writeFile(wb, fname);
 }
 
 function reorder(idx){
