@@ -95,6 +95,9 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
 .status-exported{background:#f0e3f5;color:#a67cb8;}
 .new-dot{display:inline-block;width:7px;height:7px;background:var(--danger);border-radius:50%;margin-left:4px;vertical-align:middle;}
 
+@keyframes bellBlink { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(1.15);} }
+.bell-blink{display:inline-block;animation:bellBlink .9s infinite;margin-left:.35rem;font-size:.85rem;}
+
 /* 요청사항(거래처 댓글) */
 .req-client-row{padding:.55rem .7rem;border:1px solid var(--border);border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:#fff;}
 .req-client-row:hover{background:#f5f9fc;}
@@ -352,7 +355,7 @@ async function loadRequestClients(){
       return '<div class="req-client-row" onclick="openRequestThread('+i+')">'+
         '<div><div class="req-client-name">'+escapeHtml(c.client)+'</div>'+
         '<div class="req-client-preview">'+escapeHtml(c.lastText||'')+'</div></div>'+
-        (c.unread>0 ? '<span class="req-count-badge">'+c.unread+'</span>' : '')+
+        (c.unread>0 ? '<span class="bell-blink">🔔'+c.unread+'</span>' : '')+
       '</div>';
     }).join('');
   } catch(e) {
@@ -884,7 +887,7 @@ let _reqLastCount = 0;
 db.collection('client_messages').where('from','==','client').where('readByAdmin','==',false)
   .onSnapshot(function(snap){
     var badge = document.getElementById('request-total-badge');
-    if(badge) badge.textContent = snap.size > 0 ? snap.size : '';
+    if(badge) badge.innerHTML = snap.size > 0 ? '<span class="bell-blink">🔔'+snap.size+'</span>' : '';
     if(_reqLastCount !== 0 && snap.size > _reqLastCount){
       playNewOrderSound();
       blinkTitle('💬 새 요청사항!');

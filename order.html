@@ -92,6 +92,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .msg-send-row{display:flex;gap:.5rem;margin-top:.8rem;}
 .msg-send-row input{flex:1;}
 .msg-send-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:0 1rem;font-weight:700;font-family:inherit;cursor:pointer;}
+@keyframes bellBlink { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(1.15);} }
+.bell-blink{display:inline-block;animation:bellBlink .9s infinite;margin-left:.35rem;font-size:.8rem;}
 </style>
 </head>
 <body>
@@ -516,7 +518,8 @@ function showRequestBadge(){
   if(!btn || document.getElementById('request-badge')) return;
   var badge=document.createElement('span');
   badge.id='request-badge';
-  badge.style.cssText='display:inline-block;width:9px;height:9px;border-radius:50%;background:#e74c3c;margin-left:5px;vertical-align:middle;';
+  badge.className='bell-blink';
+  badge.textContent='🔔';
   btn.appendChild(badge);
 }
 function hideRequestBadge(){
