@@ -81,6 +81,17 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .excel-btn{background:#1d6f42;color:#fff;border:none;border-radius:6px;padding:.5rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:.35rem;}
 .excel-btn:disabled{background:var(--sub);cursor:default;}
 .excel-btn-sm{background:#1d6f42;color:#fff;border:none;border-radius:5px;padding:.3rem .55rem;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit;margin-left:.4rem;}
+.msg-list{display:flex;flex-direction:column;gap:.5rem;max-height:48vh;overflow-y:auto;padding:.2rem .1rem;}
+.msg-row{display:flex;}
+.msg-row.mine{justify-content:flex-end;}
+.msg-row.theirs{justify-content:flex-start;}
+.msg-bubble{max-width:78%;padding:.55rem .8rem;border-radius:14px;font-size:.85rem;line-height:1.5;word-break:break-word;}
+.msg-row.mine .msg-bubble{background:var(--primary);color:#fff;border-bottom-right-radius:4px;}
+.msg-row.theirs .msg-bubble{background:#eee;color:#222;border-bottom-left-radius:4px;}
+.msg-time{font-size:.65rem;color:var(--sub);margin-top:2px;}
+.msg-send-row{display:flex;gap:.5rem;margin-top:.8rem;}
+.msg-send-row input{flex:1;}
+.msg-send-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:0 1rem;font-weight:700;font-family:inherit;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -101,6 +112,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
       <div class="header-client" id="header-client"></div>
     </div>
     <button class="hbtn hbtn-gray" onclick="openNotice()">📢 공지사항</button>
+    <button class="hbtn hbtn-gray" id="btn-request" onclick="openRequests()">💬 요청사항</button>
     <button class="hbtn hbtn-gray" onclick="openHistory()">📋 내역</button>
     <button class="hbtn hbtn-accent" onclick="openCart()">🛒 발주 <span class="cart-count" id="cart-count">0</span></button>
   </div>
@@ -123,6 +135,17 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 <div class="modal" id="modal-history">
   <div class="modal-title">📋 발주 내역</div>
   <div id="history-list"></div>
+</div>
+
+<!-- 요청사항 모달 (거래처 ↔ 더브레드뱅크 댓글) -->
+<div class="overlay" id="ov-request" onclick="closeRequests()"></div>
+<div class="modal" id="modal-request">
+  <div class="modal-title">💬 요청사항</div>
+  <div class="msg-list" id="request-list"></div>
+  <div class="msg-send-row">
+    <input class="search-input" id="request-input" placeholder="메시지를 입력하세요..." onkeydown="if(event.key==='Enter')sendRequestMsg();">
+    <button class="msg-send-btn" onclick="sendRequestMsg()">전송</button>
+  </div>
 </div>
 
 <!-- 장바구니 모달 -->
@@ -291,6 +314,7 @@ async function init() {
   document.getElementById('main-wrap').style.display='block';
   renderCats(); renderProds(); updateCartCount();
   startOrderStatusListener();
+  startRequestListener();
 }
 
 function renderCats() {
@@ -484,6 +508,93 @@ async function openNotice(){
 function closeNotice(){
   document.getElementById('ov-notice').classList.remove('show');
   document.getElementById('modal-notice').classList.remove('show');
+}
+
+// 요청사항 (거래처 ↔ 더브레드뱅크 댓글 스레드)
+function showRequestBadge(){
+  var btn = document.getElementById('btn-request');
+  if(!btn || document.getElementById('request-badge')) return;
+  var badge=document.createElement('span');
+  badge.id='request-badge';
+  badge.style.cssText='display:inline-block;width:9px;height:9px;border-radius:50%;background:#e74c3c;margin-left:5px;vertical-align:middle;';
+  btn.appendChild(badge);
+}
+function hideRequestBadge(){
+  var b=document.getElementById('request-badge');
+  if(b) b.remove();
+}
+function openRequests(){
+  document.getElementById('ov-request').classList.add('show');
+  document.getElementById('modal-request').classList.add('show');
+  hideRequestBadge();
+  loadRequests();
+}
+function closeRequests(){
+  document.getElementById('ov-request').classList.remove('show');
+  document.getElementById('modal-request').classList.remove('show');
+}
+async function loadRequests(){
+  var el=document.getElementById('request-list');
+  el.innerHTML='<div style="text-align:center;padding:1rem;color:#aaa;font-size:.85rem;">로딩 중...</div>';
+  try{
+    var snap=await db.collection('client_messages').where('client','==',S.client).get();
+    var msgs=[]; snap.forEach(function(d){msgs.push(Object.assign({id:d.id},d.data()));});
+    msgs.sort(function(a,b){
+      var ta=a.ts&&a.ts.toDate?a.ts.toDate().getTime():0;
+      var tb=b.ts&&b.ts.toDate?b.ts.toDate().getTime():0;
+      return ta-tb;
+    });
+    if(!msgs.length){
+      el.innerHTML='<div class="cart-empty">아직 요청사항이 없어요.<br>메시지를 남겨보세요!</div>';
+    } else {
+      el.innerHTML = msgs.map(function(m){
+        var mine = m.from==='client';
+        var t=m.ts&&m.ts.toDate?m.ts.toDate():null;
+        var timeStr=t?((t.getMonth()+1)+'/'+t.getDate()+' '+t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0')):'';
+        return '<div class="msg-row '+(mine?'mine':'theirs')+'"><div>'+
+          '<div class="msg-bubble">'+escNotice(m.text)+'</div>'+
+          '<div class="msg-time" style="text-align:'+(mine?'right':'left')+';">'+(mine?'':'🥐 더브레드뱅크 · ')+timeStr+'</div>'+
+        '</div></div>';
+      }).join('');
+      el.scrollTop = el.scrollHeight;
+    }
+    // 더브레드뱅크가 보낸 메시지 읽음 처리 (배지 해제용)
+    var batch=db.batch(); var any=false;
+    snap.forEach(function(d){
+      var m=d.data();
+      if(m.from==='admin' && m.readByClient===false){ batch.update(d.ref,{readByClient:true}); any=true; }
+    });
+    if(any) await batch.commit();
+  } catch(e){
+    el.innerHTML='<p style="color:red;font-size:.82rem;">오류: '+e.message+'</p>';
+  }
+}
+async function sendRequestMsg(){
+  var inp=document.getElementById('request-input');
+  var text=inp.value.trim();
+  if(!text) return;
+  inp.value='';
+  try{
+    await db.collection('client_messages').add({
+      client:S.client, from:'client', text:text,
+      ts:firebase.firestore.FieldValue.serverTimestamp(),
+      readByAdmin:false, readByClient:true
+    });
+    loadRequests();
+  } catch(e){ toast('전송 오류: '+e.message); }
+}
+// 더브레드뱅크가 새 메시지를 보내면 실시간으로 종(배지) 표시
+function startRequestListener(){
+  if(!S.client) return;
+  db.collection('client_messages').where('client','==',S.client)
+    .onSnapshot(function(snap){
+      var hasNew=false;
+      snap.forEach(function(d){
+        var m=d.data();
+        if(m.from==='admin' && m.readByClient===false) hasNew=true;
+      });
+      if(hasNew) showRequestBadge(); else hideRequestBadge();
+    });
 }
 
 // 발주 내역

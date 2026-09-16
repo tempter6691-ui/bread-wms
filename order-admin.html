@@ -94,6 +94,15 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
 
 .status-exported{background:#f0e3f5;color:#a67cb8;}
 .new-dot{display:inline-block;width:7px;height:7px;background:var(--danger);border-radius:50%;margin-left:4px;vertical-align:middle;}
+
+/* 요청사항(거래처 댓글) */
+.req-client-row{padding:.55rem .7rem;border:1px solid var(--border);border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:#fff;}
+.req-client-row:hover{background:#f5f9fc;}
+.req-client-name{font-weight:700;font-size:.82rem;}
+.req-client-preview{font-size:.72rem;color:var(--sub);margin-top:2px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.req-count-badge{background:var(--danger);color:#fff;font-size:.68rem;font-weight:700;border-radius:10px;padding:1px 7px;}
+.req-msg-row{display:flex;margin-bottom:.4rem;}
+.req-msg-bubble{max-width:78%;padding:.5rem .75rem;border-radius:12px;font-size:.8rem;line-height:1.5;word-break:break-word;}
 </style>
 </head>
 <body>
@@ -104,6 +113,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
     <div class="header-sub" id="header-sub">로딩 중...</div>
   </div>
   <button class="refresh-btn" style="background:var(--primary);margin-right:.4rem;" onclick="toggleNoticeEditor()">📢 공지사항</button>
+  <button class="refresh-btn" style="background:#8fb8d4;margin-right:.4rem;position:relative;" onclick="toggleRequestPanel()">💬 요청사항<span id="request-total-badge" style="margin-left:.3rem;"></span></button>
   <button class="refresh-btn" onclick="loadOrders()">↻ 새로고침</button>
 </div>
 
@@ -117,6 +127,21 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
     <div style="flex:1;"></div>
     <span id="notice-saved-at" style="font-size:.7rem;color:var(--sub);"></span>
     <button class="btn-sm btn-confirm" onclick="saveNotice()">저장</button>
+  </div>
+</div>
+
+<div id="request-panel" style="display:none;background:#fff;padding:.8rem 1rem;border-bottom:1px solid var(--border);">
+  <div style="font-size:.82rem;font-weight:700;color:var(--primary);margin-bottom:.5rem;">💬 거래처 요청사항</div>
+  <div id="request-client-list" style="display:flex;flex-direction:column;gap:.4rem;max-height:260px;overflow-y:auto;"></div>
+</div>
+
+<div id="request-thread-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;" onclick="closeRequestThread()"></div>
+<div id="request-thread-modal" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:16px 16px 0 0;padding:1rem;z-index:501;max-height:80vh;overflow-y:auto;">
+  <div style="font-weight:700;margin-bottom:.6rem;color:var(--primary);" id="request-thread-title"></div>
+  <div id="request-thread-msgs" style="display:flex;flex-direction:column;max-height:45vh;overflow-y:auto;margin-bottom:.6rem;"></div>
+  <div style="display:flex;gap:.4rem;">
+    <input id="request-thread-input" class="search-input" style="flex:1;" placeholder="답장 입력..." onkeydown="if(event.key==='Enter')sendAdminReply();">
+    <button class="btn-sm btn-confirm" onclick="sendAdminReply()">전송</button>
   </div>
 </div>
 
@@ -294,6 +319,105 @@ async function loadClients() {
       });
     });
   } catch(e) {}
+}
+
+// ===== 요청사항 (거래처 ↔ 더브레드뱅크 댓글) =====
+var _requestClientsCache = [];
+var _curThreadClient = null;
+
+async function toggleRequestPanel(){
+  var p = document.getElementById('request-panel');
+  var show = p.style.display === 'none';
+  p.style.display = show ? 'block' : 'none';
+  if (show) await loadRequestClients();
+}
+
+async function loadRequestClients(){
+  var el = document.getElementById('request-client-list');
+  el.innerHTML = '로딩 중...';
+  try {
+    var snap = await db.collection('client_messages').get();
+    var byClient = {};
+    snap.forEach(function(d){
+      var m = d.data();
+      if(!byClient[m.client]) byClient[m.client] = {client:m.client, lastTs:0, lastText:'', unread:0};
+      var ts = m.ts && m.ts.toDate ? m.ts.toDate().getTime() : 0;
+      if(ts >= byClient[m.client].lastTs){ byClient[m.client].lastTs = ts; byClient[m.client].lastText = m.text; }
+      if(m.from === 'client' && m.readByAdmin === false) byClient[m.client].unread++;
+    });
+    var list = Object.values(byClient).sort(function(a,b){ return b.lastTs - a.lastTs; });
+    _requestClientsCache = list;
+    if(!list.length){ el.innerHTML = '<div style="color:#aaa;font-size:.8rem;padding:.5rem;">아직 요청사항이 없어요</div>'; return; }
+    el.innerHTML = list.map(function(c, i){
+      return '<div class="req-client-row" onclick="openRequestThread('+i+')">'+
+        '<div><div class="req-client-name">'+escapeHtml(c.client)+'</div>'+
+        '<div class="req-client-preview">'+escapeHtml(c.lastText||'')+'</div></div>'+
+        (c.unread>0 ? '<span class="req-count-badge">'+c.unread+'</span>' : '')+
+      '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<p style="color:red;font-size:.8rem;">오류: '+e.message+'</p>';
+  }
+}
+
+async function openRequestThread(i){
+  var c = _requestClientsCache[i];
+  if(!c) return;
+  _curThreadClient = c.client;
+  document.getElementById('request-thread-title').textContent = '💬 ' + c.client;
+  document.getElementById('request-thread-overlay').style.display = 'block';
+  document.getElementById('request-thread-modal').style.display = 'block';
+  await loadRequestThread();
+}
+function closeRequestThread(){
+  document.getElementById('request-thread-overlay').style.display = 'none';
+  document.getElementById('request-thread-modal').style.display = 'none';
+  loadRequestClients(); // 목록 배지 갱신
+}
+async function loadRequestThread(){
+  var el = document.getElementById('request-thread-msgs');
+  el.innerHTML = '로딩 중...';
+  try {
+    var snap = await db.collection('client_messages').where('client','==',_curThreadClient).get();
+    var msgs = []; snap.forEach(function(d){ msgs.push(Object.assign({id:d.id}, d.data())); });
+    msgs.sort(function(a,b){
+      var ta=a.ts&&a.ts.toDate?a.ts.toDate().getTime():0, tb=b.ts&&b.ts.toDate?b.ts.toDate().getTime():0;
+      return ta-tb;
+    });
+    el.innerHTML = msgs.map(function(m){
+      var mine = m.from === 'admin'; // 관리자 입장에서 내가 보낸 메시지는 오른쪽
+      var t = m.ts && m.ts.toDate ? m.ts.toDate() : null;
+      var timeStr = t ? ((t.getMonth()+1)+'/'+t.getDate()+' '+t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0')) : '';
+      return '<div class="req-msg-row" style="justify-content:'+(mine?'flex-end':'flex-start')+';">'+
+        '<div><div class="req-msg-bubble" style="background:'+(mine?'#7ba7c9;color:#fff':'#eee;color:#333')+';">'+escapeHtml(m.text)+'</div>'+
+        '<div style="font-size:.65rem;color:var(--sub);margin-top:2px;text-align:'+(mine?'right':'left')+';">'+(mine?'':escapeHtml(_curThreadClient)+' · ')+timeStr+'</div></div>'+
+      '</div>';
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+    // 거래처가 보낸 메시지 읽음 처리
+    var batch = db.batch(); var any = false;
+    snap.forEach(function(d){
+      var m = d.data();
+      if(m.from === 'client' && m.readByAdmin === false){ batch.update(d.ref, {readByAdmin:true}); any = true; }
+    });
+    if(any) await batch.commit();
+  } catch(e) {
+    el.innerHTML = '<p style="color:red;font-size:.8rem;">오류: '+e.message+'</p>';
+  }
+}
+async function sendAdminReply(){
+  var inp = document.getElementById('request-thread-input');
+  var text = inp.value.trim();
+  if(!text || !_curThreadClient) return;
+  inp.value = '';
+  try {
+    await db.collection('client_messages').add({
+      client: _curThreadClient, from: 'admin', text: text,
+      ts: firebase.firestore.FieldValue.serverTimestamp(),
+      readByAdmin: true, readByClient: false
+    });
+    loadRequestThread();
+  } catch(e) { alert('전송 오류: '+e.message); }
 }
 
 async function loadOrders() {
@@ -753,6 +877,24 @@ db.collection('orders_request')
       loadOrders();
     }
     _lastSnapCount = snap.size;
+  });
+
+// 실시간 요청사항(거래처 댓글) 감지 - 미확인 배지 + 알림
+let _reqLastCount = 0;
+db.collection('client_messages').where('from','==','client').where('readByAdmin','==',false)
+  .onSnapshot(function(snap){
+    var badge = document.getElementById('request-total-badge');
+    if(badge) badge.textContent = snap.size > 0 ? snap.size : '';
+    if(_reqLastCount !== 0 && snap.size > _reqLastCount){
+      playNewOrderSound();
+      blinkTitle('💬 새 요청사항!');
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification('💬 새 요청사항 도착', { body: '거래처로부터 새 메시지가 있어요.' }); } catch(e) {}
+      }
+    }
+    _reqLastCount = snap.size;
+    // 요청사항 패널이 열려있으면 목록도 갱신
+    if (document.getElementById('request-panel').style.display !== 'none') loadRequestClients();
   });
 </script>
 </body>
