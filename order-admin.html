@@ -16,6 +16,7 @@
 body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;min-height:100vh;}
 
 .header{background:var(--primary);color:#fff;padding:.9rem 1rem;display:flex;align-items:center;gap:.6rem;position:sticky;top:0;z-index:100;}
+.header-title-wrap{flex:1;min-width:0;}
 .header h1{font-size:.95rem;font-weight:700;flex:1;}
 .header-sub{font-size:.72rem;color:var(--accent);}
 .refresh-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.45rem .8rem;font-size:.78rem;cursor:pointer;font-family:inherit;font-weight:700;}
@@ -109,9 +110,11 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
 
 /* ── 모바일 화면 대응 ── */
 @media (max-width: 640px) {
-  .header{flex-wrap:wrap;row-gap:.5rem;}
-  .header > div:first-child{flex:1 1 100%;order:1;}
-  .header .refresh-btn{order:2;flex:1 1 auto;text-align:center;white-space:nowrap;}
+  .header{flex-wrap:wrap;row-gap:.4rem;padding:.7rem .9rem;}
+  .header-title-wrap{min-width:150px;}
+  .header h1{white-space:nowrap;word-break:keep-all;font-size:.88rem;}
+  .header-sub{white-space:nowrap;word-break:keep-all;}
+  .header .refresh-btn{flex:1 1 auto;text-align:center;white-space:nowrap;padding:.4rem .5rem;font-size:.7rem;margin-right:0;}
   .stats{grid-template-columns:repeat(2,1fr);}
   .date-body{grid-template-columns:1fr;}
   .order-actions{flex-wrap:wrap;row-gap:.35rem;}
@@ -123,7 +126,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
 <body>
 
 <div class="header">
-  <div style="flex:1;">
+  <div class="header-title-wrap">
     <h1>🥐 브레드뱅크 발주 관리</h1>
     <div class="header-sub" id="header-sub">로딩 중...</div>
   </div>
