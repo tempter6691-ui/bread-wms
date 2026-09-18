@@ -3785,8 +3785,8 @@ async function ecPreview() {
             var custCode=client&&client.ecountCode?client.ecountCode:'';
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
-            var finalPrice=(boxMult>1&&adj.price)?Math.round(adj.price/boxMult):adj.price;
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,WH_CD:'100',PRICE:finalPrice});
+            var finalPrice=(boxMult>1&&adj.price)?Math.round(adj.price*boxMult):adj.price;
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:finalPrice});
           });
         });
       }
@@ -3821,8 +3821,8 @@ async function ecPreview() {
       var custCode=client&&client.ecountCode?client.ecountCode:'';
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
-      var finalPrice=(boxMult>1&&adj.price)?Math.round(adj.price/boxMult):adj.price;
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,WH_CD:'100',PRICE:finalPrice});
+      var finalPrice=(boxMult>1&&adj.price)?Math.round(adj.price*boxMult):adj.price;
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:finalPrice});
     });
     }
     // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순으로 정렬
