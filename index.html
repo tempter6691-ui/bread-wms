@@ -3838,6 +3838,23 @@ async function ecPreview() {
       if(ra!==rb) return ra-rb;
       return (a.prodName||'').localeCompare(b.prodName||'','ko');
     });
+    // 같은 날짜+거래처+상품(단가까지 동일)이면 한 줄로 합침 (수량 합산) — 로그 1건당 수량 1씩 여러 줄로 쪼개져 보이던 걸 방지
+    (function(){
+      var mergedMap={}; var mergedRows=[];
+      rows.forEach(function(r){
+        var key=r.IO_DATE+'|'+r.clientName+'|'+r.PROD_CD+'|'+r.PRICE;
+        if(mergedMap[key]){
+          var m=mergedMap[key];
+          m.QTY+=r.QTY; m.origQty+=r.origQty; m.mult=1; // 합쳐진 뒤엔 "N×M=합계" 표기가 의미없어짐
+          if(r.logId) m.logIds.push(r.logId);
+        } else {
+          var copy=Object.assign({},r);
+          copy.logIds=r.logId?[r.logId]:[];
+          mergedMap[key]=copy; mergedRows.push(copy);
+        }
+      });
+      rows=mergedRows;
+    })();
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
     var noPrice=rows.filter(function(r){return r.CUST&&!r.PRICE;});
@@ -4168,9 +4185,11 @@ async function ecMarkSent() {
     var batch=db.batch();
     var n=0;
     sendRows.forEach(function(r){
-      if(!r.logId)return;
-      batch.update(db.collection('logs').doc(r.logId), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
-      n++;
+      var ids=r.logIds&&r.logIds.length?r.logIds:(r.logId?[r.logId]:[]);
+      ids.forEach(function(id){
+        batch.update(db.collection('logs').doc(id), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
+        n++;
+      });
     });
     await batch.commit();
     statusEl.style.color='#16a34a';
@@ -4217,8 +4236,10 @@ async function ecSend() {
         totalSent+=chunkRows.length;
         var batch=db.batch();
         chunkRows.forEach(function(r){
-          if(!r.logId)return;
-          batch.update(db.collection('logs').doc(r.logId), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
+          var ids=r.logIds&&r.logIds.length?r.logIds:(r.logId?[r.logId]:[]);
+          ids.forEach(function(id){
+            batch.update(db.collection('logs').doc(id), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
+          });
         });
         await batch.commit();
       } else {
