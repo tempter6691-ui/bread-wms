@@ -17,6 +17,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
 
 .header{background:var(--primary);color:#fff;padding:.9rem 1rem;display:flex;align-items:center;gap:.6rem;position:sticky;top:0;z-index:100;}
 .header-title-wrap{flex:1;min-width:0;}
+.header-btns{display:flex;align-items:center;}
 .header h1{font-size:.95rem;font-weight:700;flex:1;}
 .header-sub{font-size:.72rem;color:var(--accent);}
 .refresh-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.45rem .8rem;font-size:.78rem;cursor:pointer;font-family:inherit;font-weight:700;}
@@ -110,11 +111,11 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
 
 /* ── 모바일 화면 대응 ── */
 @media (max-width: 640px) {
-  .header{flex-wrap:wrap;row-gap:.4rem;padding:.7rem .9rem;}
-  .header-title-wrap{min-width:150px;}
-  .header h1{white-space:nowrap;word-break:keep-all;font-size:.88rem;}
+  .header{flex-direction:column;align-items:stretch;row-gap:.5rem;padding:.7rem .9rem;}
+  .header h1{white-space:nowrap;word-break:keep-all;font-size:.9rem;}
   .header-sub{white-space:nowrap;word-break:keep-all;}
-  .header .refresh-btn{flex:1 1 auto;text-align:center;white-space:nowrap;padding:.4rem .5rem;font-size:.7rem;margin-right:0;}
+  .header-btns{gap:.4rem;}
+  .header-btns .refresh-btn{flex:1 1 0;text-align:center;white-space:nowrap;padding:.4rem .3rem;font-size:.68rem;margin-right:0!important;}
   .stats{grid-template-columns:repeat(2,1fr);}
   .date-body{grid-template-columns:1fr;}
   .order-actions{flex-wrap:wrap;row-gap:.35rem;}
@@ -130,9 +131,11 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
     <h1>🥐 브레드뱅크 발주 관리</h1>
     <div class="header-sub" id="header-sub">로딩 중...</div>
   </div>
-  <button class="refresh-btn" style="background:var(--primary);margin-right:.4rem;" onclick="toggleNoticeEditor()">📢 공지사항</button>
-  <button class="refresh-btn" style="background:#8fb8d4;margin-right:.4rem;position:relative;" onclick="toggleRequestPanel()">💬 요청사항<span id="request-total-badge" style="margin-left:.3rem;"></span></button>
-  <button class="refresh-btn" onclick="loadOrders()">↻ 새로고침</button>
+  <div class="header-btns">
+    <button class="refresh-btn" style="background:var(--primary);margin-right:.4rem;" onclick="toggleNoticeEditor()">📢 공지사항</button>
+    <button class="refresh-btn" style="background:#8fb8d4;margin-right:.4rem;position:relative;" onclick="toggleRequestPanel()">💬 요청사항<span id="request-total-badge" style="margin-left:.3rem;"></span></button>
+    <button class="refresh-btn" onclick="loadOrders()">↻ 새로고침</button>
+  </div>
 </div>
 
 <div id="notice-panel" style="display:none;background:#fff;padding:.8rem 1rem;border-bottom:1px solid var(--border);">
