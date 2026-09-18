@@ -94,6 +94,14 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 .msg-send-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:0 1rem;font-weight:700;font-family:inherit;cursor:pointer;}
 @keyframes bellBlink { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.3;transform:scale(1.15);} }
 .bell-blink{display:inline-block;animation:bellBlink .9s infinite;margin-left:.35rem;font-size:.8rem;}
+
+/* ── 모바일 화면 대응 ── */
+@media (max-width: 480px) {
+  .header{flex-wrap:wrap;row-gap:.6rem;padding:.8rem 1rem;}
+  .header-info{flex:1 1 100%;order:1;}
+  .hbtn{order:2;flex:1 1 auto;white-space:nowrap;text-align:center;padding:.5rem .5rem;font-size:.72rem;}
+  .cat-wrap{top:88px;}
+}
 </style>
 </head>
 <body>
