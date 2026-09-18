@@ -97,10 +97,11 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#222;min-h
 
 /* ── 모바일 화면 대응 ── */
 @media (max-width: 480px) {
-  .header{flex-wrap:wrap;row-gap:.6rem;padding:.8rem 1rem;}
-  .header-info{flex:1 1 100%;order:1;}
-  .hbtn{order:2;flex:1 1 auto;white-space:nowrap;text-align:center;padding:.5rem .5rem;font-size:.72rem;}
-  .cat-wrap{top:88px;}
+  .header{flex-wrap:wrap;row-gap:.4rem;padding:.7rem .9rem;gap:.5rem;}
+  .header-info{min-width:150px;}
+  .header-title,.header-client{white-space:nowrap;word-break:keep-all;}
+  .hbtn{flex:1 1 auto;white-space:nowrap;text-align:center;padding:.4rem .3rem;font-size:.68rem;}
+  .cat-wrap{top:76px;}
 }
 </style>
 </head>
