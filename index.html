@@ -3785,7 +3785,7 @@ async function ecPreview() {
             var custCode=client&&client.ecountCode?client.ecountCode:'';
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
-            var finalPrice=(boxMult>1&&adj.price)?Math.round(adj.price*boxMult):adj.price;
+            var finalPrice=adj.price;
             rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:finalPrice});
           });
         });
@@ -3821,7 +3821,7 @@ async function ecPreview() {
       var custCode=client&&client.ecountCode?client.ecountCode:'';
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
-      var finalPrice=(boxMult>1&&adj.price)?Math.round(adj.price*boxMult):adj.price;
+      var finalPrice=adj.price;
       rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:finalPrice});
     });
     }
