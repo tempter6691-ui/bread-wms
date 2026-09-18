@@ -106,6 +106,18 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:#4a4a4a;mi
 .req-count-badge{background:var(--danger);color:#fff;font-size:.68rem;font-weight:700;border-radius:10px;padding:1px 7px;}
 .req-msg-row{display:flex;margin-bottom:.4rem;}
 .req-msg-bubble{max-width:78%;padding:.5rem .75rem;border-radius:12px;font-size:.8rem;line-height:1.5;word-break:break-word;}
+
+/* ── 모바일 화면 대응 ── */
+@media (max-width: 640px) {
+  .header{flex-wrap:wrap;row-gap:.5rem;}
+  .header > div:first-child{flex:1 1 100%;order:1;}
+  .header .refresh-btn{order:2;flex:1 1 auto;text-align:center;white-space:nowrap;}
+  .stats{grid-template-columns:repeat(2,1fr);}
+  .date-body{grid-template-columns:1fr;}
+  .order-actions{flex-wrap:wrap;row-gap:.35rem;}
+  .order-actions input[type="date"]{flex:1 1 auto;min-width:0;}
+  .order-actions .btn-sm{white-space:nowrap;}
+}
 </style>
 </head>
 <body>
@@ -212,11 +224,16 @@ let allOrders = [];
 let clients = {}; // name -> driver
 let statusFilter = 'all';
 let prodCatMap = {}; // pid -> cat (품목 그룹핑용, 최초 1회 로드 후 캐시)
+let prodUnitMap = {}; // pid -> unit (제품관리 화면의 실제 단위 — 발주앱에서 넘어온 값은 신뢰하지 않고 항상 이걸로 덮어씀)
 async function loadProdCatMap() {
   if (Object.keys(prodCatMap).length) return prodCatMap;
   try {
     var snap = await db.collection('products').get();
-    snap.forEach(function(doc){ prodCatMap[doc.id] = (doc.data()||{}).cat || ''; });
+    snap.forEach(function(doc){
+      var d = doc.data()||{};
+      prodCatMap[doc.id] = d.cat || '';
+      prodUnitMap[doc.id] = d.unit || '';
+    });
   } catch(e) { console.error('제품 분류 로드 실패:', e.message); }
   return prodCatMap;
 }
@@ -709,8 +726,11 @@ async function exportToOrder(id) {
   var driver = clients[resolvedClient] || '';
 
   // 출고지시서 items 형태로 변환 (item에는 driver 불필요 - 거래처 레벨에만 저장)
+  // 단위(unit)는 발주 당시 저장된 스냅샷을 그대로 믿지 않고, 지금 제품관리 화면의 실제 단위로 덮어씀
+  // (제품 단위를 나중에 고쳐도 이미 들어온 주문엔 옛날 값이 그대로 남아있어서 "봉"이 계속 재발하던 문제)
+  await loadProdCatMap();
   var newItems = (o.items||[]).map(function(item){
-    return { pid: item.pid, pname: item.pname||'', qty: item.qty, unit: item.unit||'판', scanned: 0, done: false };
+    return { pid: item.pid, pname: item.pname||'', qty: item.qty, unit: prodUnitMap[item.pid] || item.unit || '판', scanned: 0, done: false };
   });
 
   exportInProgress[id] = true;
