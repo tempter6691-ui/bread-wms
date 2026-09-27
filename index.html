@@ -2258,9 +2258,9 @@ function printOrders() {
           var lNameStyle=cellStyle(lu,true), lQtyStyle=cellStyle(lu,false);
           var rNameStyle=cellStyle(ru,true), rQtyStyle=cellStyle(ru,false);
           html += '<tr>'+
-            '<td style="'+lNameStyle+'">'+printItemName(lp, left[i].pid)+'</td>'+
+            '<td style="'+lNameStyle+'">'+(lp?(lp.cat&&lp.cat.indexOf("마카롱")>=0||lp.id==="P110"||lp.id==="P111"?lp.name:lp.name.replace(/\(.*$/,"")):left[i].pid)+'</td>'+
             '<td class="qty" style="'+lQtyStyle+'">'+(left[i].qty)+'</td>'+
-            '<td style="'+rNameStyle+'">'+(rItem?printItemName(rp, rItem.pid):"")+'</td>'+
+            '<td style="'+rNameStyle+'">'+(rItem?(rp?(rp.cat&&rp.cat.indexOf("마카롱")>=0||rp.id==="P110"||rp.id==="P111"?rp.name:rp.name.replace(/\(.*$/,"")):rItem.pid):"")+'</td>'+
             '<td class="qty" style="'+rQtyStyle+'">'+(rItem?rItem.qty:'')+'</td>'+
           '</tr>';
         }
@@ -3491,19 +3491,47 @@ async function doRestore(input) {
   try {
     var data=JSON.parse(text);
     if(!confirm('복원할까요? 현재 데이터가 덮어씌워집니다.')) return;
-    if(data.prods){S.prods=data.prods;var b=db.batch();S.prods.forEach(function(p){
-      // 상품의 ecountCode/ecountQtyMultiplier/orderUnitDivisor(이카운트·비즈모아 연동용)도
-      // 거래처 코드와 같은 이유로 복원 대상에서 제외 (2026-08-21)
-      var pCopy=Object.assign({},p);delete pCopy.id;delete pCopy.ecountCode;delete pCopy.ecountQtyMultiplier;delete pCopy.orderUnitDivisor;
-      b.set(db.collection('products').doc(p.id),pCopy,{merge:true});
-    });await b.commit();}
-    if(data.clients){S.clients=data.clients;var b2=db.batch();S.clients.forEach(function(c){
-      // 거래처의 code/ecountCode(이카운트·비즈모아 연동 코드)는 백업 시점 이후 새로 입력/수정됐을 수 있어서
-      // 복원 대상에서 제외 — 예전 백업을 복원해도 최근에 등록한 코드가 되돌아가지 않도록 함
-      // (2026-08-21 추가: "코드가 자꾸 바뀌는 것 같다"는 문의로 원인 조사 중 발견한 위험 요소를 사전 차단)
-      var cCopy=Object.assign({},c);delete cCopy.id;delete cCopy.code;delete cCopy.ecountCode;
-      b2.set(db.collection('clients').doc(c.id),cCopy,{merge:true});
-    });await b2.commit();}
+    if(data.prods){
+      // 2026-09-28 수정: 예전 백업을 복원하면 name/cat/unit 등 그 이후에 수정된 필드가
+      // 통째로 되살아나는(예: "체리쿠키(1kg/봉)" → "체리쿠키") 사고가 반복 발생하여,
+      // "이미 존재하는 상품"은 절대 덮어쓰지 않고 "백업에는 있지만 현재 사라진 상품"만
+      // 복원하도록 범위를 좁힘. (과거엔 ecountCode 등 3개 필드만 제외했었는데,
+      // 그 정도로는 부족해서 근본적으로 살아있는 상품은 아예 건드리지 않게 변경)
+      var existingSnap=await db.collection('products').get();
+      var existingIds={}; existingSnap.forEach(function(d){existingIds[d.id]=true;});
+      var missingProds=data.prods.filter(function(p){return !existingIds[p.id];});
+      if(missingProds.length){
+        var b=db.batch();
+        missingProds.forEach(function(p){
+          var pCopy=Object.assign({},p);delete pCopy.id;delete pCopy.ecountCode;delete pCopy.ecountQtyMultiplier;delete pCopy.orderUnitDivisor;
+          b.set(db.collection('products').doc(p.id),pCopy,{merge:true});
+        });
+        await b.commit();
+        toast(missingProds.length+'개 삭제된 상품만 복원했습니다 (기존 상품은 보호됨)','ok');
+      } else {
+        toast('복원할 상품 없음 (모든 상품이 이미 존재 — 기존 데이터 보호됨)','ok');
+      }
+    }
+    if(data.clients){
+      // 2026-09-28 수정: code/ecountCode만 제외해도 name 등 다른 필드가 여전히
+      // 되살아날 수 있었던 문제(상품 쪽과 동일한 원인) → 이미 존재하는 거래처는
+      // 아예 건드리지 않고, 백업에는 있지만 현재 삭제된 거래처만 복원하도록 변경
+      var existingClientSnap=await db.collection('clients').get();
+      var existingClientIds={}; existingClientSnap.forEach(function(d){existingClientIds[d.id]=true;});
+      var missingClients=data.clients.filter(function(c){return !existingClientIds[c.id];});
+      S.clients=data.clients;
+      if(missingClients.length){
+        var b2=db.batch();
+        missingClients.forEach(function(c){
+          var cCopy=Object.assign({},c);delete cCopy.id;delete cCopy.code;delete cCopy.ecountCode;
+          b2.set(db.collection('clients').doc(c.id),cCopy,{merge:true});
+        });
+        await b2.commit();
+        toast(missingClients.length+'개 삭제된 거래처만 복원했습니다 (기존 거래처는 보호됨)','ok');
+      } else {
+        toast('복원할 거래처 없음 (모든 거래처가 이미 존재 — 기존 데이터 보호됨)','ok');
+      }
+    }
     if(data.inv){S.inv=data.inv;var b3=db.batch();Object.keys(data.inv).forEach(function(id){b3.set(db.collection('inventory').doc(id),{qty:data.inv[id]});});await b3.commit();}
     if(data.orders){S.orders=data.orders;var b4=db.batch();Object.keys(data.orders).forEach(function(d){b4.set(db.collection('orders').doc(d),data.orders[d]);});await b4.commit();}
     if(data.templates){S.templates=data.templates;var b5=db.batch();Object.keys(data.templates).forEach(function(k){b5.set(db.collection('templates').doc(k),data.templates[k]);});await b5.commit();}
@@ -3715,30 +3743,11 @@ function ecAdjustNamePrice(prod, price) {
   var cleanName = rawName.replace(/\s*\d+\s*단\s*$/, '').trim();
   var adjPrice = price;
   // 마카롱 1단 절반 보정: 가격이 이미 정상 등록된 색상은 제외 목록에 추가
-  var macaronHalvingExceptions = ['마카롱퍼플1단', '마카롱엘로우1단', '마카롱초코1단', '마카롱로즈1단', '마카롱그린1단'];
+  var macaronHalvingExceptions = ['마카롱퍼플1단', '마카롱옐로우1단', '마카롱초코1단', '마카롱로즈1단', '마카롱그린1단'];
   if (tierMatch && tierMatch[1] === '1' && rawName.indexOf('마카롱') !== -1 && price && macaronHalvingExceptions.indexOf(rawName) === -1) {
     adjPrice = Math.round(price / 2);
   }
   return {name: cleanName, price: adjPrice};
-}
-
-// "(N개/box)" 또는 "(N개/박스)" 표기가 있는 상품 이름에서 배수(N)를 뽑아냄 — 이카운트/비즈모아 공용
-function boxUnitMult(name){
-  var m = (name||'').match(/\((\d+)\s*개\s*\/\s*(box|박스)\)/i);
-  if(m) return parseInt(m[1],10);
-  var m2 = (name||'').match(/\(2\s*개\s*\/\s*봉\)/i);
-  if(m2) return 2;
-  var NAME_BOX_MULT = { '바나나3JWG호': 2, '녹차3JWG호': 2, '3호생크림케익(화이트아이씽JWG용)': 2, '3호생크림아이씽컷팅JWG': 2, '당근3호JWG': 2 };
-  if(NAME_BOX_MULT[name]) return NAME_BOX_MULT[name];
-  return 1;
-}
-
-// 배송 출력용지용 이름 축약 — "(2개/box)"류 포장단위 표기만 지우고, "(생지)"처럼 의미있는 설명은 남김
-// (예전엔 "(" 이후 전부 잘라버려서 새 상품에 괄호 설명이 붙을 때마다 매번 재발하던 버그를 근본적으로 고침)
-function printItemName(p, fallbackId){
-  if(!p) return fallbackId;
-  if((p.cat&&p.cat.indexOf('마카롱')>=0)||p.id==='P110'||p.id==='P111') return p.name;
-  return (p.name||'').replace(/\s*\(\s*\d+\s*(개|kg|g)\s*\/\s*(box|박스|봉|판)\s*\)\s*$/i,'').trim();
 }
 
 async function ecPreview() {
@@ -3780,13 +3789,11 @@ async function ecPreview() {
             if(!prod) return;
             var ecCode=prod.ecountCode||prod.id;
             var mult=prod.ecountQtyMultiplier||1;
-            var boxMult=boxUnitMult(prod.name);
             var client=S.clients.find(function(c){return c.name===clientName||(c.aliases&&c.aliases.indexOf(clientName)!==-1);});
             var custCode=client&&client.ecountCode?client.ecountCode:'';
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
-            var finalPrice=adj.price;
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:finalPrice});
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
           });
         });
       }
@@ -3816,13 +3823,11 @@ async function ecPreview() {
       if(!prod){ noProdWarnings.push((d.client||'?')+' - '+(d.pname||d.pid)+' ('+logDate.slice(0,4)+'-'+logDate.slice(4,6)+'-'+logDate.slice(6,8)+')'); return; }
       var ecCode=prod.ecountCode||prod.id;
       var mult=prod.ecountQtyMultiplier||1;
-      var boxMult=boxUnitMult(prod.name);
       var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
       var custCode=client&&client.ecountCode?client.ecountCode:'';
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
-      var finalPrice=adj.price;
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:finalPrice});
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
     });
     }
     // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순으로 정렬
@@ -3831,30 +3836,10 @@ async function ecPreview() {
       if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
       var ca=a.clientName||'', cb=b.clientName||'';
       if(ca!==cb) return ca.localeCompare(cb,'ko');
-      // 미니와플은 거래처 불문하고 항상 해당 거래처 품목 맨 끝에 오도록 (카테고리 정렬보다 우선)
-      var aMW=(a.prodName||'').indexOf('미니와플')!==-1, bMW=(b.prodName||'').indexOf('미니와플')!==-1;
-      if(aMW!==bMW) return aMW?1:-1;
       var ra=catRank(a.cat), rb=catRank(b.cat);
       if(ra!==rb) return ra-rb;
       return (a.prodName||'').localeCompare(b.prodName||'','ko');
     });
-    // 같은 날짜+거래처+상품(단가까지 동일)이면 한 줄로 합침 (수량 합산) — 로그 1건당 수량 1씩 여러 줄로 쪼개져 보이던 걸 방지
-    (function(){
-      var mergedMap={}; var mergedRows=[];
-      rows.forEach(function(r){
-        var key=r.IO_DATE+'|'+r.clientName+'|'+r.PROD_CD+'|'+r.PRICE;
-        if(mergedMap[key]){
-          var m=mergedMap[key];
-          m.QTY+=r.QTY; m.origQty+=r.origQty; m.mult=1; // 합쳐진 뒤엔 "N×M=합계" 표기가 의미없어짐
-          if(r.logId) m.logIds.push(r.logId);
-        } else {
-          var copy=Object.assign({},r);
-          copy.logIds=r.logId?[r.logId]:[];
-          mergedMap[key]=copy; mergedRows.push(copy);
-        }
-      });
-      rows=mergedRows;
-    })();
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
     var noPrice=rows.filter(function(r){return r.CUST&&!r.PRICE;});
@@ -3963,8 +3948,18 @@ function ecExportExcel() {
 // ── 비즈모아(BizMore) ERP 전송 ──────────────────────────────────
 // 이카운트와 별도 플래그(bmSent)로 관리 — 이카운트에 이미 보냈어도 비즈모아 쪽은 독립적으로 미전송 상태일 수 있음
 async function bmPreview() {
-  // "(N개/box)" 또는 "(N개/박스)" 표기 배수 로직은 이제 ecPreview와 공용인 boxUnitMult()를 그대로 사용
-  var bmBoxMult = boxUnitMult;
+  // "(N개/box)" 또는 "(N개/박스)" 표기가 있는 상품은 이카운트는 "판" 단위지만 비즈모아는 "개" 단위로 넣어야 함
+  // → 수량은 N배, 단가는 N분의 1로 환산
+  function bmBoxMult(name){
+    var m = (name||'').match(/\((\d+)\s*개\s*\/\s*(box|박스)\)/i);
+    if(m) return parseInt(m[1],10);
+    var m2 = (name||'').match(/\(2\s*개\s*\/\s*봉\)/i);
+    if(m2) return 2;
+    // 이름에 괄호표기가 없지만 "판 1개 = N개"로 환산해야 하는 제품들 (WMS는 판 단위, 비즈모아는 개당 단위)
+    var NAME_BOX_MULT = { '바나나3JWG호': 2, '녹차3JWG호': 2, '3호생크림케익(화이트아이씽JWG용)': 2, '3호생크림아이씽컷팅JWG': 2, '당근3호JWG': 2 };
+    if(NAME_BOX_MULT[name]) return NAME_BOX_MULT[name];
+    return 1;
+  }
   var fromRaw=(document.getElementById('bm-from')||{}).value||'';
   var toRaw=(document.getElementById('bm-to')||{}).value||'';
   if(!fromRaw||!toRaw){alert('날짜를 선택해주세요.');return;}
@@ -4049,9 +4044,6 @@ async function bmPreview() {
       if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
       var ca=a.clientName||'', cb=b.clientName||'';
       if(ca!==cb) return ca.localeCompare(cb,'ko');
-      // 미니와플은 거래처 불문하고 항상 해당 거래처 품목 맨 끝에 오도록 (카테고리 정렬보다 우선)
-      var aMW=(a.prodName||'').indexOf('미니와플')!==-1, bMW=(b.prodName||'').indexOf('미니와플')!==-1;
-      if(aMW!==bMW) return aMW?1:-1;
       var ra=catRank(a.cat), rb=catRank(b.cat);
       if(ra!==rb) return ra-rb;
       return (a.prodName||'').localeCompare(b.prodName||'','ko');
@@ -4185,11 +4177,9 @@ async function ecMarkSent() {
     var batch=db.batch();
     var n=0;
     sendRows.forEach(function(r){
-      var ids=r.logIds&&r.logIds.length?r.logIds:(r.logId?[r.logId]:[]);
-      ids.forEach(function(id){
-        batch.update(db.collection('logs').doc(id), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
-        n++;
-      });
+      if(!r.logId)return;
+      batch.update(db.collection('logs').doc(r.logId), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
+      n++;
     });
     await batch.commit();
     statusEl.style.color='#16a34a';
@@ -4236,10 +4226,8 @@ async function ecSend() {
         totalSent+=chunkRows.length;
         var batch=db.batch();
         chunkRows.forEach(function(r){
-          var ids=r.logIds&&r.logIds.length?r.logIds:(r.logId?[r.logId]:[]);
-          ids.forEach(function(id){
-            batch.update(db.collection('logs').doc(id), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
-          });
+          if(!r.logId)return;
+          batch.update(db.collection('logs').doc(r.logId), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
         });
         await batch.commit();
       } else {
