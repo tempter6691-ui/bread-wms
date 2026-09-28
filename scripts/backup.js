@@ -6,9 +6,20 @@ const fs = require('fs');
 const path = require('path');
 const { db } = require('./lib/admin');
 
-const DEFAULT = ['products', 'clients', 'inventory', 'templates', 'drivers', 'settings', 'recipes', 'ingredientEcountMap'];
+//       npm run backup -- logs --allow-large  (대용량 컬렉션 포함)
+const DEFAULT = ['products', 'clients', 'inventory', 'orders', 'templates', 'drivers', 'settings', 'recipes', 'ingredientEcountMap'];
+// 2026-09-28: logs(2만 건 이상) 전체 백업하다 무료 요금제 일일 읽기 한도(5만)를 초과해서
+// 운영 페이지까지 영향 → 대용량 컬렉션은 --allow-large 없이는 건너뜀
+const LARGE = ['logs', 'priceHistory'];
+const allowLarge = process.argv.includes('--allow-large');
 const names = process.argv.slice(2).filter(a => !a.startsWith('--'));
-const targets = names.length ? names : DEFAULT;
+const targets = (names.length ? names : DEFAULT).filter(n => {
+  if (LARGE.includes(n) && !allowLarge) {
+    console.log('  ' + n.padEnd(22) + '건너뜀 (대용량 — 포함하려면 --allow-large)');
+    return false;
+  }
+  return true;
+});
 
 (async () => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');

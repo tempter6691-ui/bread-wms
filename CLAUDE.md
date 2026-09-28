@@ -15,6 +15,9 @@ GitHub에 "Add files via upload"로 올려서 배포함.
 - 키: 프로젝트 루트의 `serviceAccountKey.json`, 또는 `FIREBASE_KEY` 환경변수로 경로 지정. 둘 다 gitignore 처리됨. **키 파일은 절대 커밋하거나 출력하지 말 것.**
 - `npm run check` — 읽기 전용 연결 확인 + 컬렉션별 문서 수.
 - `npm run backup [-- 컬렉션...]` — `backups/<타임스탬프>/`에 JSON으로 덤프(gitignore 처리됨).
+  `logs`, `priceHistory`는 `--allow-large`를 붙여야만 포함됨.
+- **읽기 한도 주의:** 무료 요금제 일일 읽기 한도(5만 건, 16:00 KST 초기화)를 운영 페이지들과 같이 씀.
+  2026-09-28에 logs 전체를 읽다가 한도를 넘김. 대량으로 읽기 전에 문서 수를 확인하고 사용자에게 알릴 것.
 - 새 스크립트는 `require('./lib/admin')`으로 `{ db, FieldValue, FieldPath, APPLY }`를 가져와 씀.
 - **쓰기 스크립트 규칙:** 기본은 dry-run(변경 예정 내용만 출력)이고, `--apply`를 붙였을 때만 반영. 반영 전에 먼저 `npm run backup`으로 해당 컬렉션을 백업. 운영 데이터이므로 반영하기 전에 사용자에게 dry-run 결과를 보여주고 확인받을 것.
 - 재고 수량은 `FieldValue.increment()`로 변경(앱과 동일한 방식). 스캔이 동시에 일어나므로 읽은 값에 더해서 `set`하지 말 것.
