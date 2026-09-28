@@ -1772,6 +1772,7 @@ function drawOrdCard(name, data) {
     '<input type="text" placeholder="📝 특이사항 메모..." value="'+memo.replace(/"/g,'&quot;')+'" style="flex:1;padding:.3rem .6rem;font-size:.8rem;border:1px solid #e0e0e0;border-radius:6px;background:#fffde7;color:#555;min-width:0;" onchange="saveMemo(\''+en+'\',this.value)" onblur="saveMemo(\''+en+'\',this.value)">'+
       lockBtn+
       '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="moveOrdClient(\''+en+'\')" >이동</button>'+
+      '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="copyOrdClient(\''+en+'\')" >복사</button>'+
       '<button class="btn btn-danger btn-sm" onclick="removeOrdClient(\''+en+'\')">삭제</button>'+
     '</div>'+
     (!locked?'<input type="text" placeholder="품목 검색 후 추가..." style="width:100%;padding:.4rem;margin-bottom:.3rem;" oninput="searchProd(\''+en+'\',\''+sid+'\',this.value)">':'')+
@@ -2109,6 +2110,55 @@ async function moveOrdClientConfirm() {
       toast(name+' → '+targetDate+' ('+targetDriver+') 이동 완료!', 'ok');
     }
     document.getElementById('moveModal').style.display='none';
+    render();
+  } catch(e){ toast('오류: '+e.message, 'err'); }
+}
+
+// 다른 날짜 출고지시서를 그대로 복사(원본은 유지) — 매주 물량이 거의 비슷한 거래처용
+function copyOrdClient(name) {
+  var modal = document.getElementById('copyModal');
+  document.getElementById('copyModal_clientName').textContent = name;
+  document.getElementById('copyModal_name').value = name;
+  var sel = document.getElementById('copyModal_driver');
+  sel.innerHTML = '';
+  DRIVERS.forEach(function(d){
+    var op = document.createElement('option'); op.value=d; op.textContent=d;
+    var cur = (S.orders[S.ordDate]||{})[name];
+    if(cur && cur.driver === d) op.selected = true;
+    sel.appendChild(op);
+  });
+  // 날짜 기본값 = 오늘 (보통 "이번 주도 거의 동일"해서 오늘자로 복사하는 용도)
+  document.getElementById('copyModal_date').value = todayStr();
+  modal.style.display = 'flex';
+}
+
+async function copyOrdClientConfirm() {
+  var name = document.getElementById('copyModal_name').value;
+  var targetDriver = document.getElementById('copyModal_driver').value;
+  var targetDate = document.getElementById('copyModal_date').value;
+  if(!targetDate) { alert('날짜를 선택해주세요'); return; }
+  var fromDate = S.ordDate;
+  try {
+    var fromOrd = S.orders[fromDate] || {};
+    var src = fromOrd[name];
+    if(!src) { alert('데이터가 없어요'); return; }
+    if(targetDate === fromDate && (S.orders[targetDate]||{})[name]) {
+      if(!confirm('같은 날짜에 '+name+' 출고지시서가 이미 있습니다. 덮어쓸까요?')) return;
+    }
+    // 원본은 그대로 두고, 품목/수량만 복사한 새 데이터 생성 (잠금·이전수량이력은 초기화)
+    var data = {
+      items: (src.items||[]).map(function(it){ return {pid:it.pid, qty:it.qty}; }),
+      driver: targetDriver,
+      locked: false,
+      memo: src.memo || ''
+    };
+    if(!S.orders[targetDate]) S.orders[targetDate] = {};
+    S.orders[targetDate][name] = data;
+    await safeWrite(async function() {
+      await db.collection('orders').doc(targetDate).set({[name]: data}, {merge:true});
+    });
+    toast(name+' → '+targetDate+' ('+targetDriver+') 복사 완료! (원본 유지됨)', 'ok');
+    document.getElementById('copyModal').style.display='none';
     render();
   } catch(e){ toast('오류: '+e.message, 'err'); }
 }
@@ -3676,6 +3726,30 @@ function playBeep(kind){
         style="padding:.5rem 1rem;border:1.5px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:.88rem;">취소</button>
       <button onclick="moveOrdClientConfirm()"
         style="padding:.5rem 1.2rem;background:#2d7dd2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:600;">이동</button>
+    </div>
+  </div>
+</div>
+
+<div id="copyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:1.5rem;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="font-weight:700;font-size:1rem;margin-bottom:1rem;">📋 거래처 출고지시서 복사</div>
+    <div style="font-size:.85rem;color:#555;margin-bottom:1rem;">
+      <strong id="copyModal_clientName"></strong> 의 품목/수량을 그대로 복사합니다 (원본은 그대로 유지)
+    </div>
+    <input type="hidden" id="copyModal_name">
+
+    <label style="font-size:.8rem;font-weight:600;color:#444;display:block;margin-bottom:.3rem;">기사 선택</label>
+    <select id="copyModal_driver" style="width:100%;border:1.5px solid #ddd;border-radius:8px;padding:.5rem .75rem;font-size:.9rem;margin-bottom:1rem;">
+    </select>
+
+    <label style="font-size:.8rem;font-weight:600;color:#444;display:block;margin-bottom:.3rem;">붙여넣을 날짜</label>
+    <input type="date" id="copyModal_date" style="width:100%;border:1.5px solid #ddd;border-radius:8px;padding:.5rem .75rem;font-size:.9rem;margin-bottom:1.2rem;box-sizing:border-box;">
+
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+      <button onclick="document.getElementById('copyModal').style.display='none'"
+        style="padding:.5rem 1rem;border:1.5px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:.88rem;">취소</button>
+      <button onclick="copyOrdClientConfirm()"
+        style="padding:.5rem 1.2rem;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:600;">복사</button>
     </div>
   </div>
 </div>
