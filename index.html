@@ -3321,10 +3321,11 @@ async function loadLogs() {
           '</div>'+
         '</div>'+
         '<table style="border-radius:0 0 4px 4px;overflow:hidden;">'+
-        '<thead><tr><th>제품명</th><th style="text-align:center;width:140px;">입고 수량</th></tr></thead><tbody>'+
-        Object.keys(prods).sort().map(function(pname){
+        // 2026-09-29 수정: 입고 기록 테이블에 번호(#) 컬럼 추가
+        '<thead><tr><th style="width:2.5em;text-align:center;">#</th><th>제품명</th><th style="text-align:center;width:140px;">입고 수량</th></tr></thead><tbody>'+
+        Object.keys(prods).sort().map(function(pname,idx){
           var q=prods[pname];
-          return '<tr><td>'+pname+'</td><td style="text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:.4rem;">'+
+          return '<tr><td style="text-align:center;color:#888;">'+(idx+1)+'</td><td>'+pname+'</td><td style="text-align:center;"><div style="display:flex;align-items:center;justify-content:center;gap:.4rem;">'+
             '<button class="btn btn-danger btn-sm" onclick="adjustLogQty(\''+esc(pname)+'\',\''+date+'\',-1)" style="padding:.15rem .5rem;">-1</button>'+
             '<span style="font-weight:bold;color:#27ae60;min-width:2.2em;display:inline-block;">'+(q>=0?'+':'')+q+'</span>'+
             '<button class="btn btn-success btn-sm" onclick="adjustLogQty(\''+esc(pname)+'\',\''+date+'\',1)" style="padding:.15rem .5rem;">+1</button>'+
