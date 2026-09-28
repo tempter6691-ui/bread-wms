@@ -1,0 +1,10 @@
+# Node
+node_modules/
+
+# Firebase 서비스 계정 키 — 절대 커밋 금지 (Firestore 전체 관리자 권한)
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+secrets/
+
+# 스크립트로 뽑은 Firestore 백업 (실데이터)
+backups/

@@ -3817,7 +3817,9 @@ function ecAdjustNamePrice(prod, price) {
   var cleanName = rawName.replace(/\s*\d+\s*단\s*$/, '').trim();
   var adjPrice = price;
   // 마카롱 1단 절반 보정: 가격이 이미 정상 등록된 색상은 제외 목록에 추가
-  var macaronHalvingExceptions = ['마카롱퍼플1단', '마카롱옐로우1단', '마카롱초코1단', '마카롱로즈1단', '마카롱그린1단'];
+  // 2026-09-28 수정: 실제 상품명은 "마카롱엘로우1단"(P053)인데 목록엔 "옐로우"만 있어서
+  // 노랑 1단만 단가가 절반으로 전송되던 문제 → 실제 표기 추가 (옐로우는 이름이 바뀔 경우 대비해 유지)
+  var macaronHalvingExceptions = ['마카롱퍼플1단', '마카롱엘로우1단', '마카롱옐로우1단', '마카롱초코1단', '마카롱로즈1단', '마카롱그린1단'];
   if (tierMatch && tierMatch[1] === '1' && rawName.indexOf('마카롱') !== -1 && price && macaronHalvingExceptions.indexOf(rawName) === -1) {
     adjPrice = Math.round(price / 2);
   }

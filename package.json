@@ -1,0 +1,22 @@
+{
+  "name": "bread-wms-scripts",
+  "version": "1.0.0",
+  "description": "더브레드뱅크 WMS Firestore admin scripts",
+  "scripts": {
+    "check": "node scripts/check-connection.js",
+    "backup": "node scripts/backup.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tempter6691-ui/bread-wms.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tempter6691-ui/bread-wms/issues"
+  },
+  "homepage": "https://github.com/tempter6691-ui/bread-wms#readme",
+  "private": true,
+  "dependencies": {
+    "firebase-admin": "^14.5.0"
+  }
+}
