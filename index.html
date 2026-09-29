@@ -3811,6 +3811,38 @@ async function ensurePriceHistoryLoaded(clientIds) {
   }
 }
 
+// 2026-09-29 추가: 이카운트/비즈모아 미리보기에서 "확인필요"(단가 없음) 항목을 바로 입력하는 버튼용.
+// priceHistory에 clientDocId/pid/price로 등록 후 미리보기 새로고침. 입력값은 WMS 단위 기준 단가이고,
+// 전송 시 보정(마카롱 1단 절반, 비즈모아 개환산 등)은 기존처럼 자동 적용됨.
+// 같은 거래처+상품 문서가 이미 있으면(단가 0 등) 새로 만들지 않고 그 문서를 업데이트 — 중복 문서가 생기면 어느 단가가 쓰일지 불확실해짐.
+async function promptSetPrice(pid, clientId, clientName, prodName, refreshFn) {
+  if (!pid || !clientId) { alert('거래처 또는 상품 정보가 없어서 단가를 등록할 수 없어요.'); return; }
+  var input = prompt('['+clientName+'] '+prodName+'\n단가를 입력해주세요 (WMS 단위 기준, 원).\n※ 마카롱 1단 절반·비즈모아 개환산 등은 전송 시 자동 보정됩니다.', '');
+  if (input === null) return;
+  var price = Number(String(input).replace(/[,\s원]/g, ''));
+  if (!isFinite(price) || price <= 0) { alert('0보다 큰 숫자로 입력해주세요.'); return; }
+  try {
+    var snap = await db.collection('priceHistory').where('clientDocId','==',clientId).where('pid','==',pid).get();
+    var now = firebase.firestore.FieldValue.serverTimestamp();
+    if (snap.empty) {
+      await db.collection('priceHistory').add({clientDocId: clientId, pid: pid, price: price, updatedAt: now});
+    } else {
+      var batch = db.batch();
+      snap.forEach(function(d){ batch.update(d.ref, {price: price, updatedAt: now}); });
+      await batch.commit();
+    }
+    S.priceHistory[clientId+'__'+pid] = price;
+    toast('단가 등록: '+prodName+' '+price.toLocaleString()+'원', 'ok');
+    if (typeof refreshFn === 'function') await refreshFn();
+  } catch(e) { alert('단가 등록 실패: '+e.message); }
+}
+// 미리보기 표의 "확인필요" 칸 → "💰 입력" 버튼. 거래처를 못 찾은 행은 등록할 곳이 없으니 기존 텍스트 유지.
+function priceInputBtn(r, refreshName) {
+  if (!r.pid || !r.clientId) return '확인필요';
+  var a = function(s){ return esc(String(s||'')).replace(/"/g,'&quot;'); };
+  return '<button class="btn btn-gray btn-sm" style="padding:.1rem .45rem;font-size:.72rem;color:#d97706;" onclick="promptSetPrice(\''+a(r.pid)+'\',\''+a(r.clientId)+'\',\''+a(r.clientName)+'\',\''+a(r.prodName)+'\','+refreshName+')">💰 입력</button>';
+}
+
 // 이카운트 전송용 품목명/단가 보정: "N단" 접미사 제거 + 마카롱 1단은 단가 절반
 function ecAdjustNamePrice(prod, price) {
   var rawName = (prod.name||'').trim();
@@ -3870,7 +3902,7 @@ async function ecPreview() {
             var custCode=client&&client.ecountCode?client.ecountCode:'';
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:item.pid,clientId:client?client.id:null});
           });
         });
       }
@@ -3904,7 +3936,7 @@ async function ecPreview() {
       var custCode=client&&client.ecountCode?client.ecountCode:'';
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price});
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:d.pid,clientId:client?client.id:null});
     });
     }
     // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순으로 정렬
@@ -3954,7 +3986,7 @@ async function ecPreview() {
         '<td style="padding:.35rem .6rem;">'+r.prodName+'</td>'+
         '<td style="padding:.35rem .6rem;">'+r.PROD_CD+'</td>'+
         '<td style="padding:.35rem .6rem;text-align:right;">'+qtyDisp+'</td>'+
-        '<td style="padding:.35rem .6rem;text-align:right;color:'+(r.PRICE?'#333':'#d97706')+';">'+(r.PRICE?r.PRICE.toLocaleString():'확인필요')+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;color:'+(r.PRICE?'#333':'#d97706')+';">'+(r.PRICE?r.PRICE.toLocaleString():priceInputBtn(r,'ecPreview'))+'</td>'+
       '</tr>';
     });
     html+='</tbody></table></div>';
@@ -4079,7 +4111,7 @@ async function bmPreview() {
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
             var boxMult=bmBoxMult(prod.name);
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price});
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:item.pid,clientId:client?client.id:null});
           });
         });
       }
@@ -4113,7 +4145,7 @@ async function bmPreview() {
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
       var boxMult=bmBoxMult(prod.name);
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price});
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:d.pid,clientId:client?client.id:null});
     });
     }
     // ecPreview와 동일하게, 거래처별로 묶여 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순 정렬
@@ -4156,7 +4188,7 @@ async function bmPreview() {
         '<td style="padding:.35rem .6rem;">'+r.PROD_CD+'</td>'+
         '<td style="padding:.35rem .6rem;">'+r.prodName+'</td>'+
         '<td style="padding:.35rem .6rem;text-align:right;">'+qtyDisp+'</td>'+
-        '<td style="padding:.35rem .6rem;text-align:right;color:'+(r.PRICE?'#333':'#d97706')+';">'+(r.PRICE?r.PRICE.toLocaleString():'확인필요')+(r.boxMult>1?' <span style="color:#2563eb;font-size:.7rem;">(개환산)</span>':'')+'</td>'+
+        '<td style="padding:.35rem .6rem;text-align:right;color:'+(r.PRICE?'#333':'#d97706')+';">'+(r.PRICE?r.PRICE.toLocaleString():priceInputBtn(r,'bmPreview'))+(r.boxMult>1?' <span style="color:#2563eb;font-size:.7rem;">(개환산)</span>':'')+'</td>'+
       '</tr>';
     });
     html+='</tbody></table></div>';
