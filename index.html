@@ -189,6 +189,7 @@ tr:hover td{background:#fafafa;}
 <div id="main">
   <div id="topbar">
     <div id="page-title">대시보드</div>
+    <button class="btn btn-gray btn-sm" onclick="refreshCache()" title="데이터가 방금 바꿨는데 화면에 안 보일 때 눌러주세요" style="margin-left:auto;margin-right:.5rem;">🔄 새로고침</button>
     <div id="fb-status" class="badge fb-no">● 연결 중...</div>
   </div>
   <div id="content"></div>
@@ -603,6 +604,11 @@ function loadCacheLS(key) {
 }
 // 제품/거래처 관리 화면에서 뭔가 고치고 나면 캐시가 낡은 채로 남아있지 않도록 즉시 비움
 function clearCacheLS(key) { try { localStorage.removeItem('wmscache_'+key); } catch(e){} }
+// 2026-09-29 추가: 다른 기기에서 바꾼 상품/거래처 등이 로컬 캐시 때문에 안 보일 때, 캐시 비우고 다시 불러오기
+function refreshCache() {
+  ['products','clients','templates','drivers'].forEach(function(k){ clearCacheLS(k); });
+  location.reload();
+}
 
 async function loadAll() {
   try {
