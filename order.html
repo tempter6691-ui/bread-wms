@@ -677,7 +677,7 @@ function downloadOrderExcel(idx){
   if(!order){ toast('발주 내역을 찾을 수 없어요'); return; }
   if(typeof XLSX === 'undefined'){ toast('엑셀 기능을 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.'); return; }
 
-  var statusText = { confirmed:'확인완료', exported:'확인완료', cancelled:'취소', pending:'대기중' }; // 2026-09-30 수정: exported도 확인완료
+  // 2026-09-30 수정: 상태/요청사항/답변 컬럼 제거 (발주일자/발주시간/거래처/제품명/수량만 남김)
   var t = order.ts && order.ts.toDate ? order.ts.toDate() : null;
   var dateStr = t ? (t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')) : '';
   var timeStr = t ? (t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0')) : '';
@@ -685,16 +685,14 @@ function downloadOrderExcel(idx){
 
   var rows = items.length ? items.map(function(item){
     return {
-      '발주일자': dateStr, '발주시간': timeStr, '거래처': S.client, '제품명': item.pname||item.pid||'', '수량': item.qty||'',
-      '상태': statusText[order.status]||order.status||'', '요청사항': order.memo||'', '답변': order.reply||''
+      '발주일자': dateStr, '발주시간': timeStr, '거래처': S.client, '제품명': item.pname||item.pid||'', '수량': item.qty||''
     };
   }) : [{
-    '발주일자': dateStr, '발주시간': timeStr, '거래처': S.client, '제품명': '', '수량': '',
-    '상태': statusText[order.status]||order.status||'', '요청사항': order.memo||'', '답변': order.reply||''
+    '발주일자': dateStr, '발주시간': timeStr, '거래처': S.client, '제품명': '', '수량': ''
   }];
 
   var ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [ {wch:11}, {wch:8}, {wch:16}, {wch:24}, {wch:8}, {wch:10}, {wch:24}, {wch:24} ];
+  ws['!cols'] = [ {wch:11}, {wch:8}, {wch:16}, {wch:24}, {wch:8} ];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '발주내역');
 
