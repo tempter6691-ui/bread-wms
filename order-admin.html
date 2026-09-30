@@ -611,7 +611,9 @@ function renderCard(o) {
       (o.status==='pending'?
         '<button class="btn-sm btn-confirm" onclick="confirmOrder(\''+o.id+'\')">✅ 확인</button>'+
         '<button class="btn-sm btn-cancel" onclick="cancelOrder(\''+o.id+'\')">❌ 취소</button>':'')+
+      // 2026-09-30 수정: 이미 확인된 발주는 확인 버튼 대신 확인완료됨 표시
       (o.status==='confirmed'||o.status==='exported'?
+        '<span class="status-badge status-confirmed" style="margin-right:.3rem;">✅ 확인완료됨</span>'+
         '<span style="font-size:.68rem;color:var(--sub);margin-right:.2rem;">배송일</span>'+
         '<input type="date" id="edate_'+o.id+'" value="'+(o.exportDate||(t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')))+'" style="padding:.3rem .4rem;border:1px solid var(--border);border-radius:5px;font-size:.72rem;font-family:inherit;margin-right:.3rem;" onchange="updateExportDate(\''+o.id+'\',this.value)">'+
         '<button class="btn-sm" style="background:#8e44ad;" onclick="exportToOrder(\''+o.id+'\')">📋 출고지시서 '+(o.status==='exported'?'재등록':'등록')+'</button>':'')+
@@ -815,7 +817,8 @@ async function exportToOrder(id) {
 
 async function confirmOrder(id) {
   try {
-    await db.collection('orders_request').doc(id).update({status:'confirmed'});
+    // 2026-09-30 수정: 확인 시각도 기록 (거래처 화면은 status로 확인완료 표시)
+    await db.collection('orders_request').doc(id).update({status:'confirmed', confirmedAt: firebase.firestore.FieldValue.serverTimestamp()});
     var o = allOrders.find(function(x){return x.id===id;});
     if(o) o.status='confirmed';
     updateStats(); renderOrders();
@@ -825,7 +828,8 @@ async function confirmOrder(id) {
 async function cancelOrder(id) {
   if(!confirm('취소하시겠어요?')) return;
   try {
-    await db.collection('orders_request').doc(id).update({status:'cancelled'});
+    // 2026-09-30 수정: 취소 시각도 기록
+    await db.collection('orders_request').doc(id).update({status:'cancelled', cancelledAt: firebase.firestore.FieldValue.serverTimestamp()});
     var o = allOrders.find(function(x){return x.id===id;});
     if(o) o.status='cancelled';
     updateStats(); renderOrders();

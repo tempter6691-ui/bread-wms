@@ -638,8 +638,10 @@ async function loadHistory(){
     orders.forEach(function(o,idx){
       var t=o.ts&&o.ts.toDate?o.ts.toDate():new Date();
       var dateStr=t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')+' '+t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
-      var statusLabel=o.status==='confirmed'?'✅ 확인완료':o.status==='cancelled'?'❌ 취소':'⏳ 대기중';
-      var statusColor=o.status==='confirmed'?'#d4edda':o.status==='cancelled'?'#f8d7da':'#fff3cd';
+      // 2026-09-30 수정: 관리자가 출고지시서에 등록하면 status가 'exported'로 바뀌는데, 이것도 확인완료로 표시
+      var isConfirmed=o.status==='confirmed'||o.status==='exported';
+      var statusLabel=isConfirmed?'✅ 확인완료':o.status==='cancelled'?'❌ 취소':'⏳ 대기중';
+      var statusColor=isConfirmed?'#d4edda':o.status==='cancelled'?'#f8d7da':'#fff3cd';
       var total=(o.items||[]).reduce(function(s,i){return s+i.qty;},0);
       html+='<div class="history-item">'+
         '<div class="history-header">'+
@@ -675,7 +677,7 @@ function downloadOrderExcel(idx){
   if(!order){ toast('발주 내역을 찾을 수 없어요'); return; }
   if(typeof XLSX === 'undefined'){ toast('엑셀 기능을 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.'); return; }
 
-  var statusText = { confirmed:'확인완료', cancelled:'취소', pending:'대기중' };
+  var statusText = { confirmed:'확인완료', exported:'확인완료', cancelled:'취소', pending:'대기중' }; // 2026-09-30 수정: exported도 확인완료
   var t = order.ts && order.ts.toDate ? order.ts.toDate() : null;
   var dateStr = t ? (t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')) : '';
   var timeStr = t ? (t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0')) : '';
