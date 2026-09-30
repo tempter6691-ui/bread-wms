@@ -1794,7 +1794,7 @@ function drawOrdCard(name, data) {
           var p=S.prods.find(function(x){return x.id===item.pid;});
           var origQty=item.origQty;
           var changed=locked&&origQty!==undefined&&origQty!==item.qty;
-          var qtyShow=changed?'<span style="color:#aaa;text-decoration:line-through;">'+origQty+'</span> &rarr; <span style="color:#e67e22;font-weight:bold;">'+item.qty+'</span>':item.qty+'';
+          var qtyShow=changed?'<span style="color:#aaa;text-decoration:line-through;">'+origQty+'</span> &rarr; <span style="color:#e67e22;font-weight:bold;">'+item.qty+'</span>':'<input type="number" min="1" value="'+item.qty+'" style="width:3.4em;text-align:center;border:1px solid #ccc;border-radius:4px;padding:.15rem .2rem;" onchange="setQty(\''+en+'\',\''+item.pid+'\',this.value)">'; // 2026-09-30 수정: 수량을 숫자로 직접 입력 가능하게
           return '<tr draggable="'+ (!locked?'true':'false') +'" data-pid="'+item.pid+'" data-client="'+en+'" ondragstart="ordDragStart(event)" style="cursor:'+ (!locked?'grab':'default') +';">'+
             '<td style="color:#888;font-weight:600;">'+(offset+i+1)+'.</td>'+
             '<td>'+(p?p.name:item.pid)+'</td>'+
@@ -1968,6 +1968,20 @@ async function chgQty(clientName, pid, delta) {
   var data=(S.orders[S.ordDate]||{})[clientName]; if(!data||!data.items) return;
   var item=data.items.find(function(i){return i.pid===pid;}); if(!item) return;
   item.qty=Math.max(1,(item.qty||1)+delta);
+  var sid=safeid(clientName);
+  await safeWrite(async function() {
+    await db.collection('orders').doc(S.ordDate).set({[clientName]: data}, {merge:true});
+    var el=document.getElementById('ocard_'+sid); if(el){var tmp=document.createElement('div');tmp.innerHTML=drawOrdCard(clientName,data);el.parentNode.replaceChild(tmp.firstChild,el);}
+  });
+}
+
+// 2026-09-30 수정: 출고지시서 수량 직접 입력 (1 미만/숫자 아님은 1로 처리)
+async function setQty(clientName, pid, value) {
+  var n = parseInt(value, 10);
+  if (isNaN(n) || n < 1) n = 1;
+  var data=(S.orders[S.ordDate]||{})[clientName]; if(!data||!data.items) return;
+  var item=data.items.find(function(i){return i.pid===pid;}); if(!item) return;
+  item.qty=n;
   var sid=safeid(clientName);
   await safeWrite(async function() {
     await db.collection('orders').doc(S.ordDate).set({[clientName]: data}, {merge:true});
