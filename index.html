@@ -1872,6 +1872,22 @@ function drawOrdCard(name, data) {
 var XL_NAME_KEYS = ['제품명','품명','품목','상품명','품목명'];
 var XL_QTY_KEYS = ['수량','주문수량','발주수량','qty','수'];
 var XL_SKIP_NAMES = ['합계','총계','소계','계']; // 합계 행은 제품이 아니라서 건너뜀
+// 2026-10-05 수정: "분류/세부/공급자" 형태 제품명(예: 타르트/견과/브레드뱅크)용 단어(토큰) 매칭 설정
+// 공급자명 토큰은 버림
+var XL_SUPPLIER_TOKENS = ['브레드뱅크','더브레드뱅크'];
+// 표기 차이 동의어: 같은 줄에 있는 표기는 서로 같은 걸로 봄. 새 표기는 여기에 한 줄 추가하면 됨
+var XL_SYNONYMS = [
+  ['마들렌','마들랜'],
+  ['옐로우','엘로우'],
+  ['크레이프','크레페'],
+  ['케익','케이크'],
+  ['도넛','도너츠','도나츠'],
+];
+// 분류 토큰(첫 토큰은 항상 분류로 봄)·형태 토큰은 보너스 점수만, 필수 조건에서는 제외
+var XL_CAT_TOKENS = ['케익','케이크','쿠키','빵','타르트','머핀','도넛','파이','마카롱','슈크림'];
+var XL_SHAPE_TOKENS = ['원형','사각'];
+// 1위 점수가 2위보다 이만큼 이상 높으면 자동 매칭 (같으면 후보로만 추천)
+var XL_TOKEN_MARGIN = 1;
 
 function xlNorm(s){ return String(s==null?'':s).replace(/\s+/g,'').toLowerCase(); }
 // 괄호 안 규격 "(2개/box)", "[1kg]" 등을 뺀 이름
@@ -1931,7 +1947,58 @@ function xlMatchProd(name,prods,aliases){
       if(ct.length===1) return {pid:ct[0].id,how:'contains'};
     }
   }
-  return {pid:'',how:'none'};
+  // 2026-10-05 수정: 5) 단어(토큰) 매칭 — 단어 순서가 달라도 맞춤. 애매하면 자동 매칭 안 하고 후보만 추천
+  var tk=xlTokenMatch(name,prods);
+  if(tk.pid) return {pid:tk.pid,how:'token',cands:tk.cands};
+  return {pid:'',how:'none',cands:tk.cands};
+}
+
+// 2026-10-05 수정: 엑셀 이름 → 토큰 [{t, req}] (괄호 규격 제거, "/"·공백으로 나눔, 공급자명 제거)
+function xlTokens(name){
+  var raw=String(name==null?'':name).replace(/\([^)]*\)|（[^）]*）|\[[^\]]*\]/g,' ').split(/[\/\s]+/)
+    .map(function(t){ return t.toLowerCase(); }).filter(function(t){ return t&&XL_SUPPLIER_TOKENS.indexOf(t)<0; });
+  var toks=raw.map(function(t,i){
+    var bonus=(i===0&&raw.length>1)||XL_CAT_TOKENS.indexOf(t)>=0||XL_SHAPE_TOKENS.indexOf(t)>=0;
+    return {t:t,req:!bonus};
+  });
+  // 세부 토큰이 하나도 없으면(예: 누네띠네/브레드뱅크, 슈크림/브레드뱅크) 전부 필수로 봄
+  if(toks.length&&!toks.some(function(x){return x.req;})) toks.forEach(function(x){ x.req=true; });
+  return toks;
+}
+// 토큰이 제품명(정규화) 안에 들어 있는지 — 동의어 표기도 같이 확인
+function xlTokIn(tok,pn){ return xlTokForm(tok,pn)!==''; }
+// 제품명 안에 실제로 들어 있는 표기(원래 표기 또는 동의어 표기)를 돌려줌, 없으면 ''
+function xlTokForm(tok,pn){
+  if(pn.indexOf(tok)>=0) return tok;
+  for(var i=0;i<XL_SYNONYMS.length;i++){
+    var g=XL_SYNONYMS[i];
+    for(var j=0;j<g.length;j++){
+      if(tok.indexOf(g[j])>=0){
+        for(var k=0;k<g.length;k++){ var alt=tok.split(g[j]).join(g[k]); if(k!==j&&pn.indexOf(alt)>=0) return alt; }
+      }
+    }
+  }
+  return '';
+}
+// 반환 {pid, cands:[pid…최대 5개, 점수순]} — pid는 후보가 1개이거나 1위가 뚜렷할 때만
+function xlTokenMatch(name,prods){
+  var toks=xlTokens(name);
+  if(!toks.length) return {pid:'',cands:[]};
+  var list=[];
+  prods.forEach(function(p){
+    var pn=xlNorm(p.name); // 괄호 안 "(원형)" 같은 정보도 쓰려고 규격을 지우지 않은 이름으로 비교
+    var score=0, ok=true, rest=xlStripSpec(p.name);
+    toks.forEach(function(x){ var f=xlTokForm(x.t,pn); if(f){ score++; rest=rest.split(f).join(''); } else if(x.req) ok=false; });
+    // 형태가 반대인 제품은 후보에서 뺌 (엑셀은 "원형"인데 제품명이 "사각"인 경우 등)
+    toks.forEach(function(x){ if(XL_SHAPE_TOKENS.indexOf(x.t)>=0&&XL_SHAPE_TOKENS.some(function(sh){ return sh!==x.t&&pn.indexOf(sh)>=0; })) ok=false; });
+    // 제품명이 엑셀 단어들로만 이루어져 있으면(예: 빵/모닝 → 모닝빵) +1 → 먹물모닝빵 같은 긴 이름보다 앞섬
+    if(ok&&score>0&&!rest) score++;
+    if(ok&&score>0) list.push({id:p.id,score:score,len:pn.length});
+  });
+  list.sort(function(a,b){ return b.score-a.score||a.len-b.len; });
+  var cands=list.slice(0,5).map(function(x){return x.id;});
+  if(list.length===1||(list.length>1&&list[0].score-list[1].score>=XL_TOKEN_MARGIN)) return {pid:list[0].id,cands:cands};
+  return {pid:'',cands:cands};
 }
 
 // ── 엑셀 불러오기 화면 ──
@@ -1999,17 +2066,21 @@ function xlRebuild(){
   var aliases=(cl&&cl.prodAliases)||{};
   var b=xlBuildRows(_xl.sheet,_xl.headerRow,_xl.nameCol,_xl.qtyCol);
   _xl.skipped=b.skipped;
-  _xl.rows=b.list.map(function(r){ var m=xlMatchProd(r.name,S.prods,aliases); return {name:r.name,qty:r.qty,pid:m.pid,how:m.how,autoPid:m.pid,autoHow:m.how,excluded:false}; });
+  _xl.rows=b.list.map(function(r){ var m=xlMatchProd(r.name,S.prods,aliases); return {name:r.name,qty:r.qty,pid:m.pid,how:m.how,autoPid:m.pid,autoHow:m.how,cands:m.cands||[],excluded:false}; }); // 2026-10-05 수정: 추천 후보(cands) 보관
   xlRender();
 }
 
-function xlProdOptions(selPid,q){
+function xlProdOptions(selPid,q,cands){
   var nq=xlNorm(q||'');
-  var list=S.prods.filter(function(p){ return p.id===selPid||!nq||xlNorm(p.name).indexOf(nq)>=0||xlNorm(p.qr||'').indexOf(nq)>=0||xlNorm(p.id).indexOf(nq)>=0; })
-    .slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');});
-  return '<option value="">-- 미매칭 --</option>'+list.map(function(p){
-    return '<option value="'+xlHtml(p.id)+'"'+(p.id===selPid?' selected':'')+'>'+xlHtml(p.name)+' ['+xlHtml(p.id)+']</option>';
-  }).join('');
+  function hit(p){ return p.id===selPid||!nq||xlNorm(p.name).indexOf(nq)>=0||xlNorm(p.qr||'').indexOf(nq)>=0||xlNorm(p.id).indexOf(nq)>=0; }
+  function opt(p){ return '<option value="'+xlHtml(p.id)+'"'+(p.id===selPid?' selected':'')+'>'+xlHtml(p.name)+' ['+xlHtml(p.id)+']</option>'; }
+  var list=S.prods.filter(hit).slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');});
+  // 2026-10-05 수정: 단어 매칭 후보(점수순, 최대 5개)를 "추천" 묶음으로 맨 위에 표시
+  var rec=(cands||[]).map(function(id){ return S.prods.find(function(p){return p.id===id;}); }).filter(function(p){ return p&&hit(p); });
+  if(!rec.length) return '<option value="">-- 미매칭 --</option>'+list.map(opt).join('');
+  return '<option value="">-- 미매칭 --</option>'+
+    '<optgroup label="── 추천 ──">'+rec.map(opt).join('').replace(' selected','')+'</optgroup>'+
+    '<optgroup label="── 전체 ──">'+list.map(opt).join('')+'</optgroup>';
 }
 
 function xlRender(){
@@ -2029,7 +2100,7 @@ function xlRender(){
     } return o;
   }
   var unmatched=_xl.rows.filter(function(r){return !r.excluded&&!r.pid;}).length;
-  var howLbl={alias:'저장된 매칭',exact:'이름 일치',spec:'규격 뺀 이름',contains:'이름 포함',none:'',manual:'직접 선택'};
+  var howLbl={alias:'저장된 매칭',exact:'이름 일치',spec:'규격 뺀 이름',contains:'이름 포함',token:'단어 매칭',none:'',manual:'직접 선택'}; // 2026-10-05 수정: 단어 매칭 라벨
   var exItems=((S.orders[S.ordDate]||{})[_xl.client]||{}).items||[];
   var rowsHtml=_xl.rows.map(function(r,i){
     var bg=r.excluded?'#f3f3f3':(!r.pid?'#fff6cc':'');
@@ -2037,8 +2108,10 @@ function xlRender(){
       '<td style="padding:.3rem;">'+xlHtml(r.name)+'</td>'+
       '<td style="padding:.3rem;">'+
         (!r.pid?'<input type="text" placeholder="🔍 제품 검색" style="width:100%;padding:.2rem .4rem;font-size:.75rem;margin-bottom:.2rem;border:1px solid #e0c060;border-radius:4px;" oninput="xlFilter('+i+',this.value)">':'')+
-        '<select id="xlSel_'+i+'" style="width:100%;font-size:.78rem;padding:.2rem;" onchange="xlSetPid('+i+',this.value)">'+xlProdOptions(r.pid,'')+'</select>'+
-        (r.pid&&howLbl[r.how]?'<div style="font-size:.65rem;color:#888;">'+howLbl[r.how]+'</div>':'')+
+        '<select id="xlSel_'+i+'" style="width:100%;font-size:.78rem;padding:.2rem;" onchange="xlSetPid('+i+',this.value)">'+xlProdOptions(r.pid,'',r.cands)+'</select>'+
+        // 2026-10-05 수정: 단어 매칭은 확인이 필요해서 주황색 라벨, 미매칭인데 후보가 있으면 추천 개수 표시
+        (r.pid&&howLbl[r.how]?'<div style="font-size:.65rem;color:'+(r.how==='token'?'#d35400':'#888')+';">'+howLbl[r.how]+(r.how==='token'?' — 확인해 주세요':'')+'</div>':'')+
+        (!r.pid&&r.cands&&r.cands.length?'<div style="font-size:.65rem;color:#c08000;">추천 후보 '+r.cands.length+'개 — 드롭다운 맨 위에서 골라주세요</div>':'')+
       '</td>'+
       '<td style="padding:.3rem;"><input type="number" min="1" value="'+r.qty+'" style="width:4.2em;text-align:center;" onchange="xlSetQty('+i+',this.value)"></td>'+
       '<td style="padding:.3rem;text-align:center;"><input type="checkbox"'+(r.excluded?' checked':'')+' onchange="xlSetEx('+i+',this.checked)"></td>'+
@@ -2072,7 +2145,7 @@ function xlRender(){
   var nb=document.getElementById('xlBody'); if(nb) nb.scrollTop=scrollTop;
 }
 
-function xlFilter(i,q){ var sel=document.getElementById('xlSel_'+i); if(sel) sel.innerHTML=xlProdOptions(_xl.rows[i].pid,q); }
+function xlFilter(i,q){ var sel=document.getElementById('xlSel_'+i); if(sel) sel.innerHTML=xlProdOptions(_xl.rows[i].pid,q,_xl.rows[i].cands); } // 2026-10-05 수정: 검색 중에도 추천 후보 유지
 function xlSetPid(i,pid){ var r=_xl.rows[i]; r.pid=pid; r.how=pid?(pid===r.autoPid?r.autoHow:'manual'):'none'; xlRender(); }
 function xlSetQty(i,v){ var n=Number(v); _xl.rows[i].qty=(isFinite(n)&&n>0)?n:_xl.rows[i].qty; }
 function xlSetEx(i,on){ _xl.rows[i].excluded=on; xlRender(); }
