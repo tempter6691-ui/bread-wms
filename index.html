@@ -171,7 +171,8 @@ tr:hover td{background:#fafafa;}
   <div class="nav-section">운영</div>
   <div class="nav-item" onclick="go('dashboard')">📊 대시보드</div>
   <div class="nav-item" onclick="go('inbound')">📦 입고 (생산라인)</div>
-  <div class="nav-item" onclick="go('outbound')">🚚 출고 (부장님)</div>
+  <!-- 2026-10-05 수정: 메뉴/제목에서 (부장님) 삭제 -->
+  <div class="nav-item" onclick="go('outbound')">🚚 출고</div>
   <div class="nav-item" onclick="go('stock')">📋 재고 현황</div>
   <div class="nav-section">설정</div>
   <div class="nav-item" onclick="go('orders')">📝 출고지시서</div>
@@ -882,7 +883,8 @@ async function manualSetInventory(pid, targetQty, memo) {
 window.manualSetInventory = manualSetInventory;
 
 // ── NAVIGATION ────────────────────────────────────────────────
-var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고 (부장님)',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',ecount:'📤 이카운트 전송'};
+// 2026-10-05 수정: 메뉴/제목에서 (부장님) 삭제
+var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',ecount:'📤 이카운트 전송'};
 
 function go(page) {
   if(S.page === 'inbound' && page !== 'inbound') { clearInterval(_ibPollTimer); clearInterval(_ibMultPollTimer); }
