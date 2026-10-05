@@ -617,6 +617,9 @@ function renderCard(o) {
         '<span style="font-size:.68rem;color:var(--sub);margin-right:.2rem;">배송일</span>'+
         '<input type="date" id="edate_'+o.id+'" value="'+(o.exportDate||(t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')))+'" style="padding:.3rem .4rem;border:1px solid var(--border);border-radius:5px;font-size:.72rem;font-family:inherit;margin-right:.3rem;" onchange="updateExportDate(\''+o.id+'\',this.value)">'+
         '<button class="btn-sm" style="background:#8e44ad;" onclick="exportToOrder(\''+o.id+'\')">📋 출고지시서 '+(o.status==='exported'?'재등록':'등록')+'</button>':'')+
+      // 2026-10-05 수정: 출고지시서에 반영된 주문도 취소할 수 있게 취소 버튼 표시 (반영분 차감 여부는 cancelOrder에서 물어봄)
+      (o.status==='exported'?
+        '<button class="btn-sm btn-cancel" onclick="cancelOrder(\''+o.id+'\')">❌ 취소</button>':'')+
       '<button class="btn-sm btn-print" onclick="printOrder(\''+o.id+'\')">🖨️ 출력</button>'+
     '</div>'+
   '</div>';
@@ -754,6 +757,11 @@ async function exportToOrder(id) {
     var orderContributions = Object.assign({}, (existingClientData && existingClientData.orderContributions) || {});
     var prevContribution = orderContributions[id]; // 이 주문이 예전에 반영한 수량 (있으면 = 재등록 케이스)
 
+    // 2026-10-05 수정: 이 주문과 상관없는 품목이 이미 있으면(다른 주문/직접 입력분) 합산된다는 걸 먼저 확인받음
+    if (existingItems.length > 0 && !prevContribution) {
+      if (!confirm('['+resolvedClient+'] '+dateStr+' 출고지시서에 이미 '+existingItems.length+'개 품목이 있어요. 이번 주문이 합산됩니다. 계속할까요?')) return;
+    }
+
     var mergedMap = {};
     existingItems.forEach(function(item){ mergedMap[item.pid] = Object.assign({}, item); });
 
@@ -804,9 +812,10 @@ async function exportToOrder(id) {
     await ordRef.set({ [resolvedClient]: clientData }, { merge: true });
 
     // 발주 상태를 exported로 업데이트
-    await db.collection('orders_request').doc(id).update({status:'exported'});
+    // 2026-10-05 수정: 실제로 반영한 날짜/거래처명도 기록 → 배송일 입력란을 나중에 바꿔도 취소 시 정확한 문서에서 차감
+    await db.collection('orders_request').doc(id).update({status:'exported', exportedDate: dateStr, exportedClient: resolvedClient});
     var ord = allOrders.find(function(x){return x.id===id;});
-    if(ord) ord.status='exported';
+    if(ord) { ord.status='exported'; ord.exportedDate=dateStr; ord.exportedClient=resolvedClient; }
 
 
     updateStats(); renderOrders();
@@ -830,7 +839,18 @@ async function confirmOrder(id) {
 }
 
 async function cancelOrder(id) {
-  if(!confirm('취소하시겠어요?')) return;
+  var o0 = allOrders.find(function(x){return x.id===id;});
+  // 2026-10-05 수정: 출고지시서에 이미 반영된 주문은 반영분을 출고지시서에서 빼고 취소할지 물어봄
+  if (o0 && o0.status==='exported') {
+    if (confirm('이미 출고지시서에 반영된 주문입니다. 출고지시서에서도 이 주문 수량을 빼고 취소할까요?')) {
+      await cancelExportedOrder(o0);
+      return;
+    }
+    // 차감 없이 취소만 원하면 기존처럼 상태만 변경
+    if (!confirm('출고지시서는 그대로 두고 주문 상태만 취소할까요?')) return;
+  } else {
+    if(!confirm('취소하시겠어요?')) return;
+  }
   try {
     // 2026-09-30 수정: 취소 시각도 기록
     await db.collection('orders_request').doc(id).update({status:'cancelled', cancelledAt: firebase.firestore.FieldValue.serverTimestamp()});
@@ -838,6 +858,69 @@ async function cancelOrder(id) {
     if(o) o.status='cancelled';
     updateStats(); renderOrders();
   } catch(e){ alert('취소 처리 오류: '+e.message); }
+}
+
+// 2026-10-05 수정: 출고지시서 반영분 차감 후 취소
+// - exportToOrder가 기록한 orderContributions[주문id]의 pid별 수량을 items에서 빼고, 0 이하가 된 품목은 제거
+// - 이미 스캔된 품목(scanned>0)은 빼지 않고 경고만 띄움
+// - orderContributions[id], orderMemos[id] 삭제 후 memo 재계산, items가 비면 거래처 항목 자체를 삭제
+// - 출고 스캔과 동시에 일어날 수 있어 트랜잭션으로 읽고 씀
+async function cancelExportedOrder(o) {
+  var id = o.id;
+  if (exportInProgress[id]) return;
+  var t = o.ts&&o.ts.toDate?o.ts.toDate():new Date();
+  var dateStr = o.exportedDate || o.exportDate || (t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0'));
+  var clientName = o.exportedClient || resolveClientName(o.client).name || o.client;
+  var skipped = [], notFound = false, removedClient = false;
+  exportInProgress[id] = true;
+  try {
+    var ordRef = db.collection('orders').doc(dateStr);
+    await db.runTransaction(async function(tx) {
+      skipped = []; notFound = false; removedClient = false; // 트랜잭션 재시도 대비 초기화
+      var doc = await tx.get(ordRef);
+      var cd = doc.exists ? (doc.data()||{})[clientName] : null;
+      var contrib = cd && cd.orderContributions && cd.orderContributions[id];
+      if (!contrib) { notFound = true; return; }
+      var items = (cd.items||[]).map(function(it){ return Object.assign({}, it); });
+      contrib.forEach(function(p){
+        var it = items.find(function(x){ return x.pid===p.pid; });
+        if (!it) return;
+        if ((it.scanned||0) > 0) { skipped.push((it.pname||p.pid)+' (스캔 '+it.scanned+')'); return; }
+        it.qty = (it.qty||0) - (p.qty||0);
+      });
+      items = items.filter(function(it){ return (it.qty||0) > 0; });
+      if (items.length === 0) {
+        removedClient = true;
+        tx.set(ordRef, { [clientName]: firebase.firestore.FieldValue.delete() }, { merge: true });
+        return;
+      }
+      var orderContributions = Object.assign({}, cd.orderContributions); delete orderContributions[id];
+      var orderMemos = Object.assign({}, cd.orderMemos||{}); delete orderMemos[id];
+      var memo = Object.keys(orderMemos).map(function(k){ return orderMemos[k]; }).filter(Boolean).join('\n');
+      // 이 거래처의 해당 필드만 교체 (addedAt, driver, locked 등 다른 필드는 그대로)
+      var FP = firebase.firestore.FieldPath;
+      tx.update(ordRef,
+        new FP(clientName, 'items'), items,
+        new FP(clientName, 'orderContributions'), orderContributions,
+        new FP(clientName, 'orderMemos'), orderMemos,
+        new FP(clientName, 'memo'), memo);
+    });
+    if (notFound) {
+      if (!confirm('['+clientName+'] '+dateStr+' 출고지시서에서 이 주문의 반영 기록을 찾지 못했어요.\n(출고지시서에서 직접 지웠거나 다른 날짜로 옮겼을 수 있어요)\n\n출고지시서는 그대로 두고 주문 상태만 취소할까요?')) return;
+    }
+    await db.collection('orders_request').doc(id).update({status:'cancelled', cancelledAt: firebase.firestore.FieldValue.serverTimestamp()});
+    o.status = 'cancelled';
+    updateStats(); renderOrders();
+    if (skipped.length) {
+      alert('⚠️ 이미 스캔된 품목은 출고지시서에서 빼지 않았어요. 출고관리에서 직접 확인해 주세요:\n\n'+skipped.join('\n'));
+    } else if (!notFound) {
+      alert('✅ 취소했어요.\n['+clientName+'] '+dateStr+' 출고지시서에서 '+(removedClient?'거래처 항목을 삭제했어요.':'이 주문 수량을 뺐어요.'));
+    }
+  } catch(e) {
+    alert('취소 처리 오류: '+e.message);
+  } finally {
+    exportInProgress[id] = false;
+  }
 }
 
 function printOrder(id) {
