@@ -797,7 +797,11 @@ async function exportToOrder(id) {
 
     // 출고지시서에 해당 거래처만 추가/덮어쓰기 (merge:true로 다른 거래처 데이터 보호)
     // 정식 거래처명(resolvedClient)을 키로 사용 - 자동매핑된 경우 원래 표기와 달라도 정식명으로 통일 저장
-    await ordRef.set({ [resolvedClient]: { items: finalItems, driver: driver, orderContributions: orderContributions, orderMemos: orderMemos, memo: combinedMemo } }, { merge: true });
+    var clientData = { items: finalItems, driver: driver, orderContributions: orderContributions, orderMemos: orderMemos, memo: combinedMemo };
+    // 2026-10-05 수정: 처음 등록되는 거래처만 등록 시각(addedAt) 저장 → 출고지시서 맨 위에 표시
+    // 이미 있는 거래처에 주문을 합치거나 재등록할 때는 기존 순서를 유지하도록 addedAt을 건드리지 않음(merge:true)
+    if (!existingClientData) clientData.addedAt = Date.now();
+    await ordRef.set({ [resolvedClient]: clientData }, { merge: true });
 
     // 발주 상태를 exported로 업데이트
     await db.collection('orders_request').doc(id).update({status:'exported'});

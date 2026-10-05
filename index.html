@@ -1691,6 +1691,15 @@ function drawStock() {
 }
 
 // ── ORDERS ───────────────────────────────────────────────────
+// 2026-10-05 수정: 출고지시서 거래처를 등록 시각(addedAt) 내림차순으로 정렬 (최신이 맨 위)
+// Firestore가 맵 키를 가나다순으로 돌려줘서 새로고침하면 새 거래처가 중간/아래로 가던 문제.
+// addedAt이 없는 기존 거래처는 0으로 보고 그 아래에 기존 순서 그대로 둠(Array.sort는 안정 정렬)
+function sortedOrdNames(todayOrd) {
+  return Object.keys(todayOrd).sort(function(a,b){
+    return ((todayOrd[b]||{}).addedAt||0) - ((todayOrd[a]||{}).addedAt||0);
+  });
+}
+
 function pgOrders() {
   if(!S.ordDay) S.ordDay='전체';
   var todayOrd=S.orders[S.ordDate]||{};
@@ -1718,7 +1727,7 @@ function pgOrders() {
     '<div id="ord-clients" style="display:flex;flex-wrap:wrap;gap:.3rem;max-height:180px;overflow-y:auto;margin-bottom:.75rem;">'+
       (function(){
         // 입력된 거래처는 필터 무관하게 항상 파란색으로 표시
-        var orderedNames = Object.keys(todayOrd);
+        var orderedNames = sortedOrdNames(todayOrd); // 2026-10-05 수정: 최신 등록 거래처가 맨 위
         var orderedBtns = orderedNames.map(function(n){
           return '<div style="display:inline-flex;align-items:center;background:#2d7dd2;color:#fff;border-radius:4px;margin:.15rem;">'+
             '<span style="padding:.35rem .6rem;font-size:.78rem;">'+n+'</span>'+
@@ -1734,7 +1743,8 @@ function pgOrders() {
       })()+
     '</div></div>'+
     '<div id="ord-cards">'+
-      Object.keys(todayOrd).filter(function(n){
+      // 2026-10-05 수정: 최신 등록 거래처가 맨 위
+      sortedOrdNames(todayOrd).filter(function(n){
         if(S.ordDriver==='전체') return true;
         // order에 저장된 driver 우선, 없으면 거래처 배정 기사
         var orderDriver = todayOrd[n].driver;
@@ -2120,6 +2130,7 @@ async function moveOrdClientConfirm() {
       toast(name+' → '+targetDriver+' 이동 완료!', 'ok');
     } else {
       // 날짜 다름 → 새 날짜에 복사 후 원본 삭제
+      data.addedAt = Date.now(); // 2026-10-05 수정: 새 날짜에서는 새로 등록된 것으로 보고 맨 위에 표시
       if(!S.orders[targetDate]) S.orders[targetDate] = {};
       S.orders[targetDate][name] = data;
       await safeWrite(async function() {
@@ -2170,7 +2181,8 @@ async function copyOrdClientConfirm() {
       items: (src.items||[]).map(function(it){ return {pid:it.pid, qty:it.qty}; }),
       driver: targetDriver,
       locked: false,
-      memo: src.memo || ''
+      memo: src.memo || '',
+      addedAt: Date.now() // 2026-10-05 수정: 등록 시각 저장 (출고지시서 맨 위 정렬용)
     };
     if(!S.orders[targetDate]) S.orders[targetDate] = {};
     S.orders[targetDate][name] = data;
@@ -2201,7 +2213,8 @@ async function toggleOrdClient(name) {
       var cl=S.clients.find(function(c){return c.name===name;});
       assignedDriver = cl ? cl.driver : '';
     }
-    S.orders[d][name]={items:[], driver: assignedDriver};
+    // 2026-10-05 수정: 등록 시각(addedAt) 저장 → 출고지시서에서 최신 등록 거래처가 맨 위로 옴
+    S.orders[d][name]={items:[], driver: assignedDriver, addedAt: Date.now()};
     // 기사 탭이 선택된 경우 미배정 거래처면 자동 배정
     if(S.ordDriver!=='전체'){
       var cl2=S.clients.find(function(c){return c.name===name;});
