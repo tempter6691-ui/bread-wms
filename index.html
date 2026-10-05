@@ -1784,13 +1784,17 @@ function drawOrdCard(name, data) {
   var lockBtn = locked
     ? '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">수정</button>'
     : '<button class="btn btn-success btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">입력완료</button>';
-  return '<div class="card" id="ocard_'+sid+'"'+(locked?' style="background:#f8fff8;border:1px solid #a8e6b0;"':'')+'>'+
+  // 2026-10-05 수정: 잠기지 않은 카드에 엑셀 파일을 끌어다 놓으면 엑셀 불러오기 (품목 순서 드래그와는 별개)
+  var xlDrop = !locked ? ' ondragover="xlCardDragOver(event)" ondragleave="xlCardDragLeave(event)" ondrop="xlCardDrop(event,\''+en+'\')"' : '';
+  return '<div class="card" id="ocard_'+sid+'"'+(locked?' style="background:#f8fff8;border:1px solid #a8e6b0;"':'')+xlDrop+'>'+
     '<div style="display:flex;align-items:center;margin-bottom:.6rem;gap:.5rem;">'+
       '<div style="font-weight:bold;white-space:nowrap;">'+name+codeBadge+driverBadge+lockBadge+'</div>'+
     '<input type="text" placeholder="📝 특이사항 메모..." value="'+memo.replace(/"/g,'&quot;')+'" style="flex:1;padding:.3rem .6rem;font-size:.8rem;border:1px solid #e0e0e0;border-radius:6px;background:#fffde7;color:#555;min-width:0;" onchange="saveMemo(\''+en+'\',this.value)" onblur="saveMemo(\''+en+'\',this.value)">'+
       lockBtn+
       '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="moveOrdClient(\''+en+'\')" >이동</button>'+
       '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="copyOrdClient(\''+en+'\')" >복사</button>'+
+      // 2026-10-05 수정: 엑셀로 품목 등록 버튼 (잠긴 카드에서는 숨김)
+      (!locked?'<button class="btn btn-success btn-sm" style="margin-right:.3rem;" onclick="xlPickFile(\''+en+'\')">📥 엑셀</button>':'')+
       '<button class="btn btn-danger btn-sm" onclick="removeOrdClient(\''+en+'\')">삭제</button>'+
     '</div>'+
     (!locked?'<input type="text" placeholder="품목 검색 후 추가..." style="width:100%;padding:.4rem;margin-bottom:.3rem;" oninput="searchProd(\''+en+'\',\''+sid+'\',this.value)">':'')+
@@ -1858,6 +1862,289 @@ function drawOrdCard(name, data) {
       '</div>'+sumBar;
     })():'<p style="color:#aaa;font-size:.83rem;">품목을 검색해서 추가하세요</p>')+
   '</div>';
+}
+
+
+// ── 출고지시서 엑셀 불러오기 (2026-10-05 추가) ──
+// 2026-10-05 수정: 거래처 카드의 "📥 엑셀" 버튼/파일 끌어놓기로 거래처 발주 엑셀을 읽어 품목을 등록
+// 제품 매칭 순서: 거래처별 prodAliases → 이름 정확 일치 → 괄호 규격 뺀 이름 일치/포함 관계(한 개로 좁혀질 때만) → 미매칭
+// 상품명은 절대 자동으로 바꾸지 않음(CLAUDE.md "마카롱엘로우" 참고) — 못 맞춘 건 미리보기에서 사람이 고름
+var XL_NAME_KEYS = ['제품명','품명','품목','상품명','품목명'];
+var XL_QTY_KEYS = ['수량','주문수량','발주수량','qty','수'];
+var XL_SKIP_NAMES = ['합계','총계','소계','계']; // 합계 행은 제품이 아니라서 건너뜀
+
+function xlNorm(s){ return String(s==null?'':s).replace(/\s+/g,'').toLowerCase(); }
+// 괄호 안 규격 "(2개/box)", "[1kg]" 등을 뺀 이름
+function xlStripSpec(s){ return xlNorm(String(s==null?'':s).replace(/\([^)]*\)|（[^）]*）|\[[^\]]*\]/g,'')); }
+
+// 위쪽 20행 안에서 제품명 열/수량 열이 같이 있는 제목 행을 찾음. 못 찾으면 null
+// 정확히 일치하는 제목을 먼저 보고, 없으면 "포함"으로 찾음('품목코드'처럼 코드 열은 제외, '수'는 정확히 일치할 때만)
+function xlFindHeader(rows){
+  var lim=Math.min(rows.length,20);
+  for(var r=0;r<lim;r++){
+    var row=rows[r]||[], cells=row.map(xlNorm);
+    var nameCol=xlPickCol(cells,XL_NAME_KEYS,-1), qtyCol=xlPickCol(cells,XL_QTY_KEYS,nameCol);
+    if(nameCol>=0&&qtyCol>=0) return {row:r,nameCol:nameCol,qtyCol:qtyCol};
+  }
+  return null;
+}
+function xlPickCol(cells,keys,notCol){
+  var i,k;
+  for(k=0;k<keys.length;k++) for(i=0;i<cells.length;i++) if(i!==notCol&&cells[i]===keys[k]) return i;
+  for(k=0;k<keys.length;k++){
+    if(keys[k].length<2) continue;
+    for(i=0;i<cells.length;i++) if(i!==notCol&&cells[i].indexOf(keys[k])>=0&&cells[i].indexOf('코드')<0) return i;
+  }
+  return -1;
+}
+
+// 제목 행 아래부터 읽어서 같은 제품명끼리 수량 합침. 제품명 빈칸/수량이 숫자 아님/0 이하/합계 행은 건너뜀
+function xlBuildRows(rows,headerRow,nameCol,qtyCol){
+  var list=[], byName={}, skipped=0;
+  for(var r=headerRow+1;r<rows.length;r++){
+    var row=rows[r]||[];
+    var name=String(row[nameCol]==null?'':row[nameCol]).trim();
+    var rawQty=row[qtyCol];
+    var allEmpty=row.every(function(c){ return c===''||c==null; });
+    if(allEmpty) continue; // 완전히 빈 행은 건너뛴 수에 넣지 않음
+    var qty=typeof rawQty==='number'?rawQty:Number(String(rawQty==null?'':rawQty).replace(/[,\s]/g,''));
+    if(!name||XL_SKIP_NAMES.indexOf(xlNorm(name))>=0||String(rawQty).trim()===''||!isFinite(qty)||qty<=0){ skipped++; continue; }
+    var key=xlNorm(name); // "레몬 타르트"/"레몬타르트"처럼 공백만 다른 행도 한 줄로 합침
+    if(byName[key]) byName[key].qty+=qty;
+    else { byName[key]={name:name,qty:qty}; list.push(byName[key]); }
+  }
+  return {list:list,skipped:skipped};
+}
+
+// 제품 매칭. 반환 {pid, how} — how: alias/exact/spec/contains/none
+function xlMatchProd(name,prods,aliases){
+  if(aliases&&aliases[name]&&prods.some(function(p){return p.id===aliases[name];})) return {pid:aliases[name],how:'alias'};
+  var n=xlNorm(name);
+  var ex=prods.filter(function(p){return xlNorm(p.name)===n;});
+  if(ex.length===1) return {pid:ex[0].id,how:'exact'};
+  var s=xlStripSpec(name);
+  if(s){
+    var sp=prods.filter(function(p){return xlStripSpec(p.name)===s;});
+    if(sp.length===1) return {pid:sp[0].id,how:'spec'};
+    if(sp.length===0&&s.length>=2){
+      var ct=prods.filter(function(p){ var ps=xlStripSpec(p.name); return ps.length>=2&&(ps.indexOf(s)>=0||s.indexOf(ps)>=0); });
+      if(ct.length===1) return {pid:ct[0].id,how:'contains'};
+    }
+  }
+  return {pid:'',how:'none'};
+}
+
+// ── 엑셀 불러오기 화면 ──
+var _xl = null; // 미리보기 상태 {client, sheet, header, nameCol, qtyCol, rows, skipped, mode}
+
+function xlHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function xlPickFile(clientName){
+  if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
+  var inp=document.getElementById('xlFileInput');
+  if(!inp){
+    inp=document.createElement('input'); inp.type='file'; inp.id='xlFileInput'; inp.accept='.xlsx,.xls,.csv'; inp.style.display='none';
+    inp.onchange=function(){ var f=inp.files&&inp.files[0]; inp.value=''; if(f) xlReadFile(inp.dataset.client,f); };
+    document.body.appendChild(inp);
+  }
+  inp.dataset.client=clientName;
+  inp.click();
+}
+
+function xlCardDragOver(e){
+  if(!e.dataTransfer||Array.prototype.indexOf.call(e.dataTransfer.types||[],'Files')<0) return; // 품목 순서 드래그는 그대로
+  e.preventDefault(); e.dataTransfer.dropEffect='copy';
+  e.currentTarget.style.outline='2px dashed #27ae60';
+}
+function xlCardDragLeave(e){ if(!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.style.outline=''; }
+function xlCardDrop(e,clientName){
+  e.currentTarget.style.outline='';
+  var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+  if(!f) return;
+  e.preventDefault();
+  if(!/\.(xlsx|xls|csv)$/i.test(f.name)){ toast('엑셀(.xlsx/.xls/.csv) 파일만 올릴 수 있어요','err'); return; }
+  if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
+  xlReadFile(clientName,f);
+}
+
+function xlReadFile(clientName,file){
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var buf=new Uint8Array(rd.result), wb;
+      if(/\.csv$/i.test(file.name)){
+        // 엑셀에서 저장한 CSV는 보통 EUC-KR이라 UTF-8로 안 읽히면 EUC-KR로 다시 읽음
+        var text;
+        try{ text=new TextDecoder('utf-8',{fatal:true}).decode(buf); }catch(_){ text=new TextDecoder('euc-kr').decode(buf); }
+        wb=XLSX.read(text.replace(/^﻿/,''),{type:'string'});
+      } else {
+        wb=XLSX.read(buf,{type:'array'});
+      }
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var sheet=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false});
+      if(!sheet.length){ toast('엑셀에 내용이 없어요','err'); return; }
+      var hd=xlFindHeader(sheet);
+      _xl={client:clientName,file:file.name,sheet:sheet,header:hd,headerRow:hd?hd.row:-1,nameCol:hd?hd.nameCol:0,qtyCol:hd?hd.qtyCol:1};
+      var ex=((S.orders[S.ordDate]||{})[clientName]||{}).items||[];
+      _xl.mode=ex.length?'merge':'replace';
+      xlRebuild();
+    }catch(e){ console.error(e); alert('엑셀을 읽지 못했어요: '+e.message); }
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+// 열 선택이 바뀌면 행을 다시 만들고 매칭
+function xlRebuild(){
+  var cl=S.clients.find(function(c){return c.name===_xl.client;});
+  var aliases=(cl&&cl.prodAliases)||{};
+  var b=xlBuildRows(_xl.sheet,_xl.headerRow,_xl.nameCol,_xl.qtyCol);
+  _xl.skipped=b.skipped;
+  _xl.rows=b.list.map(function(r){ var m=xlMatchProd(r.name,S.prods,aliases); return {name:r.name,qty:r.qty,pid:m.pid,how:m.how,autoPid:m.pid,autoHow:m.how,excluded:false}; });
+  xlRender();
+}
+
+function xlProdOptions(selPid,q){
+  var nq=xlNorm(q||'');
+  var list=S.prods.filter(function(p){ return p.id===selPid||!nq||xlNorm(p.name).indexOf(nq)>=0||xlNorm(p.qr||'').indexOf(nq)>=0||xlNorm(p.id).indexOf(nq)>=0; })
+    .slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');});
+  return '<option value="">-- 미매칭 --</option>'+list.map(function(p){
+    return '<option value="'+xlHtml(p.id)+'"'+(p.id===selPid?' selected':'')+'>'+xlHtml(p.name)+' ['+xlHtml(p.id)+']</option>';
+  }).join('');
+}
+
+function xlRender(){
+  var m=document.getElementById('xlModal');
+  if(!m){
+    m=document.createElement('div'); m.id='xlModal';
+    m.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;';
+    document.body.appendChild(m);
+  }
+  var cols=0; _xl.sheet.slice(0,30).forEach(function(r){ cols=Math.max(cols,r.length); });
+  var hdrRow=_xl.headerRow>=0?_xl.sheet[_xl.headerRow]:null;
+  function colOpts(sel){
+    var o=''; for(var c=0;c<cols;c++){
+      var sample=hdrRow?hdrRow[c]:'';
+      if(sample===''||sample==null){ for(var r=0;r<Math.min(_xl.sheet.length,10);r++){ if(_xl.sheet[r][c]!==''&&_xl.sheet[r][c]!=null){ sample=_xl.sheet[r][c]; break; } } }
+      o+='<option value="'+c+'"'+(c===sel?' selected':'')+'>'+XLSX.utils.encode_col(c)+'열'+(sample!==''&&sample!=null?' ('+xlHtml(String(sample).slice(0,12))+')':'')+'</option>';
+    } return o;
+  }
+  var unmatched=_xl.rows.filter(function(r){return !r.excluded&&!r.pid;}).length;
+  var howLbl={alias:'저장된 매칭',exact:'이름 일치',spec:'규격 뺀 이름',contains:'이름 포함',none:'',manual:'직접 선택'};
+  var exItems=((S.orders[S.ordDate]||{})[_xl.client]||{}).items||[];
+  var rowsHtml=_xl.rows.map(function(r,i){
+    var bg=r.excluded?'#f3f3f3':(!r.pid?'#fff6cc':'');
+    return '<tr style="background:'+bg+';'+(r.excluded?'color:#aaa;':'')+'">'+
+      '<td style="padding:.3rem;">'+xlHtml(r.name)+'</td>'+
+      '<td style="padding:.3rem;">'+
+        (!r.pid?'<input type="text" placeholder="🔍 제품 검색" style="width:100%;padding:.2rem .4rem;font-size:.75rem;margin-bottom:.2rem;border:1px solid #e0c060;border-radius:4px;" oninput="xlFilter('+i+',this.value)">':'')+
+        '<select id="xlSel_'+i+'" style="width:100%;font-size:.78rem;padding:.2rem;" onchange="xlSetPid('+i+',this.value)">'+xlProdOptions(r.pid,'')+'</select>'+
+        (r.pid&&howLbl[r.how]?'<div style="font-size:.65rem;color:#888;">'+howLbl[r.how]+'</div>':'')+
+      '</td>'+
+      '<td style="padding:.3rem;"><input type="number" min="1" value="'+r.qty+'" style="width:4.2em;text-align:center;" onchange="xlSetQty('+i+',this.value)"></td>'+
+      '<td style="padding:.3rem;text-align:center;"><input type="checkbox"'+(r.excluded?' checked':'')+' onchange="xlSetEx('+i+',this.checked)"></td>'+
+    '</tr>';
+  }).join('');
+  var prevBody=document.getElementById('xlBody'), scrollTop=prevBody?prevBody.scrollTop:0; // 다시 그려도 표 스크롤 위치 유지
+  m.innerHTML='<div style="background:#fff;border-radius:14px;padding:1.3rem;width:94%;max-width:760px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.2);">'+
+    '<div style="font-weight:700;font-size:1rem;margin-bottom:.4rem;">📥 엑셀로 품목 등록 — '+xlHtml(_xl.client)+' <span style="font-weight:400;font-size:.8rem;color:#888;">('+xlHtml(S.ordDate)+', '+xlHtml(_xl.file)+')</span></div>'+
+    (_xl.header?'':'<div style="background:#fff6cc;color:#8a6d00;padding:.4rem .6rem;border-radius:6px;font-size:.78rem;margin-bottom:.4rem;">제목 행(제품명/수량)을 찾지 못했어요. 아래에서 제품명 열과 수량 열을 골라주세요.</div>')+
+    '<div style="display:flex;gap:.8rem;flex-wrap:wrap;font-size:.8rem;margin-bottom:.5rem;align-items:center;">'+
+      '<label>제품명 열 <select onchange="_xl.nameCol=+this.value;xlRebuild();">'+colOpts(_xl.nameCol)+'</select></label>'+
+      '<label>수량 열 <select onchange="_xl.qtyCol=+this.value;xlRebuild();">'+colOpts(_xl.qtyCol)+'</select></label>'+
+      '<span style="color:#888;">'+_xl.rows.length+'개 품목 · 건너뛴 행 '+_xl.skipped+'개'+(unmatched?' · <b style="color:#c08000;">미매칭 '+unmatched+'개</b>':'')+'</span>'+
+    '</div>'+
+    '<div style="display:flex;gap:1rem;font-size:.82rem;margin-bottom:.5rem;">'+
+      '<label><input type="radio" name="xlMode" value="replace"'+(_xl.mode==='replace'?' checked':'')+' onchange="_xl.mode=this.value"> 기존 품목 교체</label>'+
+      '<label><input type="radio" name="xlMode" value="merge"'+(_xl.mode==='merge'?' checked':'')+' onchange="_xl.mode=this.value"> 기존 품목에 합치기</label>'+
+      '<span style="color:#888;">(현재 '+exItems.length+'개 품목)</span>'+
+    '</div>'+
+    '<div id="xlBody" style="overflow-y:auto;flex:1;border:1px solid #eee;border-radius:6px;">'+
+      '<table style="width:100%;font-size:.8rem;border-collapse:collapse;"><thead><tr style="background:#fafafa;position:sticky;top:0;">'+
+        '<th style="text-align:left;padding:.3rem;">엑셀 제품명</th><th style="text-align:left;padding:.3rem;width:45%;">매칭된 제품</th><th style="padding:.3rem;">수량</th><th style="padding:.3rem;">제외</th>'+
+      '</tr></thead><tbody>'+(rowsHtml||'<tr><td colspan="4" style="padding:1rem;text-align:center;color:#aaa;">읽을 수 있는 품목이 없어요. 열 선택을 확인해 주세요.</td></tr>')+'</tbody></table>'+
+    '</div>'+
+    '<div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.8rem;">'+
+      '<button onclick="xlClose()" style="padding:.5rem 1rem;border:1.5px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:.88rem;">취소</button>'+
+      '<button onclick="xlConfirm()" style="padding:.5rem 1.2rem;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:600;">등록</button>'+
+    '</div>'+
+  '</div>';
+  m.style.display='flex';
+  var nb=document.getElementById('xlBody'); if(nb) nb.scrollTop=scrollTop;
+}
+
+function xlFilter(i,q){ var sel=document.getElementById('xlSel_'+i); if(sel) sel.innerHTML=xlProdOptions(_xl.rows[i].pid,q); }
+function xlSetPid(i,pid){ var r=_xl.rows[i]; r.pid=pid; r.how=pid?(pid===r.autoPid?r.autoHow:'manual'):'none'; xlRender(); }
+function xlSetQty(i,v){ var n=Number(v); _xl.rows[i].qty=(isFinite(n)&&n>0)?n:_xl.rows[i].qty; }
+function xlSetEx(i,on){ _xl.rows[i].excluded=on; xlRender(); }
+function xlClose(){ var m=document.getElementById('xlModal'); if(m) m.style.display='none'; _xl=null; } // 취소: 아무것도 저장 안 함
+
+async function xlConfirm(){
+  if(!_xl) return;
+  var use=_xl.rows.filter(function(r){return !r.excluded;});
+  var unmatched=use.filter(function(r){return !r.pid;});
+  if(unmatched.length){
+    alert('⚠️ 매칭되지 않은 품목이 '+unmatched.length+'개 있어요.\n\n'+unmatched.map(function(r){return '· '+r.name;}).join('\n')+'\n\n제품을 고르거나 "제외"에 체크한 뒤 등록해 주세요.');
+    return;
+  }
+  if(!use.length){ alert('등록할 품목이 없어요.'); return; }
+  var name=_xl.client, d=S.ordDate, mode=_xl.mode;
+  // 같은 제품으로 매칭된 행은 수량 합침 (엑셀 순서 유지)
+  var add={}, order=[];
+  use.forEach(function(r){ if(add[r.pid]==null){ add[r.pid]=0; order.push(r.pid); } add[r.pid]+=r.qty; });
+  var cur=(S.orders[d]||{})[name];
+  var isNew=!cur;
+  var data=cur?Object.assign({},cur):{items:[],driver:(function(){var c=S.clients.find(function(x){return x.name===name;});return c?c.driver||'':'';})(),addedAt:Date.now()};
+  var oldItems=(cur&&cur.items)||[];
+  var items=[], keptScanned=[];
+  if(mode==='replace'){
+    // 교체: 엑셀에 없는 기존 품목은 빼되, 이미 스캔된 품목은 지우지 않고 남김
+    oldItems.forEach(function(it){ if(add[it.pid]==null&&(it.scanned||0)>0){ items.push(Object.assign({},it)); keptScanned.push(it.pid); } });
+  } else {
+    items=oldItems.map(function(it){ return Object.assign({},it); });
+  }
+  order.forEach(function(pid){
+    var old=oldItems.find(function(it){return it.pid===pid;});
+    var ex=items.find(function(it){return it.pid===pid;});
+    if(mode==='merge'&&ex){
+      ex.qty=(ex.qty||0)+add[pid];
+    } else if(old){
+      // 교체 모드에서 기존 품목이면 scanned/done 등은 그대로 두고 수량만 엑셀 값으로
+      ex=Object.assign({},old,{qty:add[pid]}); items.push(ex);
+    } else {
+      items.push({pid:pid,qty:add[pid],done:false});
+      return;
+    }
+    // 수량이 스캔 수보다 늘어나면 완료 표시를 풀어줌 (order-admin exportToOrder와 같은 처리)
+    if(ex.done&&(ex.scanned||0)<ex.qty) ex.done=false;
+  });
+  data.items=items;
+  var ok=false;
+  await safeWrite(async function(){
+    await db.collection('orders').doc(d).set({[name]: data},{merge:true});
+    ok=true;
+  });
+  if(!ok) return; // safeWrite가 오류 알림을 띄움, 미리보기는 그대로 둬서 다시 시도 가능
+  if(!S.orders[d]) S.orders[d]={};
+  S.orders[d][name]=data;
+
+  // 사람이 직접 고른 매칭은 거래처 문서 prodAliases에 저장 (merge라서 다른 필드/다른 별칭은 그대로)
+  var picked={};
+  use.forEach(function(r){ if(r.how==='manual'&&r.pid) picked[r.name]=r.pid; });
+  var cl=S.clients.find(function(c){return c.name===name;});
+  if(cl&&Object.keys(picked).length){
+    try{
+      await db.collection('clients').doc(cl.id).set({prodAliases:picked},{merge:true});
+      cl.prodAliases=Object.assign({},cl.prodAliases||{},picked);
+      saveCacheLS('clients', S.clients);
+    }catch(e){ console.error('prodAliases 저장 실패:',e); toast('제품 매칭 기억 저장 실패: '+e.message,'err'); }
+  }
+
+  var excludedCnt=_xl.rows.length-use.length+_xl.skipped;
+  xlClose();
+  if(isNew) render();
+  else { var sid=safeid(name), el=document.getElementById('ocard_'+sid); if(el){var tmp=document.createElement('div');tmp.innerHTML=drawOrdCard(name,data);el.parentNode.replaceChild(tmp.firstChild,el);} }
+  toast(order.length+'개 품목 등록, '+excludedCnt+'개 제외','ok');
+  if(keptScanned.length) alert('이미 스캔된 품목 '+keptScanned.length+'개는 엑셀에 없지만 지우지 않고 남겨뒀어요.\n필요하면 카드에서 직접 정리해 주세요.');
 }
 
 
