@@ -1716,6 +1716,7 @@ function pgOrders() {
       '<button class="btn btn-gray btn-sm" onclick="clearOrders()">초기화</button>'+
       '<button class="btn btn-success btn-sm" onclick="exportExcel()">📊 엑셀 다운로드</button>'+
       '<button class="btn btn-primary btn-sm" onclick="printOrders()">🖨️ 인쇄</button>'+
+      '<button class="btn btn-success btn-sm" onclick="xlbPickFile()">📥 엑셀로 거래처 등록</button>'+ // 2026-10-06 수정: 여러 거래처 엑셀 일괄 등록
     '</div>'+
     '<div class="driver-tabs"><div class="dtab'+(S.ordDriver==='전체'?' active':'')+'" onclick="S.ordDriver=\'전체\';render();">전체</div>'+
       DRIVERS.map(function(d){return '<div class="dtab'+(S.ordDriver===d?' active':'')+'" onclick="S.ordDriver=\''+d+'\';render();">'+d+'</div>';}).join('')+
@@ -2034,7 +2035,8 @@ function xlCardDrop(e,clientName){
   xlReadFile(clientName,f);
 }
 
-function xlReadFile(clientName,file){
+// 2026-10-06 수정: 파일 → 첫 시트 2차원 배열 읽기를 따로 빼서 "엑셀로 거래처 등록"과 같이 씀. cb(sheet, 시트이름)
+function xlReadSheet(file,cb){
   var rd=new FileReader();
   rd.onload=function(){
     try{
@@ -2050,14 +2052,20 @@ function xlReadFile(clientName,file){
       var ws=wb.Sheets[wb.SheetNames[0]];
       var sheet=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false});
       if(!sheet.length){ toast('엑셀에 내용이 없어요','err'); return; }
+      cb(sheet,wb.SheetNames[0]);
+    }catch(e){ console.error(e); alert('엑셀을 읽지 못했어요: '+e.message); }
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+function xlReadFile(clientName,file){
+  xlReadSheet(file,function(sheet){
       var hd=xlFindHeader(sheet);
       _xl={client:clientName,file:file.name,sheet:sheet,header:hd,headerRow:hd?hd.row:-1,nameCol:hd?hd.nameCol:0,qtyCol:hd?hd.qtyCol:1};
       var ex=((S.orders[S.ordDate]||{})[clientName]||{}).items||[];
       _xl.mode=ex.length?'merge':'replace';
       xlRebuild();
-    }catch(e){ console.error(e); alert('엑셀을 읽지 못했어요: '+e.message); }
-  };
-  rd.readAsArrayBuffer(file);
+  });
 }
 
 // 열 선택이 바뀌면 행을 다시 만들고 매칭
@@ -2083,6 +2091,17 @@ function xlProdOptions(selPid,q,cands){
     '<optgroup label="── 전체 ──">'+list.map(opt).join('')+'</optgroup>';
 }
 
+// 열 선택 드롭다운 옵션: "A열 (제목 또는 첫 값)"
+function xlColOptions(sheet,headerRow,sel){
+  var cols=0; sheet.slice(0,30).forEach(function(r){ cols=Math.max(cols,r.length); });
+  var hdrRow=headerRow>=0?sheet[headerRow]:null;
+  var o=''; for(var c=0;c<cols;c++){
+    var sample=hdrRow?hdrRow[c]:'';
+    if(sample===''||sample==null){ for(var r=0;r<Math.min(sheet.length,10);r++){ if(sheet[r][c]!==''&&sheet[r][c]!=null){ sample=sheet[r][c]; break; } } }
+    o+='<option value="'+c+'"'+(c===sel?' selected':'')+'>'+XLSX.utils.encode_col(c)+'열'+(sample!==''&&sample!=null?' ('+xlHtml(String(sample).slice(0,12))+')':'')+'</option>';
+  } return o;
+}
+
 function xlRender(){
   var m=document.getElementById('xlModal');
   if(!m){
@@ -2090,15 +2109,7 @@ function xlRender(){
     m.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;';
     document.body.appendChild(m);
   }
-  var cols=0; _xl.sheet.slice(0,30).forEach(function(r){ cols=Math.max(cols,r.length); });
-  var hdrRow=_xl.headerRow>=0?_xl.sheet[_xl.headerRow]:null;
-  function colOpts(sel){
-    var o=''; for(var c=0;c<cols;c++){
-      var sample=hdrRow?hdrRow[c]:'';
-      if(sample===''||sample==null){ for(var r=0;r<Math.min(_xl.sheet.length,10);r++){ if(_xl.sheet[r][c]!==''&&_xl.sheet[r][c]!=null){ sample=_xl.sheet[r][c]; break; } } }
-      o+='<option value="'+c+'"'+(c===sel?' selected':'')+'>'+XLSX.utils.encode_col(c)+'열'+(sample!==''&&sample!=null?' ('+xlHtml(String(sample).slice(0,12))+')':'')+'</option>';
-    } return o;
-  }
+  function colOpts(sel){ return xlColOptions(_xl.sheet,_xl.headerRow,sel); } // 2026-10-06 수정: 거래처 일괄 등록과 같이 쓰려고 밖으로 뺌
   var unmatched=_xl.rows.filter(function(r){return !r.excluded&&!r.pid;}).length;
   var howLbl={alias:'저장된 매칭',exact:'이름 일치',spec:'규격 뺀 이름',contains:'이름 포함',token:'단어 매칭',none:'',manual:'직접 선택'}; // 2026-10-05 수정: 단어 매칭 라벨
   var exItems=((S.orders[S.ordDate]||{})[_xl.client]||{}).items||[];
@@ -2166,7 +2177,32 @@ async function xlConfirm(){
   use.forEach(function(r){ if(add[r.pid]==null){ add[r.pid]=0; order.push(r.pid); } add[r.pid]+=r.qty; });
   var cur=(S.orders[d]||{})[name];
   var isNew=!cur;
-  var data=cur?Object.assign({},cur):{items:[],driver:(function(){var c=S.clients.find(function(x){return x.name===name;});return c?c.driver||'':'';})(),addedAt:Date.now()};
+  var mg=xlMergeCard(name,cur,add,order,mode,Date.now()); // 2026-10-06 수정: 거래처 일괄 등록과 같이 쓰려고 밖으로 뺌
+  var data=mg.data, keptScanned=mg.keptScanned;
+  var ok=false;
+  await safeWrite(async function(){
+    await db.collection('orders').doc(d).set({[name]: data},{merge:true});
+    ok=true;
+  });
+  if(!ok) return; // safeWrite가 오류 알림을 띄움, 미리보기는 그대로 둬서 다시 시도 가능
+  if(!S.orders[d]) S.orders[d]={};
+  S.orders[d][name]=data;
+
+  await xlSaveAliases(name,use);
+
+  var excludedCnt=_xl.rows.length-use.length+_xl.skipped;
+  xlClose();
+  if(isNew) render();
+  else { var sid=safeid(name), el=document.getElementById('ocard_'+sid); if(el){var tmp=document.createElement('div');tmp.innerHTML=drawOrdCard(name,data);el.parentNode.replaceChild(tmp.firstChild,el);} }
+  toast(order.length+'개 품목 등록, '+excludedCnt+'개 제외','ok');
+  if(keptScanned.length) alert('이미 스캔된 품목 '+keptScanned.length+'개는 엑셀에 없지만 지우지 않고 남겨뒀어요.\n필요하면 카드에서 직접 정리해 주세요.');
+}
+
+// 2026-10-06 수정: xlConfirm에서 뺀 카드 합치기 로직 (카드별 📥 엑셀 / 엑셀로 거래처 등록 공용)
+// add: {pid: 수량}, order: pid 순서, mode: replace/merge. 새 카드면 addedAt·담당기사(clients.driver)를 넣음
+// 반환 {data, keptScanned:[교체 모드에서 엑셀에 없지만 스캔돼서 남긴 pid]}
+function xlMergeCard(name,cur,add,order,mode,addedAt){
+  var data=cur?Object.assign({},cur):{items:[],driver:(function(){var c=S.clients.find(function(x){return x.name===name;});return c?c.driver||'':'';})(),addedAt:addedAt};
   var oldItems=(cur&&cur.items)||[];
   var items=[], keptScanned=[];
   if(mode==='replace'){
@@ -2191,16 +2227,12 @@ async function xlConfirm(){
     if(ex.done&&(ex.scanned||0)<ex.qty) ex.done=false;
   });
   data.items=items;
-  var ok=false;
-  await safeWrite(async function(){
-    await db.collection('orders').doc(d).set({[name]: data},{merge:true});
-    ok=true;
-  });
-  if(!ok) return; // safeWrite가 오류 알림을 띄움, 미리보기는 그대로 둬서 다시 시도 가능
-  if(!S.orders[d]) S.orders[d]={};
-  S.orders[d][name]=data;
+  return {data:data,keptScanned:keptScanned};
+}
 
-  // 사람이 직접 고른 매칭은 거래처 문서 prodAliases에 저장 (merge라서 다른 필드/다른 별칭은 그대로)
+// 사람이 직접 고른 매칭은 거래처 문서 prodAliases에 저장 (merge라서 다른 필드/다른 별칭은 그대로)
+// 2026-10-06 수정: xlConfirm에서 밖으로 뺌 (거래처 일괄 등록과 공용)
+async function xlSaveAliases(name,use){
   var picked={};
   use.forEach(function(r){ if(r.how==='manual'&&r.pid) picked[r.name]=r.pid; });
   var cl=S.clients.find(function(c){return c.name===name;});
@@ -2211,13 +2243,298 @@ async function xlConfirm(){
       saveCacheLS('clients', S.clients);
     }catch(e){ console.error('prodAliases 저장 실패:',e); toast('제품 매칭 기억 저장 실패: '+e.message,'err'); }
   }
+}
 
-  var excludedCnt=_xl.rows.length-use.length+_xl.skipped;
-  xlClose();
-  if(isNew) render();
-  else { var sid=safeid(name), el=document.getElementById('ocard_'+sid); if(el){var tmp=document.createElement('div');tmp.innerHTML=drawOrdCard(name,data);el.parentNode.replaceChild(tmp.firstChild,el);} }
-  toast(order.length+'개 품목 등록, '+excludedCnt+'개 제외','ok');
-  if(keptScanned.length) alert('이미 스캔된 품목 '+keptScanned.length+'개는 엑셀에 없지만 지우지 않고 남겨뒀어요.\n필요하면 카드에서 직접 정리해 주세요.');
+
+// ── 출고지시서 엑셀로 거래처 등록 (2026-10-06 추가) ──
+// 2026-10-06 수정: 상단 "📥 엑셀로 거래처 등록" — 여러 거래처가 섞인 발주 엑셀(거래처/제품명/수량)을 한 번에 S.ordDate 카드로 등록
+// 제품 매칭·카드 합치기·prodAliases 저장은 카드별 📥 엑셀(xl*)과 같은 함수를 씀. 엑셀의 발주일/날짜 열은 무시함
+// 거래처 매칭 순서: 이름/별칭(aliases) 정확 일치 → 괄호 뺀 이름 일치(한 곳으로 좁혀질 때만) → 90% 이상 유사(1위가 하나일 때만) → 미리보기에서 직접 선택
+var XL_CLIENT_KEYS = ['거래처','거래처명'];
+var XL_CLIENT_SIM = 0.9;
+var _xlb = null; // {file, sheetName, sheet, header, headerRow, clientCol(-1=없음), nameCol, qtyCol, groups, skipped}
+
+// 두 문자열 유사도 (0~1) = 1 - 편집거리/긴 쪽 길이
+function xlSim(a,b){
+  if(a===b) return 1;
+  if(!a||!b) return 0;
+  var prev=[], cur, i, j;
+  for(j=0;j<=b.length;j++) prev[j]=j;
+  for(i=1;i<=a.length;i++){
+    cur=[i];
+    for(j=1;j<=b.length;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur;
+  }
+  return 1-prev[b.length]/Math.max(a.length,b.length);
+}
+
+// 엑셀 거래처 이름 → {name(S.clients 이름, 못 찾으면 ''), how: exact/spec/similar/none}
+function xlMatchClient(raw){
+  raw=String(raw==null?'':raw).trim();
+  if(!raw) return {name:'',how:'none'};
+  function names(c){ return [c.name].concat(Array.isArray(c.aliases)?c.aliases:[]).filter(Boolean); }
+  var ex=S.clients.filter(function(c){ return names(c).indexOf(raw)>=0; });
+  if(!ex.length){ var n=xlNorm(raw); ex=S.clients.filter(function(c){ return names(c).some(function(x){return xlNorm(x)===n;}); }); }
+  if(ex.length===1) return {name:ex[0].name,how:'exact'};
+  var s=xlStripSpec(raw);
+  if(s){
+    var sp=S.clients.filter(function(c){ return names(c).some(function(x){return xlStripSpec(x)===s;}); });
+    if(sp.length===1) return {name:sp[0].name,how:'spec'};
+    var best=null, second=0;
+    S.clients.forEach(function(c){
+      var sc=Math.max.apply(null,names(c).map(function(x){ return xlSim(s,xlStripSpec(x)); }));
+      if(!best||sc>best.sc){ if(best) second=Math.max(second,best.sc); best={c:c,sc:sc}; }
+      else second=Math.max(second,sc);
+    });
+    if(best&&best.sc>=XL_CLIENT_SIM&&best.sc>second) return {name:best.c.name,how:'similar'};
+  }
+  return {name:'',how:'none'};
+}
+
+function xlbPickFile(){
+  if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
+  var inp=document.getElementById('xlbFileInput');
+  if(!inp){
+    inp=document.createElement('input'); inp.type='file'; inp.id='xlbFileInput'; inp.accept='.xlsx,.xls,.csv'; inp.style.display='none';
+    inp.onchange=function(){ var f=inp.files&&inp.files[0]; inp.value=''; if(f) xlbReadFile(f); };
+    document.body.appendChild(inp);
+  }
+  inp.click();
+}
+
+function xlbReadFile(file){
+  xlReadSheet(file,function(sheet,sheetName){
+    var hd=xlFindHeader(sheet);
+    var clientCol=-1;
+    if(hd){
+      var cells=(sheet[hd.row]||[]).map(xlNorm);
+      clientCol=xlPickCol(cells,XL_CLIENT_KEYS,hd.nameCol);
+      if(clientCol===hd.qtyCol) clientCol=-1;
+    }
+    _xlb={file:file.name,sheetName:sheetName,sheet:sheet,header:hd,headerRow:hd?hd.row:-1,nameCol:hd?hd.nameCol:0,qtyCol:hd?hd.qtyCol:1,clientCol:clientCol};
+    xlbRebuild();
+  });
+}
+
+// 거래처 열이 없을 때: 파일 이름(확장자 뺌) → 시트 이름 순으로 거래처 이름인지 확인
+function xlbFallbackClient(){
+  var cands=[_xlb.file.replace(/\.[^.]+$/,''),_xlb.sheetName];
+  for(var i=0;i<cands.length;i++){ var m=xlMatchClient(cands[i]); if(m.name) return {raw:cands[i],m:m}; }
+  return {raw:cands[0],m:{name:'',how:'none'}};
+}
+
+// 열 선택이 바뀌면 거래처별 묶음을 다시 만들고 매칭
+function xlbRebuild(){
+  var groups=[], byKey={}, skipped=0, last='', fb=_xlb.clientCol<0?xlbFallbackClient():null;
+  for(var r=_xlb.headerRow+1;r<_xlb.sheet.length;r++){
+    var row=_xlb.sheet[r]||[];
+    if(row.every(function(c){ return c===''||c==null; })) continue;
+    var raw=fb?fb.raw:String(row[_xlb.clientCol]==null?'':row[_xlb.clientCol]).trim();
+    if(!raw) raw=last; // 병합된 거래처 칸은 첫 줄에만 값이 있어서 위 거래처를 이어 씀
+    if(!raw||XL_SKIP_NAMES.indexOf(xlNorm(raw))>=0){ skipped++; continue; }
+    last=raw;
+    var key=xlNorm(raw);
+    if(!byKey[key]){ byKey[key]={raw:raw,lines:[]}; groups.push(byKey[key]); }
+    byKey[key].lines.push(row);
+  }
+  _xlb.groups=[];
+  groups.forEach(function(g){
+    var b=xlBuildRows(g.lines,-1,_xlb.nameCol,_xlb.qtyCol);
+    skipped+=b.skipped;
+    if(!b.list.length) return;
+    var m=fb?fb.m:xlMatchClient(g.raw);
+    var grp={raw:g.raw,client:m.name,how:m.how,autoClient:m.name,autoHow:m.how,excluded:false,
+      rows:b.list.map(function(x){ return {name:x.name,qty:x.qty,pid:'',how:'none',autoPid:'',autoHow:'none',cands:[],excluded:false}; })};
+    xlbApplyClient(grp,true);
+    _xlb.groups.push(grp);
+  });
+  _xlb.skipped=skipped;
+  xlbRender();
+}
+
+// 거래처가 정해지거나 바뀌면: 그 거래처 prodAliases로 제품 다시 매칭(직접 고른 건 유지), 기존 카드 여부에 따라 기본 모드/제외 설정
+function xlbApplyClient(g,first){
+  var cl=S.clients.find(function(c){return c.name===g.client;});
+  var aliases=(cl&&cl.prodAliases)||{};
+  g.rows.forEach(function(r){
+    var m=xlMatchProd(r.name,S.prods,aliases);
+    r.autoPid=m.pid; r.autoHow=m.how; r.cands=m.cands||[];
+    if(r.how!=='manual'){ r.pid=m.pid; r.how=m.how; }
+  });
+  var cur=g.client?(S.orders[S.ordDate]||{})[g.client]:null;
+  g.mode=(cur&&cur.items&&cur.items.length)?'merge':'replace';
+  // 입력완료(잠김) 카드는 기본으로 제외 — 필요하면 체크를 풀어서 등록
+  if(first||g.locked!==!!(cur&&cur.locked)) g.excluded=!!(cur&&cur.locked);
+  g.locked=!!(cur&&cur.locked);
+}
+
+// 제품 드롭다운은 처음엔 선택된 제품+추천만 넣고, 누를 때 전체 목록을 채움 (거래처·품목이 많을 때 화면이 느려지지 않게)
+function xlbSelHtml(gi,i,r){
+  var full=!r.pid;
+  var inner=full?xlProdOptions(r.pid,'',r.cands):(function(){
+    var p=S.prods.find(function(x){return x.id===r.pid;});
+    return '<option value="">-- 미매칭 --</option><option value="'+xlHtml(r.pid)+'" selected>'+xlHtml(p?p.name:r.pid)+' ['+xlHtml(r.pid)+']</option>';
+  })();
+  return '<select id="xlbSel_'+gi+'_'+i+'" data-full="'+(full?1:0)+'" style="width:100%;font-size:.78rem;padding:.2rem;" onmousedown="xlbFillSel('+gi+','+i+')" onfocus="xlbFillSel('+gi+','+i+')" onchange="xlbSetPid('+gi+','+i+',this.value)">'+inner+'</select>';
+}
+function xlbFillSel(gi,i){
+  var sel=document.getElementById('xlbSel_'+gi+'_'+i); if(!sel||sel.dataset.full==='1') return;
+  var r=_xlb.groups[gi].rows[i];
+  sel.innerHTML=xlProdOptions(r.pid,'',r.cands); sel.dataset.full='1';
+}
+
+function xlbRender(){
+  var m=document.getElementById('xlbModal');
+  if(!m){
+    m=document.createElement('div'); m.id='xlbModal';
+    m.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;';
+    document.body.appendChild(m);
+  }
+  var todayOrd=S.orders[S.ordDate]||{};
+  var howLbl={alias:'저장된 매칭',exact:'이름 일치',spec:'규격 뺀 이름',contains:'이름 포함',token:'단어 매칭',none:'',manual:'직접 선택'};
+  var cHowLbl={exact:'이름 일치',spec:'괄호 뺀 이름',similar:'비슷한 이름 — 확인해 주세요',manual:'직접 선택'};
+  var clientOpts=S.clients.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'','ko');});
+  var act=_xlb.groups.filter(function(g){return !g.excluded;});
+  var noClient=act.filter(function(g){return !g.client;}).length;
+  var unmatched=0, itemCnt=0;
+  act.forEach(function(g){ g.rows.forEach(function(r){ if(!r.excluded){ itemCnt++; if(!r.pid) unmatched++; } }); });
+  var dupNames={}; act.forEach(function(g){ if(g.client) dupNames[g.client]=(dupNames[g.client]||0)+1; });
+
+  var groupsHtml=_xlb.groups.map(function(g,gi){
+    var cur=g.client?todayOrd[g.client]:null;
+    var exItems=(cur&&cur.items)||[];
+    var scannedCnt=exItems.filter(function(it){return (it.scanned||0)>0;}).length;
+    var border=g.excluded?'#ddd':(!g.client?'#e0c060':'#cfe0f5');
+    var head='<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;font-size:.82rem;">'+
+      '<label style="white-space:nowrap;"><input type="checkbox"'+(g.excluded?' checked':'')+' onchange="xlbSetGroupEx('+gi+',this.checked)"> 제외</label>'+
+      '<span style="color:#888;">엑셀:</span> <b>'+xlHtml(g.raw)+'</b> <span style="color:#888;">→</span>'+
+      '<select style="font-size:.8rem;padding:.2rem;max-width:220px;'+(!g.client?'background:#fff6cc;':'')+'" onchange="xlbSetClient('+gi+',this.value)">'+
+        '<option value="">-- 거래처 선택 --</option>'+
+        clientOpts.map(function(c){ return '<option value="'+xlHtml(c.name)+'"'+(c.name===g.client?' selected':'')+'>'+xlHtml(c.name)+(c.code?' ('+xlHtml(c.code)+')':'')+'</option>'; }).join('')+
+      '</select>'+
+      (g.client&&cHowLbl[g.how]?'<span style="font-size:.7rem;color:'+(g.how==='similar'?'#d35400':'#888')+';">'+cHowLbl[g.how]+'</span>':'')+
+      (!g.client?'<span style="font-size:.72rem;color:#c08000;">거래처를 못 찾았어요 — 골라주세요</span>':'')+
+    '</div>';
+    var status='';
+    if(g.client){
+      if(cur){
+        status='<div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;font-size:.78rem;margin:.3rem 0;">'+
+          '<span style="color:#2d7dd2;">기존 카드 있음 ('+exItems.length+'개 품목'+(scannedCnt?', 스캔된 품목 '+scannedCnt+'개':'')+')</span>'+
+          (g.locked?'<span style="color:#27ae60;font-weight:600;">[입력완료 카드]</span>':'')+
+          '<label><input type="radio" name="xlbMode_'+gi+'" value="replace"'+(g.mode==='replace'?' checked':'')+' onchange="_xlb.groups['+gi+'].mode=this.value"> 교체</label>'+
+          '<label><input type="radio" name="xlbMode_'+gi+'" value="merge"'+(g.mode==='merge'?' checked':'')+' onchange="_xlb.groups['+gi+'].mode=this.value"> 합치기</label>'+
+        '</div>';
+      } else {
+        status='<div style="font-size:.78rem;margin:.3rem 0;"><span class="badge" style="background:#e8f7ee;color:#27ae60;">새 카드 생성</span></div>';
+      }
+      if(dupNames[g.client]>1&&!g.excluded) status+='<div style="font-size:.72rem;color:#d35400;margin-bottom:.3rem;">같은 거래처로 지정된 묶음이 '+dupNames[g.client]+'개 — 한 카드로 합쳐서 등록돼요 (교체/합치기는 첫 묶음 설정을 따름)</div>';
+    }
+    var rowsHtml=g.excluded?'':g.rows.map(function(r,i){
+      var bg=r.excluded?'#f3f3f3':(!r.pid?'#fff6cc':'');
+      return '<tr style="background:'+bg+';'+(r.excluded?'color:#aaa;':'')+'">'+
+        '<td style="padding:.3rem;">'+xlHtml(r.name)+'</td>'+
+        '<td style="padding:.3rem;">'+
+          (!r.pid?'<input type="text" placeholder="🔍 제품 검색" style="width:100%;padding:.2rem .4rem;font-size:.75rem;margin-bottom:.2rem;border:1px solid #e0c060;border-radius:4px;" oninput="xlbFilter('+gi+','+i+',this.value)">':'')+
+          xlbSelHtml(gi,i,r)+
+          (r.pid&&howLbl[r.how]?'<div style="font-size:.65rem;color:'+(r.how==='token'?'#d35400':'#888')+';">'+howLbl[r.how]+(r.how==='token'?' — 확인해 주세요':'')+'</div>':'')+
+          (!r.pid&&r.cands&&r.cands.length?'<div style="font-size:.65rem;color:#c08000;">추천 후보 '+r.cands.length+'개 — 드롭다운 맨 위에서 골라주세요</div>':'')+
+        '</td>'+
+        '<td style="padding:.3rem;"><input type="number" min="1" value="'+r.qty+'" style="width:4.2em;text-align:center;" onchange="xlbSetQty('+gi+','+i+',this.value)"></td>'+
+        '<td style="padding:.3rem;text-align:center;"><input type="checkbox"'+(r.excluded?' checked':'')+' onchange="xlbSetEx('+gi+','+i+',this.checked)"></td>'+
+      '</tr>';
+    }).join('');
+    return '<div style="border:1.5px solid '+border+';border-radius:8px;padding:.5rem .6rem;margin-bottom:.6rem;'+(g.excluded?'background:#f7f7f7;color:#aaa;':'')+'">'+
+      head+status+
+      (g.excluded?'<div style="font-size:.75rem;color:#aaa;">'+g.rows.length+'개 품목 — 등록 안 함</div>':
+      '<table style="width:100%;font-size:.8rem;border-collapse:collapse;"><thead><tr style="background:#fafafa;">'+
+        '<th style="text-align:left;padding:.3rem;">엑셀 제품명</th><th style="text-align:left;padding:.3rem;width:45%;">매칭된 제품</th><th style="padding:.3rem;">수량</th><th style="padding:.3rem;">제외</th>'+
+      '</tr></thead><tbody>'+rowsHtml+'</tbody></table>')+
+    '</div>';
+  }).join('');
+
+  var prevBody=document.getElementById('xlbBody'), scrollTop=prevBody?prevBody.scrollTop:0;
+  m.innerHTML='<div style="background:#fff;border-radius:14px;padding:1.3rem;width:94%;max-width:820px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.2);">'+
+    '<div style="font-weight:700;font-size:1rem;margin-bottom:.4rem;">📥 엑셀로 거래처 등록 <span style="font-weight:400;font-size:.8rem;color:#888;">('+xlHtml(S.ordDate)+' 출고지시서에 등록, '+xlHtml(_xlb.file)+')</span></div>'+
+    (_xlb.header?'':'<div style="background:#fff6cc;color:#8a6d00;padding:.4rem .6rem;border-radius:6px;font-size:.78rem;margin-bottom:.4rem;">제목 행(제품명/수량)을 찾지 못했어요. 아래에서 열을 골라주세요.</div>')+
+    (_xlb.clientCol<0?'<div style="background:#eef5fc;color:#2d6aa0;padding:.4rem .6rem;border-radius:6px;font-size:.78rem;margin-bottom:.4rem;">거래처 열이 없어서 파일/시트 이름으로 거래처를 찾았어요. 맞지 않으면 아래에서 거래처를 골라주세요.</div>':'')+
+    '<div style="display:flex;gap:.8rem;flex-wrap:wrap;font-size:.8rem;margin-bottom:.5rem;align-items:center;">'+
+      '<label>거래처 열 <select onchange="_xlb.clientCol=+this.value;xlbRebuild();"><option value="-1"'+(_xlb.clientCol<0?' selected':'')+'>없음 (파일/시트 이름)</option>'+xlColOptions(_xlb.sheet,_xlb.headerRow,_xlb.clientCol)+'</select></label>'+
+      '<label>제품명 열 <select onchange="_xlb.nameCol=+this.value;xlbRebuild();">'+xlColOptions(_xlb.sheet,_xlb.headerRow,_xlb.nameCol)+'</select></label>'+
+      '<label>수량 열 <select onchange="_xlb.qtyCol=+this.value;xlbRebuild();">'+xlColOptions(_xlb.sheet,_xlb.headerRow,_xlb.qtyCol)+'</select></label>'+
+    '</div>'+
+    '<div style="font-size:.8rem;color:#888;margin-bottom:.5rem;">'+act.length+'개 거래처 · '+itemCnt+'개 품목 · 건너뛴 행 '+_xlb.skipped+'개'+
+      (noClient?' · <b style="color:#c08000;">거래처 미지정 '+noClient+'개</b>':'')+
+      (unmatched?' · <b style="color:#c08000;">미매칭 품목 '+unmatched+'개</b>':'')+'</div>'+
+    '<div id="xlbBody" style="overflow-y:auto;flex:1;">'+(groupsHtml||'<div style="padding:1rem;text-align:center;color:#aaa;">읽을 수 있는 품목이 없어요. 열 선택을 확인해 주세요.</div>')+'</div>'+
+    '<div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.8rem;">'+
+      '<button onclick="xlbClose()" style="padding:.5rem 1rem;border:1.5px solid #ddd;background:#fff;border-radius:8px;cursor:pointer;font-size:.88rem;">취소</button>'+
+      '<button onclick="xlbConfirm()" style="padding:.5rem 1.2rem;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:600;">등록</button>'+
+    '</div>'+
+  '</div>';
+  m.style.display='flex';
+  var nb=document.getElementById('xlbBody'); if(nb) nb.scrollTop=scrollTop;
+}
+
+function xlbFilter(gi,i,q){ var r=_xlb.groups[gi].rows[i], sel=document.getElementById('xlbSel_'+gi+'_'+i); if(sel){ sel.innerHTML=xlProdOptions(r.pid,q,r.cands); sel.dataset.full='1'; } }
+function xlbSetPid(gi,i,pid){ var r=_xlb.groups[gi].rows[i]; r.pid=pid; r.how=pid?(pid===r.autoPid?r.autoHow:'manual'):'none'; xlbRender(); }
+function xlbSetQty(gi,i,v){ var r=_xlb.groups[gi].rows[i], n=Number(v); r.qty=(isFinite(n)&&n>0)?n:r.qty; }
+function xlbSetEx(gi,i,on){ _xlb.groups[gi].rows[i].excluded=on; xlbRender(); }
+function xlbSetGroupEx(gi,on){ _xlb.groups[gi].excluded=on; xlbRender(); }
+function xlbSetClient(gi,name){
+  var g=_xlb.groups[gi];
+  g.client=name; g.how=name?(name===g.autoClient?g.autoHow:'manual'):'none';
+  xlbApplyClient(g,false);
+  xlbRender();
+}
+function xlbClose(){ var m=document.getElementById('xlbModal'); if(m) m.style.display='none'; _xlb=null; } // 취소: 아무것도 저장 안 함
+
+async function xlbConfirm(){
+  if(!_xlb) return;
+  var act=_xlb.groups.filter(function(g){ return !g.excluded&&g.rows.some(function(r){return !r.excluded;}); });
+  if(!act.length){ alert('등록할 거래처/품목이 없어요.'); return; }
+  var noClient=act.filter(function(g){return !g.client;});
+  if(noClient.length){
+    alert('⚠️ 거래처가 정해지지 않은 묶음이 '+noClient.length+'개 있어요.\n\n'+noClient.map(function(g){return '· '+g.raw;}).join('\n')+'\n\n거래처를 고르거나 "제외"에 체크한 뒤 등록해 주세요.');
+    return;
+  }
+  var unmatched=[];
+  act.forEach(function(g){ g.rows.forEach(function(r){ if(!r.excluded&&!r.pid) unmatched.push(g.client+' / '+r.name); }); });
+  if(unmatched.length){
+    alert('⚠️ 매칭되지 않은 품목이 '+unmatched.length+'개 있어요.\n\n'+unmatched.map(function(s){return '· '+s;}).join('\n')+'\n\n제품을 고르거나 "제외"에 체크한 뒤 등록해 주세요.');
+    return;
+  }
+  var d=S.ordDate;
+  // 같은 거래처로 지정된 묶음은 하나로 합침 (교체/합치기는 첫 묶음 설정), 같은 제품은 수량 합침 (엑셀 순서 유지)
+  var byClient={}, clientOrder=[];
+  act.forEach(function(g){
+    var c=byClient[g.client];
+    if(!c){ c=byClient[g.client]={mode:g.mode,add:{},order:[],use:[]}; clientOrder.push(g.client); }
+    g.rows.forEach(function(r){
+      if(r.excluded) return;
+      if(c.add[r.pid]==null){ c.add[r.pid]=0; c.order.push(r.pid); }
+      c.add[r.pid]+=r.qty; c.use.push(r);
+    });
+  });
+  var payload={}, keptScanned=0, itemCnt=0, base=Date.now();
+  clientOrder.forEach(function(name,k){
+    var c=byClient[name];
+    // 새 카드는 맨 위에 생기고, 엑셀에서 먼저 나온 거래처가 더 위에 오도록 1ms씩 차이를 둠
+    var mg=xlMergeCard(name,(S.orders[d]||{})[name],c.add,c.order,c.mode,base-k);
+    payload[name]=mg.data; keptScanned+=mg.keptScanned.length; itemCnt+=c.order.length;
+  });
+  var ok=false;
+  await safeWrite(async function(){
+    await db.collection('orders').doc(d).set(payload,{merge:true});
+    ok=true;
+  });
+  if(!ok) return; // safeWrite가 오류 알림을 띄움, 미리보기는 그대로 둬서 다시 시도 가능
+  if(!S.orders[d]) S.orders[d]={};
+  clientOrder.forEach(function(name){ S.orders[d][name]=payload[name]; });
+  for(var k=0;k<clientOrder.length;k++) await xlSaveAliases(clientOrder[k],byClient[clientOrder[k]].use);
+  xlbClose();
+  render();
+  toast(clientOrder.length+'개 거래처, '+itemCnt+'개 품목 등록','ok');
+  if(keptScanned) alert('이미 스캔된 품목 '+keptScanned+'개는 엑셀에 없지만 지우지 않고 남겨뒀어요.\n필요하면 카드에서 직접 정리해 주세요.');
 }
 
 
