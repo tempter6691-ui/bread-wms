@@ -4473,6 +4473,34 @@ function playBeep(kind){
 var ECOUNT_PROXY = 'https://equipment-routers-diameter-boom.trycloudflare.com';
 var ECOUNT_API_KEY = '----123';
 
+// 2026-10-07 수정: 이카운트/비즈모아 전송 목록에서 같은 분류 안의 제품 순서를 고정하기 위한 순서표.
+// 여기 있는 제품이 먼저(표 순서대로), 없는 제품은 그 뒤에 가나다순. 순서를 바꾸려면 이 배열만 고치면 됨.
+// 비교는 공백 제거 후 정확 일치 — 보정 후 이름(prodName)이나 원래 상품명(origName) 중 하나라도 맞으면 매칭.
+var EC_PROD_ORDER = ['딸기파나코타','망고파나코타','모카파나코타','오렌지파나코타','초코치즈컵','큐브티라미스','양갱','블루베리미니','요거트미니'];
+function ecProdOrderIdx(r){
+  var names=[r.prodName, r.origName];
+  for(var i=0;i<names.length;i++){
+    var k=EC_PROD_ORDER.indexOf(String(names[i]||'').replace(/\s+/g,''));
+    if(k!==-1) return k;
+  }
+  return -1;
+}
+// 2026-10-07 수정: ecPreview/bmPreview가 같이 쓰는 정렬 — 날짜 → 거래처 → 분류(catRank) → 순서표 → 제품명 가나다순
+function ecRowCompare(a,b){
+  if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
+  var ca=a.clientName||'', cb=b.clientName||'';
+  if(ca!==cb) return ca.localeCompare(cb,'ko');
+  var ra=catRank(a.cat), rb=catRank(b.cat);
+  if(ra!==rb) return ra-rb;
+  var oa=ecProdOrderIdx(a), ob=ecProdOrderIdx(b);
+  if(oa!==ob){
+    if(oa===-1) return 1;  // 표에 없는 제품은 뒤로
+    if(ob===-1) return -1;
+    return oa-ob;
+  }
+  return (a.prodName||'').localeCompare(b.prodName||'','ko');
+}
+
 function pgEcount() {
   var today = todayStr();
   var d7 = new Date(); d7.setDate(d7.getDate()-7);
@@ -4614,7 +4642,8 @@ async function ecPreview() {
             var custCode=client&&client.ecountCode?client.ecountCode:'';
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:item.pid,clientId:client?client.id:null});
+            // 2026-10-07 수정: 순서표 매칭용으로 원래 상품명(origName)도 저장
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:item.pid,clientId:client?client.id:null});
           });
         });
       }
@@ -4648,19 +4677,14 @@ async function ecPreview() {
       var custCode=client&&client.ecountCode?client.ecountCode:'';
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:d.pid,clientId:client?client.id:null});
+      // 2026-10-07 수정: 순서표 매칭용으로 원래 상품명(origName)도 저장
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:d.pid,clientId:client?client.id:null});
     });
     }
     // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순으로 정렬
     // (Firestore에서 가져오는 순서는 날짜/거래처 순서를 보장 안 해서, 정렬 없이는 뒤섞여 보일 수 있음)
-    rows.sort(function(a,b){
-      if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
-      var ca=a.clientName||'', cb=b.clientName||'';
-      if(ca!==cb) return ca.localeCompare(cb,'ko');
-      var ra=catRank(a.cat), rb=catRank(b.cat);
-      if(ra!==rb) return ra-rb;
-      return (a.prodName||'').localeCompare(b.prodName||'','ko');
-    });
+    // 2026-10-07 수정: 같은 분류 안에서는 EC_PROD_ORDER 순서표 제품이 먼저 오도록 공통 비교 함수 사용
+    rows.sort(ecRowCompare);
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
     var noPrice=rows.filter(function(r){return r.CUST&&!r.PRICE;});
@@ -4753,6 +4777,7 @@ function ecExportExcel() {
   });
 
   // 같은 순번(=같은 전표) 행끼리 붙어있어야 이카운트가 한 전표로 합칩니다 — 정렬 안 하면 중간에 다른 전표 행이 끼어서 쪼개져요.
+  // 2026-10-07 수정: Array.sort는 안정 정렬(ES2019~)이라 같은 순번 안에서는 ecRowCompare로 정한 제품 순서(순서표 → 가나다)가 그대로 유지됨
   sheetRows.sort(function(a, b){ return a['순번'] - b['순번']; });
 
   var headers = ['일자','순번','거래처코드','거래처명','담당자','출하창고','거래유형','통화','환율','전일잔액','총미수','품목코드','품목명','수량','단가','단가(vat포함)','외화금액','공급가액','부가세','적요','생산전표생성'];
@@ -4823,7 +4848,8 @@ async function bmPreview() {
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
             var boxMult=bmBoxMult(prod.name);
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,cat:prod.cat||'',unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:item.pid,clientId:client?client.id:null});
+            // 2026-10-07 수정: 순서표 매칭용으로 원래 상품명(origName)도 저장
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:item.pid,clientId:client?client.id:null});
           });
         });
       }
@@ -4857,18 +4883,13 @@ async function bmPreview() {
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
       var boxMult=bmBoxMult(prod.name);
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,cat:prod.cat||'',unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:d.pid,clientId:client?client.id:null});
+      // 2026-10-07 수정: 순서표 매칭용으로 원래 상품명(origName)도 저장
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:d.pid,clientId:client?client.id:null});
     });
     }
     // ecPreview와 동일하게, 거래처별로 묶여 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순 정렬
-    rows.sort(function(a,b){
-      if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
-      var ca=a.clientName||'', cb=b.clientName||'';
-      if(ca!==cb) return ca.localeCompare(cb,'ko');
-      var ra=catRank(a.cat), rb=catRank(b.cat);
-      if(ra!==rb) return ra-rb;
-      return (a.prodName||'').localeCompare(b.prodName||'','ko');
-    });
+    // 2026-10-07 수정: 같은 분류 안에서는 EC_PROD_ORDER 순서표 제품이 먼저 오도록 공통 비교 함수 사용
+    rows.sort(ecRowCompare);
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 비즈모아로 안 보낸 출고 데이터가 없습니다.</p>';return;}
     var noPrice=rows.filter(function(r){return !r.PRICE;});
     var noProdHtml=noProdWarnings.length>0?('<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:.5rem .75rem;margin-bottom:.6rem;font-size:.78rem;color:#b91c1c;">'+
