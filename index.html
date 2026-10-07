@@ -4485,11 +4485,27 @@ function ecProdOrderIdx(r){
   }
   return -1;
 }
-// 2026-10-07 수정: ecPreview/bmPreview가 같이 쓰는 정렬 — 날짜 → 거래처 → 분류(catRank) → 순서표 → 제품명 가나다순
+// 2026-10-07 수정: 같은 날짜+거래처 안에서 분류와 상관없이 무조건 맨 마지막에 둘 제품. 더 추가하려면 이 배열에 넣으면 됨.
+// 공백 제거 후 정확 일치, 이름 뒤에 "(2개/box)" 같은 괄호가 붙어 있으면 괄호 앞부분으로도 비교.
+var EC_LAST_PRODUCTS = ['미니와플'];
+function ecIsLastProd(r){
+  var names=[r.prodName, r.origName];
+  for(var i=0;i<names.length;i++){
+    var n=String(names[i]||'');
+    var full=n.replace(/\s+/g,'');
+    var head=n.split('(')[0].replace(/\s+/g,'');
+    if(EC_LAST_PRODUCTS.indexOf(full)!==-1 || EC_LAST_PRODUCTS.indexOf(head)!==-1) return true;
+  }
+  return false;
+}
+// 2026-10-07 수정: ecPreview/bmPreview가 같이 쓰는 정렬 — 날짜 → 거래처 → (EC_LAST_PRODUCTS는 맨 뒤) → 분류(catRank) → 순서표 → 제품명 가나다순
 function ecRowCompare(a,b){
   if(a.IO_DATE!==b.IO_DATE) return a.IO_DATE<b.IO_DATE?-1:1;
   var ca=a.clientName||'', cb=b.clientName||'';
   if(ca!==cb) return ca.localeCompare(cb,'ko');
+  // 2026-10-07 수정: 미니와플 등은 분류보다 먼저 판단해서 거래처 묶음의 맨 아래로
+  var la=ecIsLastProd(a), lb=ecIsLastProd(b);
+  if(la!==lb) return la?1:-1;
   var ra=catRank(a.cat), rb=catRank(b.cat);
   if(ra!==rb) return ra-rb;
   var oa=ecProdOrderIdx(a), ob=ecProdOrderIdx(b);
