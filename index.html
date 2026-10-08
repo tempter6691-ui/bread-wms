@@ -4627,6 +4627,40 @@ function ecAdjustNamePrice(prod, price) {
   return {name: cleanName, price: adjPrice};
 }
 
+// 2026-10-08 수정: QR 스캔 1번 = logs 문서 1개(qty:1)라서 같은 제품이 낱개 줄로 수십 줄 나오던 문제
+// → 같은 날짜+거래처+제품은 한 줄로 합침(QTY·origQty만 더하고 나머지 필드는 첫 행 것 유지).
+// logId 대신 합쳐진 로그 전부를 logIds 배열로 들고 있음(출고지시서 모드는 logId:null이라 logIds=[]).
+function ecMergeRows(rows){
+  var map={}, out=[];
+  rows.forEach(function(r){
+    var key=r.IO_DATE+'|'+r.clientName+'|'+r.pid;
+    var m=map[key];
+    if(!m){
+      m=Object.assign({}, r);
+      delete m.logId;
+      m.logIds=[];
+      m.QTY=0; m.origQty=0;
+      map[key]=m; out.push(m);
+    }
+    m.QTY+=r.QTY||0;
+    m.origQty+=r.origQty||0;
+    if(r.logId) m.logIds.push(r.logId);
+  });
+  return out;
+}
+// 2026-10-08 수정: 합쳐진 행/옛날 행 둘 다 지원 — 행에 딸린 로그 ID 목록
+function ecRowLogIds(r){ return r.logIds || (r.logId?[r.logId]:[]); }
+// 2026-10-08 수정: Firestore batch는 500건 제한이라 로그 ID를 모아서 400개씩 나눠 commit
+async function ecCommitLogFlags(ids, fields){
+  var CHUNK=400;
+  for(var i=0;i<ids.length;i+=CHUNK){
+    var batch=db.batch();
+    ids.slice(i,i+CHUNK).forEach(function(id){ batch.update(db.collection('logs').doc(id), fields); });
+    await batch.commit();
+  }
+  return ids.length;
+}
+
 async function ecPreview() {
   var fromRaw=(document.getElementById('ec-from')||{}).value||'';
   var toRaw=(document.getElementById('ec-to')||{}).value||'';
@@ -4712,6 +4746,9 @@ async function ecPreview() {
     // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순으로 정렬
     // (Firestore에서 가져오는 순서는 날짜/거래처 순서를 보장 안 해서, 정렬 없이는 뒤섞여 보일 수 있음)
     // 2026-10-07 수정: 같은 분류 안에서는 EC_PROD_ORDER 순서표 제품이 먼저 오도록 공통 비교 함수 사용
+    // 2026-10-08 수정: 같은 날짜+거래처+제품을 한 줄로 합친 뒤 정렬 (합치기 → 정렬 순서)
+    var rawCount=rows.length;
+    rows=ecMergeRows(rows);
     rows.sort(ecRowCompare);
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 전송 안 된 출고 데이터가 없습니다. (이미 전송된 건 자동으로 제외됨)</p>';return;}
     var noCust=rows.filter(function(r){return !r.CUST;});
@@ -4721,6 +4758,8 @@ async function ecPreview() {
       noProdWarnings.join('<br>')+'</div>'):'';
     var html=noProdHtml+'<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
       '<span style="font-size:.85rem;color:#555;">총 <b>'+rows.length+'</b>건 (아직 전송 안 된 것만)</span>'+
+      // 2026-10-08 수정: 몇 건이 몇 줄로 합쳐졌는지 표시
+      '<span style="font-size:.72rem;color:var(--sub);">('+(fromOrders?'출고지시서 항목':'스캔 로그')+' '+rawCount+'건 → '+rows.length+'줄로 합침)</span>'+
       (fromOrders?'<span style="color:#2563eb;font-size:.8rem;">📝 출고지시서(예정) 기준 — 아직 실물 출고 스캔 전</span>':'')+
       (noCust.length>0?'<span style="color:#dc2626;font-size:.8rem;">⚠️ 거래처코드 없음 '+noCust.length+'건 (전송 제외됨)</span>':'')+
       (noPrice.length>0?'<span style="color:#d97706;font-size:.8rem;">💰 단가 확인 필요 '+noPrice.length+'건 (0원으로 전송됨)</span>':'')+
@@ -4917,6 +4956,9 @@ async function bmPreview() {
     }
     // ecPreview와 동일하게, 거래처별로 묶여 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순 정렬
     // 2026-10-07 수정: 같은 분류 안에서는 EC_PROD_ORDER 순서표 제품이 먼저 오도록 공통 비교 함수 사용
+    // 2026-10-08 수정: 같은 날짜+거래처+제품을 한 줄로 합친 뒤 정렬 (합치기 → 정렬 순서)
+    var rawCount=rows.length;
+    rows=ecMergeRows(rows);
     rows.sort(ecRowCompare);
     if(rows.length===0 && noProdWarnings.length===0){el.innerHTML='<p style="color:#aaa;">해당 기간 중 아직 비즈모아로 안 보낸 출고 데이터가 없습니다.</p>';return;}
     var noPrice=rows.filter(function(r){return !r.PRICE;});
@@ -4924,6 +4966,8 @@ async function bmPreview() {
       '🚫 상품 정보를 못 찾아서 완전히 누락된 로그 '+noProdWarnings.length+'건:<br>'+noProdWarnings.join('<br>')+'</div>'):'';
     var html=noProdHtml+'<div style="margin-bottom:.75rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">'+
       '<span style="font-size:.85rem;color:#555;">총 <b>'+rows.length+'</b>건 (거래처 <b>'+(new Set(rows.map(function(r){return r.clientName;}))).size+'</b>곳)</span>'+
+      // 2026-10-08 수정: 몇 건이 몇 줄로 합쳐졌는지 표시
+      '<span style="font-size:.72rem;color:var(--sub);">('+(fromOrders?'출고지시서 항목':'스캔 로그')+' '+rawCount+'건 → '+rows.length+'줄로 합침)</span>'+
       (fromOrders?'<span style="color:#2563eb;font-size:.8rem;">📝 출고지시서(예정) 기준 — 아직 실물 출고 스캔 전</span>':'')+
       (noPrice.length>0?'<span style="color:#d97706;font-size:.8rem;">💰 단가 확인 필요 '+noPrice.length+'건 (0원으로 나감)</span>':'')+
       '<button class="btn btn-gray btn-sm" style="margin-left:auto;" onclick="bmExportExcel()">📥 거래처별 엑셀 다운로드</button>'+
@@ -5015,16 +5059,12 @@ async function bmMarkSent() {
   var statusEl=document.getElementById('bm-status');
   statusEl.textContent='표시하는 중...';
   try {
-    var batch=db.batch();
-    var n=0;
-    rows.forEach(function(r){
-      if(!r.logId)return;
-      batch.update(db.collection('logs').doc(r.logId), {bmSent:true, bmSentAt:firebase.firestore.FieldValue.serverTimestamp()});
-      n++;
-    });
-    await batch.commit();
+    // 2026-10-08 수정: 합쳐진 줄의 로그 전부(logIds)에 표시, 400개씩 나눠 commit
+    var ids=[];
+    rows.forEach(function(r){ ids=ids.concat(ecRowLogIds(r)); });
+    var n=await ecCommitLogFlags(ids, {bmSent:true, bmSentAt:firebase.firestore.FieldValue.serverTimestamp()});
     statusEl.style.color='#16a34a';
-    statusEl.textContent='✅ '+n+'건 전송완료로 표시했어요.';
+    statusEl.textContent='✅ '+rows.length+'줄(스캔 로그 '+n+'건) 전송완료로 표시했어요.';
   } catch(e){
     statusEl.style.color='#dc2626';
     statusEl.textContent='❌ 오류: '+e.message;
@@ -5044,16 +5084,12 @@ async function ecMarkSent() {
   statusEl.textContent='표시하는 중...';
 
   try {
-    var batch=db.batch();
-    var n=0;
-    sendRows.forEach(function(r){
-      if(!r.logId)return;
-      batch.update(db.collection('logs').doc(r.logId), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
-      n++;
-    });
-    await batch.commit();
+    // 2026-10-08 수정: 합쳐진 줄의 로그 전부(logIds)에 표시, 400개씩 나눠 commit
+    var ids=[];
+    sendRows.forEach(function(r){ ids=ids.concat(ecRowLogIds(r)); });
+    var n=await ecCommitLogFlags(ids, {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
     statusEl.style.color='#16a34a';
-    statusEl.textContent='✅ '+n+'건 전송완료로 표시했어요.';
+    statusEl.textContent='✅ '+sendRows.length+'줄(스캔 로그 '+n+'건) 전송완료로 표시했어요.';
   } catch(e){
     statusEl.style.color='#dc2626';
     statusEl.textContent='❌ 오류: '+e.message;
@@ -5094,12 +5130,10 @@ async function ecSend() {
       var data=await res.json();
       if(data.success){
         totalSent+=chunkRows.length;
-        var batch=db.batch();
-        chunkRows.forEach(function(r){
-          if(!r.logId)return;
-          batch.update(db.collection('logs').doc(r.logId), {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
-        });
-        await batch.commit();
+        // 2026-10-08 수정: 묶음 300줄이라도 줄마다 로그가 여러 개라 500건을 넘을 수 있음 → logIds를 모아 400개씩 commit
+        var ids=[];
+        chunkRows.forEach(function(r){ ids=ids.concat(ecRowLogIds(r)); });
+        await ecCommitLogFlags(ids, {ecSent:true, ecSentAt:firebase.firestore.FieldValue.serverTimestamp()});
       } else {
         totalFail+=chunkRows.length;
         statusEl.style.color='#dc2626';
