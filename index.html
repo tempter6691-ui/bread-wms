@@ -1312,6 +1312,7 @@ function pgOutbound() {
   return '<div class="card">'+
     '<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem;">'+
       '<label style="font-weight:600;font-size:.85rem;">📅 날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;S.outClient=null;ensureOrdersLoaded(this.value);go(\'outbound\');" style="padding:.45rem;margin-left:.3rem;"></label>'+
+      '<button style="background:#27ae60;color:#fff;border:none;border-radius:4px;padding:.45rem .8rem;font-size:.8rem;font-weight:600;cursor:pointer;" onclick="bulkCompleteOb()" title="선택한 기사(전체면 모든 거래처)의 이 날짜 미완료 품목을 한 번에 수동 완료">✅ 이 날짜 전체 완료</button>'+
     '</div>'+
     '<div class="card-title">기사 선택</div>'+
     '<div class="driver-tabs">'+
@@ -1662,6 +1663,63 @@ async function manualCompleteOb(pid) {
       if(scanEl) scanEl.focus();
     }, 500);
   });
+}
+
+// 2026-10-12 추가: 날짜 단위 일괄 수동완료 — 현재 기사 탭(전체면 모든 거래처)의 미완료 품목을 한 번에 완료 처리
+// 품목별 처리는 manualCompleteOb와 동일: scanned=qty, done=true / 재고는 있는 만큼만 차감 / 로그는 남은수량 전체(manual:true)
+async function bulkCompleteOb() {
+  var d=S.ordDate, dayOrd=S.orders[d]||{};
+  var names=Object.keys(dayOrd).filter(function(n){
+    if(!((dayOrd[n]||{}).items||[]).length) return false;
+    if(S.outDriver==='전체') return true;
+    var od=(dayOrd[n]||{}).driver; if(od) return od===S.outDriver;
+    var cl=S.clients.find(function(c){return c.name===n;});
+    return cl && cl.driver===S.outDriver;
+  });
+  var targets=[], cnt=0;
+  names.forEach(function(n){
+    var left=dayOrd[n].items.filter(function(it){return !it.done && (it.qty-(it.scanned||0))>0;});
+    if(left.length){ targets.push(n); cnt+=left.length; }
+  });
+  if(!cnt){ toast('이 날짜에 미완료 품목이 없어요','ok'); return; }
+  if(!confirm(d+' / '+S.outDriver+'\n\n거래처 '+targets.length+'곳, 미완료 품목 '+cnt+'건을 전부 수동 완료 처리할까요?\n(재고 자동 차감 + 출고 로그 기록)')) return;
+
+  var doneCnt=0, allOk=false;
+  try {
+    await safeWrite(async function(){
+      for(var t=0;t<targets.length;t++){
+        var client=targets[t];
+        var clientData=dayOrd[client];
+        var logs=[];
+        clientData.items.forEach(function(it){
+          if(it.done) return;
+          var rem=it.qty-(it.scanned||0);
+          if(rem<=0) return;
+          it.scanned=it.qty; it.done=true;
+          logs.push({pid:it.pid, rem:rem});
+        });
+        if(!logs.length) continue;
+        await db.collection('orders').doc(d).set({[client]: clientData}, {merge:true});
+        var batch=db.batch();
+        logs.forEach(function(l){
+          var p=S.prods.find(function(x){return x.id===l.pid;});
+          var pname=p?p.name:l.pid;
+          var curInv=S.inv[l.pid]||0;
+          var deduct=Math.min(l.rem, curInv);
+          if(deduct>0){
+            S.inv[l.pid]=curInv-deduct;
+            batch.set(db.collection('inventory').doc(l.pid), {qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
+          }
+          batch.set(db.collection('logs').doc(), {type:'outbound',pid:l.pid,pname:pname,client:client,qty:l.rem,invDeduct:deduct,manual:true,bulk:true,date:d,ts:firebase.firestore.FieldValue.serverTimestamp()});
+          doneCnt++;
+        });
+        await batch.commit();
+      }
+      allOk=true;
+    });
+    if(allOk) toast('✅ '+doneCnt+'건 일괄 완료!','ok');
+  } catch(e){ toast('오류: '+e.message+' ('+doneCnt+'건까지 처리됨)','err'); }
+  go('outbound');
 }
 
 // ── STOCK ────────────────────────────────────────────────────
