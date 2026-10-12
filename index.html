@@ -3874,7 +3874,47 @@ function pgLogs() {
       '<button class="btn btn-gray btn-sm" onclick="document.getElementById(\'log-date\').value=\'\';loadLogs()">전체보기</button>'+
       '<button class="btn btn-success btn-sm" onclick="printLogs()" style="margin-left:.5rem;">🖨️ 인쇄</button>'+
     '</div>'+
+    '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;padding:.6rem .75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">'+
+      '<span style="font-size:.85rem;font-weight:600;color:#15803d;">➕ 입고 추가</span>'+
+      '<input id="inb-add-prod" list="log-prod-list" type="text" placeholder="제품명" style="flex:1;min-width:180px;padding:.4rem;" onkeydown="if(event.key===\'Enter\'){var q=document.getElementById(\'inb-add-qty\');if(q)q.focus();}">'+
+      '<input id="inb-add-qty" type="number" min="1" placeholder="수량" style="width:90px;padding:.4rem;" onkeydown="if(event.key===\'Enter\')addInboundOnDate()">'+
+      '<button class="btn btn-success btn-sm" onclick="addInboundOnDate()">입고</button>'+
+      '<span style="font-size:.72rem;color:var(--sub);">위 날짜 칸 날짜로 들어가요</span>'+
+    '</div>'+
     '<div id="logs-content" style="margin-top:.75rem;"><p style="color:#aaa;">로딩 중...</p></div></div>';
+}
+
+// 2026-10-12 추가: 입고 기록 화면에서 날짜 지정 입고 (콘솔 없이 바로 입력)
+// 위쪽 '날짜' 칸의 날짜로 들어감. 오늘이면 현재 시각, 지난 날짜면 그날 12:00으로 기록 (adjustLogQty와 같은 방식)
+async function addInboundOnDate(){
+  var dEl=document.getElementById('log-date'), pEl=document.getElementById('inb-add-prod'), qEl=document.getElementById('inb-add-qty');
+  var date=dEl?dEl.value:'';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ alert('위 날짜 칸에 입고 날짜를 먼저 넣어주세요.'); return; }
+  var name=(pEl.value||'').trim();
+  var p=S.prods.find(function(x){return x.name===name;}) ||
+        S.prods.find(function(x){return x.name.replace(/\s/g,'')===name.replace(/\s/g,'');});
+  if(!p){ alert('제품을 찾을 수 없어요: "'+name+'"\n목록에서 골라주세요.'); pEl.focus(); return; }
+  var q=parseInt(qEl.value,10);
+  if(!q||q<=0){ alert('수량을 1 이상으로 넣어주세요.'); qEl.focus(); return; }
+  if(!confirm(date+'  '+p.name+'  +'+q+' 입고할까요?\n(재고도 +'+q+' 늘어나요)')) return;
+
+  var isToday=(date===todayStr());
+  var ok=false;
+  await safeWrite(async function(){
+    var ts=isToday?firebase.firestore.FieldValue.serverTimestamp():firebase.firestore.Timestamp.fromDate(new Date(date+'T12:00:00'));
+    var b=db.batch();
+    b.set(db.collection('inventory').doc(p.id),{qty:firebase.firestore.FieldValue.increment(q)},{merge:true});
+    b.set(db.collection('dailyInbound').doc(date+'_'+p.id),{date:date,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(q)},{merge:true});
+    b.set(db.collection('logs').doc(),{type:'inbound',pid:p.id,pname:p.name,qty:q,ts:ts,adjusted:!isToday,adjustedDate:date,manual:true,memo:'입고기록 화면 직접입력'});
+    await b.commit();
+    ok=true;
+  });
+  if(!ok) return;
+  S.inv[p.id]=(S.inv[p.id]||0)+q;
+  if(isToday) S.todayInbound[p.id]=(S.todayInbound[p.id]||0)+q;
+  toast(p.name+' +'+q+' 입고 ('+date+')','ok');
+  pEl.value=''; qEl.value=''; pEl.focus();
+  loadLogs();
 }
 
 function fillLogProdList(){
