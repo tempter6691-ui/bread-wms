@@ -1773,7 +1773,7 @@ function pgOrders() {
       '<label>날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;ensureOrdersLoaded(this.value);render();" style="padding:.45rem;"></label>'+
       '<button class="btn btn-gray btn-sm" onclick="clearOrders()">초기화</button>'+
       '<button class="btn btn-success btn-sm" onclick="exportExcel()">📊 엑셀 다운로드</button>'+
-      '<button class="btn btn-primary btn-sm" onclick="printOrders()">🖨️ 인쇄</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="printOrders()">🖨️ '+(S.ordDriver==='전체'?'':S.ordDriver+' ')+'인쇄</button>'+ // 2026-10-13 수정: 선택한 기사 탭에 맞게 버튼 글자
       '<button class="btn btn-success btn-sm" onclick="xlbPickFile()">📥 엑셀로 거래처 등록</button>'+ // 2026-10-06 수정: 여러 거래처 엑셀 일괄 등록
     '</div>'+
     '<div class="driver-tabs"><div class="dtab'+(S.ordDriver==='전체'?' active':'')+'" onclick="S.ordDriver=\'전체\';render();">전체</div>'+
@@ -3023,6 +3023,22 @@ function printOrders() {
   var todayOrd = S.orders[S.ordDate] || {};
   if(!Object.keys(todayOrd).length){ toast('출고지시서가 없어요','err'); return; }
 
+  // 2026-10-13 수정: 화면의 기사 탭(S.ordDriver) 기준으로 인쇄. '전체'면 모든 기사(기사마다 새 페이지) + 맨 뒤에 미배정,
+  // 특정 기사면 그 기사 거래처만. 담당 판단은 기존과 같이 (주문 driver || 거래처 driver).
+  // 예전엔 담당 기사가 비어 있거나 DRIVERS에 없는 거래처가 인쇄물에서 조용히 빠졌음 → '전체' 인쇄 때만 "미배정" 구역으로 출력
+  var allDrv = S.ordDriver==='전체';
+  function ordDrvOf(name){
+    var cl = S.clients.find(function(c){return c.name===name;});
+    return (todayOrd[name].driver || '') || (cl ? cl.driver : '') || '';
+  }
+  var sections = (allDrv ? DRIVERS : [S.ordDriver]).map(function(drv){
+    return {drv:drv, names:Object.keys(todayOrd).filter(function(name){ return ordDrvOf(name)===drv; })};
+  });
+  if(allDrv){
+    sections.push({drv:'미배정', names:Object.keys(todayOrd).filter(function(name){ return DRIVERS.indexOf(ordDrvOf(name))===-1; })});
+  }
+  if(!sections.some(function(s){return s.names.length;})){ toast(allDrv?'출고지시서가 없어요':'이 기사 담당 출고지시서가 없어요','err'); return; }
+
   var html = '<html><head><meta charset="UTF-8"><title>출고지시서 '+S.ordDate+'</title><style>'+
     '*{margin:0;padding:0;box-sizing:border-box;}'+
     'body{font-family:Malgun Gothic,sans-serif;font-size:11px;margin:8mm;}'+
@@ -3037,16 +3053,12 @@ function printOrders() {
     'td.qty{text-align:center;width:30px;color:#cc0000;font-weight:bold;}'+
     '@media print{@page{margin:8mm;size:A4;}body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.driver-section{page-break-before:always;}.driver-section:first-of-type{page-break-before:avoid;}}'+
   '</style></head><body>'+
-  '<h1>📋 출고지시서 — '+S.ordDate+'</h1>';
+  '<h1>📋 출고지시서 — '+S.ordDate+(allDrv?'':' — '+S.ordDriver)+'</h1>'; // 2026-10-13 수정: 기사 선택 시 제목에 기사명
 
-  DRIVERS.forEach(function(drv){
-    var clientNames = Object.keys(todayOrd).filter(function(name){
-      var data = todayOrd[name];
-      var orderDrv = data.driver || '';
-      var cl = S.clients.find(function(c){return c.name===name;});
-      var clientDrv = cl ? cl.driver : '';
-      return (orderDrv || clientDrv) === drv;
-    });
+  // 2026-10-13 수정: DRIVERS 전체 대신 위에서 걸러둔 sections(기사별 거래처 목록)로 출력 — 아래 출력 코드는 그대로
+  sections.forEach(function(sec){
+    var drv = sec.drv;
+    var clientNames = sec.names;
     if(!clientNames.length) return;
 
     html += '<div class="driver-section"><div class="driver-header">🚚 '+drv+'</div><div class="grid">';
