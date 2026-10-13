@@ -180,6 +180,8 @@ tr:hover td{background:#fafafa;}
   <div class="nav-item" onclick="go('clients')">🏢 거래처 관리</div>
   <div class="nav-item" onclick="go('products')">🏷️ 제품 관리</div>
   <div class="nav-item" onclick="go('logs')">🕐 입출고 로그</div>
+  <!-- 2026-10-13 추가: 라벨교체 기록 메뉴 -->
+  <div class="nav-item" onclick="go('labelChange')">🏷️ 라벨교체</div>
   <div class="nav-item" onclick="go('ecount')">📤 이카운트 전송</div>
   <div id="sidebar-footer">
     <button class="btn btn-warning btn-sm" onclick="doBackup()" style="width:100%;margin-bottom:.4rem;">💾 데이터 백업</button>
@@ -884,7 +886,7 @@ window.manualSetInventory = manualSetInventory;
 
 // ── NAVIGATION ────────────────────────────────────────────────
 // 2026-10-05 수정: 메뉴/제목에서 (부장님) 삭제
-var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',ecount:'📤 이카운트 전송'};
+var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',labelChange:'🏷️ 라벨교체',ecount:'📤 이카운트 전송'};
 
 function go(page) {
   if(S.page === 'inbound' && page !== 'inbound') { clearInterval(_ibPollTimer); clearInterval(_ibMultPollTimer); }
@@ -907,6 +909,7 @@ function render() {
     case 'clients':   c.innerHTML = pgClients(); setTimeout(drawClients,40); break;
     case 'products':  c.innerHTML = pgProducts(); setTimeout(drawProducts,40); break;
     case 'logs':      c.innerHTML = pgLogs(); setTimeout(function(){loadLogs();fillLogProdList();},40); break;
+    case 'labelChange': c.innerHTML = pgLabelChange(); setTimeout(function(){fillLcProdList();loadLabelChanges();},40); break; // 2026-10-13 추가: 라벨교체 기록
     case 'ecount':    c.innerHTML = pgEcount(); break;
   }
   c.scrollTop = prevScrollTop;
@@ -4337,6 +4340,150 @@ async function changeLogDate(oldDate, docIds) {
     alert('날짜 변경 완료! (오늘입고 캐시도 같이 옮겼어요)');
     loadLogs();
   } catch(e){alert('오류: '+e.message);}
+}
+
+// ── 라벨교체 기록 (2026-10-13 추가) ──────────────────────────────
+// 2026-10-13 추가: 소비기한 임박으로 라벨스티커를 바꿔 붙일 때 품목/수량/기한 변경을 남기는 순수 기록용 메뉴.
+// labelChanges 컬렉션에만 씀 — inventory/logs는 건드리지 않음. 제품이 나중에 삭제돼도 보이도록 productName도 같이 저장.
+// 목록은 읽기 쿼터 절약을 위해 기간(date 범위) + limit으로만 읽음 (전체 읽기 금지).
+var LC_LIMIT = 500;
+var _lcRows = [];
+function lcH(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function lcDaysAgo(n){
+  var d=new Date(); d.setDate(d.getDate()-n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function pgLabelChange(){
+  var today=todayStr();
+  return '<div class="card"><div class="card-title">🏷️ 라벨교체 기록 입력</div>'+
+    '<div style="font-size:.72rem;color:var(--sub);margin-bottom:.6rem;">소비기한 임박으로 라벨을 바꿔 붙인 내용을 기록만 해요. 재고 수량은 바뀌지 않아요.</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.6rem;">'+
+      '<div><label>작업일 *</label><br><input id="lc-date" type="date" value="'+today+'" style="width:100%;margin-top:.2rem;"></div>'+
+      '<div><label>제품 *</label><br><input id="lc-prod" list="lc-prod-list" type="text" placeholder="제품명 검색..." style="width:100%;margin-top:.2rem;" oninput="lcOnProdInput()"><datalist id="lc-prod-list"></datalist></div>'+
+      '<div><label>기존 소비기한 *</label><br><input id="lc-old" type="date" style="width:100%;margin-top:.2rem;"></div>'+
+      '<div><label>변경한 소비기한 *</label><br><input id="lc-new" type="date" style="width:100%;margin-top:.2rem;"></div>'+
+      '<div><label>교체 수량 <span id="lc-unit" style="color:var(--sub);font-size:.75rem;"></span></label><br><input id="lc-qty" type="number" min="0" step="any" style="width:100%;margin-top:.2rem;"></div>'+
+      '<div><label>작업자</label><br><input id="lc-worker" type="text" style="width:100%;margin-top:.2rem;"></div>'+
+      '<div><label>메모</label><br><input id="lc-memo" type="text" placeholder="예: 사유" style="width:100%;margin-top:.2rem;"></div>'+
+    '</div>'+
+    '<div style="margin-top:.75rem;"><button class="btn btn-primary btn-sm" onclick="saveLabelChange()">기록 저장</button></div>'+
+  '</div>'+
+  '<div class="card"><div class="card-title">📋 라벨교체 기록</div>'+
+    '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">'+
+      '<label style="font-size:.85rem;">기간: <input id="lc-from" type="date" value="'+lcDaysAgo(30)+'" style="padding:.4rem;"></label>'+
+      '<span>~</span><input id="lc-to" type="date" value="'+today+'" style="padding:.4rem;">'+
+      '<button class="btn btn-primary btn-sm" onclick="loadLabelChanges()">조회</button>'+
+      '<input id="lc-q" type="text" placeholder="제품명 검색..." style="flex:1;min-width:160px;padding:.4rem;" oninput="drawLabelChanges()">'+
+      '<button class="btn btn-success btn-sm" onclick="exportLabelChangesCsv()">📊 엑셀(CSV) 다운로드</button>'+
+    '</div>'+
+    '<div id="lc-list"><p style="color:#aaa;">로딩 중...</p></div>'+
+  '</div>';
+}
+function lcFindProd(name){
+  name=(name||'').trim();
+  if(!name) return null;
+  return S.prods.find(function(x){return x.name===name;}) ||
+         S.prods.find(function(x){return x.name.replace(/\s/g,'')===name.replace(/\s/g,'');}) || null;
+}
+function fillLcProdList(){
+  var dl=document.getElementById('lc-prod-list');
+  if(!dl || !S.prods) return;
+  dl.innerHTML=S.prods.map(function(p){return '<option value="'+lcH(p.name)+'">';}).join('');
+}
+function lcOnProdInput(){
+  var p=lcFindProd((document.getElementById('lc-prod')||{}).value);
+  var u=document.getElementById('lc-unit');
+  if(u) u.textContent=p?'('+(p.unit||'판')+')':'';
+}
+async function saveLabelChange(){
+  var v=function(id){ var e=document.getElementById(id); return e?(e.value||'').trim():''; };
+  var date=v('lc-date'), oldE=v('lc-old'), newE=v('lc-new'), qtyS=v('lc-qty');
+  if(!date){ alert('작업일을 넣어주세요.'); return; }
+  var p=lcFindProd(v('lc-prod'));
+  if(!p){ alert('제품을 목록에서 골라주세요.'); document.getElementById('lc-prod').focus(); return; }
+  if(!oldE||!newE){ alert('기존/변경 소비기한을 모두 넣어주세요.'); return; }
+  if(newE<oldE && !confirm('변경한 소비기한('+newE+')이 기존('+oldE+')보다 빨라요.\n그래도 저장할까요?')) return;
+  var qty=qtyS===''?null:Number(qtyS);
+  if(qty!==null && (isNaN(qty)||qty<0)){ alert('수량을 확인해주세요.'); return; }
+  var doc={date:date,pid:p.id,productName:p.name,oldExpiry:oldE,newExpiry:newE,qty:qty,
+    worker:v('lc-worker'),memo:v('lc-memo'),createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  try{
+    await db.collection('labelChanges').add(doc);
+  }catch(e){ alert('저장 실패: '+e.message); return; }
+  toast('라벨교체 기록 저장: '+p.name,'ok');
+  // 작업일/작업자는 연속 입력하기 쉽게 남겨둠
+  ['lc-prod','lc-old','lc-new','lc-qty','lc-memo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  lcOnProdInput();
+  loadLabelChanges();
+}
+async function loadLabelChanges(){
+  var el=document.getElementById('lc-list'); if(!el) return;
+  var from=(document.getElementById('lc-from')||{}).value||'';
+  var to=(document.getElementById('lc-to')||{}).value||'';
+  if(!from||!to){ el.innerHTML='<p style="color:#aaa;">기간을 선택해주세요.</p>'; return; }
+  if(from>to){ el.innerHTML='<p style="color:#dc2626;">시작일이 종료일보다 늦어요.</p>'; return; }
+  el.innerHTML='<p style="color:#aaa;">불러오는 중...</p>';
+  try{
+    var snap=await db.collection('labelChanges').where('date','>=',from).where('date','<=',to)
+      .orderBy('date','desc').limit(LC_LIMIT).get();
+    _lcRows=[];
+    snap.forEach(function(d){ _lcRows.push(Object.assign({id:d.id},d.data())); });
+    // 같은 작업일 안에서는 최근 입력이 위로
+    _lcRows.sort(function(a,b){
+      if(a.date!==b.date) return a.date<b.date?1:-1;
+      var ta=a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0, tb=b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0;
+      return tb-ta;
+    });
+    drawLabelChanges();
+  }catch(e){ el.innerHTML='<p style="color:#dc2626;">불러오기 실패: '+lcH(e.message)+'</p>'; }
+}
+function lcFiltered(){
+  var q=((document.getElementById('lc-q')||{}).value||'').replace(/\s/g,'').toLowerCase();
+  if(!q) return _lcRows;
+  return _lcRows.filter(function(r){ return String(r.productName||'').replace(/\s/g,'').toLowerCase().indexOf(q)!==-1; });
+}
+function lcUnit(r){ var p=S.prods.find(function(x){return x.id===r.pid;}); return p&&p.unit?p.unit:''; }
+function drawLabelChanges(){
+  var el=document.getElementById('lc-list'); if(!el) return;
+  var rows=lcFiltered();
+  if(!rows.length){ el.innerHTML='<p style="color:#aaa;">해당 기간에 라벨교체 기록이 없어요.</p>'; return; }
+  el.innerHTML=(_lcRows.length>=LC_LIMIT?'<div style="color:#d97706;font-size:.78rem;margin-bottom:.4rem;">⚠️ 최근 '+LC_LIMIT+'건까지만 불러왔어요. 기간을 좁혀서 조회해주세요.</div>':'')+
+    '<div style="font-size:.8rem;color:var(--sub);margin-bottom:.4rem;">총 <b>'+rows.length+'</b>건</div>'+
+    '<div style="overflow-x:auto;"><table><thead><tr><th>작업일</th><th>제품</th><th>기존 소비기한 → 변경 소비기한</th><th>수량</th><th>작업자</th><th>메모</th><th>삭제</th></tr></thead><tbody>'+
+    rows.map(function(r){
+      var earlier=r.newExpiry&&r.oldExpiry&&r.newExpiry<r.oldExpiry;
+      return '<tr><td>'+lcH(r.date)+'</td><td>'+lcH(r.productName||r.pid)+'</td>'+
+        '<td>'+lcH(r.oldExpiry)+' → <b'+(earlier?' style="color:#dc2626;"':'')+'>'+lcH(r.newExpiry)+'</b></td>'+
+        '<td style="text-align:right;">'+(r.qty==null?'':lcH(r.qty)+' '+lcH(lcUnit(r)))+'</td>'+
+        '<td>'+lcH(r.worker)+'</td><td>'+lcH(r.memo)+'</td>'+
+        '<td style="text-align:center;"><button class="btn btn-gray btn-sm" style="padding:.1rem .4rem;" onclick="deleteLabelChange(\''+esc(r.id)+'\')">🗑️</button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+async function deleteLabelChange(id){
+  var r=_lcRows.find(function(x){return x.id===id;});
+  if(!r) return;
+  if(!confirm(r.date+'  '+(r.productName||r.pid)+'  ('+r.oldExpiry+' → '+r.newExpiry+')\n이 라벨교체 기록을 삭제할까요?')) return;
+  try{ await db.collection('labelChanges').doc(id).delete(); }
+  catch(e){ alert('삭제 실패: '+e.message); return; }
+  _lcRows=_lcRows.filter(function(x){return x.id!==id;});
+  drawLabelChanges();
+  toast('삭제했어요','ok');
+}
+function exportLabelChangesCsv(){
+  var rows=lcFiltered();
+  if(!rows.length){ toast('내려받을 기록이 없어요','err'); return; }
+  var data=[['작업일','제품코드','제품','기존 소비기한','변경 소비기한','수량','단위','작업자','메모']].concat(rows.map(function(r){
+    return [r.date,r.pid,r.productName,r.oldExpiry,r.newExpiry,r.qty==null?'':r.qty,lcUnit(r),r.worker,r.memo];
+  }));
+  var csv=data.map(function(r){
+    return r.map(function(c){return '"'+(c==null?'':c).toString().replace(/"/g,'""')+'"';}).join(',');
+  }).join('\n');
+  var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='라벨교체기록_'+((document.getElementById('lc-from')||{}).value||'')+'_'+((document.getElementById('lc-to')||{}).value||'')+'.csv';
+  a.click();
+  toast('엑셀 다운로드 완료!','ok');
 }
 
 // ── MODAL ────────────────────────────────────────────────────
