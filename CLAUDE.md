@@ -30,6 +30,8 @@ GitHub에 "Add files via upload"로 올려서 배포함.
 - `products`, `clients`: **백업에는 있지만 현재 없는 문서만** 새로 만듦. 이미 있는 문서는 어떤 필드도 건드리지 않음.
 - 복원 대상에서도 `ecountCode`, `ecountQtyMultiplier`, `orderUnitDivisor`(상품)와 `code`, `ecountCode`(거래처)는 제외함.
 - 스크립트로 복원/마이그레이션할 때도 같은 원칙을 지킬 것. 필드를 "좀 더 넓게" 덮어쓰도록 되돌리지 말 것.
+- `labelChanges`(라벨교체 기록, 2026-10-13 추가)도 같은 원칙: 백업에는 있지만 현재 없는 문서(ID 기준)만 만듦.
+  앱 백업(`doBackup`)이 이 컬렉션만 Firestore에서 직접 전체를 읽음(작은 컬렉션).
 - 참고: `inventory`, `orders`, `templates`는 아직 복원 시 통째로 덮어씀(보호되지 않음).
 
 ### 3호 케익은 2개/box 단위

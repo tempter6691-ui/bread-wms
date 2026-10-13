@@ -4497,8 +4497,21 @@ document.getElementById('modal-overlay').addEventListener('click',function(e){if
 
 // ── BACKUP / RESTORE ─────────────────────────────────────────
 
-function doBackup() {
+async function doBackup() {
   var data={prods:S.prods,clients:S.clients,inv:S.inv,orders:S.orders,templates:S.templates,at:new Date().toISOString()};
+  // 2026-10-13 수정: 라벨교체 기록(labelChanges)도 백업에 포함. 화면 메모리에 없는 컬렉션이라 여기서 읽어옴
+  // (하루 몇 건 수준의 작은 컬렉션이라 전체를 읽음). createdAt은 JSON으로 저장되게 ISO 문자열로 바꿈.
+  try {
+    var lcSnap=await db.collection('labelChanges').get();
+    data.labelChanges=[];
+    lcSnap.forEach(function(d){
+      var x=Object.assign({id:d.id},d.data());
+      if(x.createdAt&&x.createdAt.toDate) x.createdAt=x.createdAt.toDate().toISOString();
+      data.labelChanges.push(x);
+    });
+  } catch(e) {
+    if(!confirm('라벨교체 기록을 불러오지 못했어요 ('+e.message+').\n라벨교체 기록 없이 나머지만 백업할까요?')) return;
+  }
   var a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
   a.download='출고관리_백업_'+todayStr()+'.json'; a.click();
@@ -4555,6 +4568,23 @@ async function doRestore(input) {
     if(data.inv){S.inv=data.inv;var b3=db.batch();Object.keys(data.inv).forEach(function(id){b3.set(db.collection('inventory').doc(id),{qty:data.inv[id]});});await b3.commit();}
     if(data.orders){S.orders=data.orders;var b4=db.batch();Object.keys(data.orders).forEach(function(d){b4.set(db.collection('orders').doc(d),data.orders[d]);});await b4.commit();}
     if(data.templates){S.templates=data.templates;var b5=db.batch();Object.keys(data.templates).forEach(function(k){b5.set(db.collection('templates').doc(k),data.templates[k]);});await b5.commit();}
+    if(data.labelChanges&&data.labelChanges.length){
+      // 2026-10-13 수정: 라벨교체 기록 복원 — 상품/거래처와 같은 원칙으로 현재 있는 기록은 절대 덮어쓰지 않고,
+      // 백업에는 있지만 지금 없는 문서(ID 기준)만 새로 만듦. createdAt(ISO 문자열)은 Timestamp로 되돌림. batch 500건 제한 때문에 450개씩.
+      var existingLcSnap=await db.collection('labelChanges').get();
+      var existingLcIds={}; existingLcSnap.forEach(function(d){existingLcIds[d.id]=true;});
+      var missingLc=data.labelChanges.filter(function(r){return r.id&&!existingLcIds[r.id];});
+      for(var li=0;li<missingLc.length;li+=450){
+        var b6=db.batch();
+        missingLc.slice(li,li+450).forEach(function(r){
+          var rCopy=Object.assign({},r);delete rCopy.id;
+          if(typeof rCopy.createdAt==='string') rCopy.createdAt=firebase.firestore.Timestamp.fromDate(new Date(rCopy.createdAt));
+          b6.set(db.collection('labelChanges').doc(r.id),rCopy);
+        });
+        await b6.commit();
+      }
+      toast(missingLc.length?missingLc.length+'건 삭제된 라벨교체 기록만 복원했습니다 (기존 기록은 보호됨)':'복원할 라벨교체 기록 없음 (모두 이미 존재)','ok');
+    }
     toast('복원 완료!','ok'); go('dashboard');
   } catch(e){toast('복원 오류: '+e.message,'err');}
 }
