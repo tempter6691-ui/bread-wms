@@ -293,6 +293,16 @@ async function init() {
     snap.forEach(function(d){S.prods.push(Object.assign({id:d.id},d.data()));});
     // orderHidden:true 인 제품은 발주앱(거래처 화면)에서만 숨김 - WMS 제품관리 데이터는 그대로 유지됨
     S.prods = S.prods.filter(function(p){ return !p.orderHidden; });
+    // 2026-10-13 수정: orderOnlyClients: 지정된 거래처만 발주앱에서 볼 수 있음 (WMS 재고관리엔 영향 없음)
+    // 필드가 없거나 빈 배열이면 기존처럼 모든 거래처에 보임. 거래처명은 앞뒤 공백 제거 후 완전일치로 비교.
+    // 거래처 링크(c 파라미터)가 없으면 어차피 안내 화면만 나오므로 기존 동작 그대로 둠(필터 안 함).
+    if(client){
+      S.prods = S.prods.filter(function(p){
+        var only = Array.isArray(p.orderOnlyClients) ? p.orderOnlyClients : [];
+        if(!only.length) return true;
+        return only.some(function(c){ return String(c==null?'':c).trim()===client; });
+      });
+    }
     S.prods.sort(function(a,b){
       // '(꼬끄)' 표시 제품은 같은 카테고리 내 맨 뒤로
       var aKko=(a.name||'').includes('(꼬끄)'), bKko=(b.name||'').includes('(꼬끄)');
