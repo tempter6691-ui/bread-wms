@@ -3138,9 +3138,10 @@ function printOrders() {
         var right = items.slice(half);
         html += '<table><thead><tr><th>품목</th><th>수량</th><th>품목</th><th>수량</th></tr></thead><tbody>';
         // 2026-10-14 수정: 출고지시서 인쇄용 품명. 기본은 괄호 규격을 떼고 출력하지만,
-        // 마카롱·마늘빵(P110/P111)·벨기에와플은 규격까지 출력. 벨기에와플은 항상 "벨기에와플(5kg/봉)"으로 표시.
+        // 마카롱·마늘빵(P110/P111)은 규격까지 출력. 벨기에와플은 "벨기에와플(5kg/봉)", 미니와플은 "미니와플(박스)"로 고정 표시.
         function obPrintName(p){
           if(String(p.name||'').indexOf('벨기에와플')===0) return '벨기에와플(5kg/봉)';
+          if(String(p.name||'').indexOf('미니와플')===0) return '미니와플(박스)'; // 2026-10-14 추가
           if((p.cat&&p.cat.indexOf("마카롱")>=0)||p.id==="P110"||p.id==="P111") return p.name;
           return p.name.replace(/\(.*$/,"");
         }
