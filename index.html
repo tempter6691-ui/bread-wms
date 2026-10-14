@@ -3137,6 +3137,13 @@ function printOrders() {
         var left = items.slice(0, half);
         var right = items.slice(half);
         html += '<table><thead><tr><th>품목</th><th>수량</th><th>품목</th><th>수량</th></tr></thead><tbody>';
+        // 2026-10-14 수정: 출고지시서 인쇄용 품명. 기본은 괄호 규격을 떼고 출력하지만,
+        // 마카롱·마늘빵(P110/P111)·벨기에와플은 규격까지 출력. 벨기에와플은 항상 "벨기에와플(5kg/봉)"으로 표시.
+        function obPrintName(p){
+          if(String(p.name||'').indexOf('벨기에와플')===0) return '벨기에와플(5kg/봉)';
+          if((p.cat&&p.cat.indexOf("마카롱")>=0)||p.id==="P110"||p.id==="P111") return p.name;
+          return p.name.replace(/\(.*$/,"");
+        }
         for(var i=0; i<left.length; i++){
           var lp = S.prods.find(function(x){return x.id===left[i].pid;});
           var rItem = right[i];
@@ -3152,9 +3159,9 @@ function printOrders() {
           var lNameStyle=cellStyle(lu,true), lQtyStyle=cellStyle(lu,false);
           var rNameStyle=cellStyle(ru,true), rQtyStyle=cellStyle(ru,false);
           html += '<tr>'+
-            '<td style="'+lNameStyle+'">'+(lp?(lp.cat&&lp.cat.indexOf("마카롱")>=0||lp.id==="P110"||lp.id==="P111"?lp.name:lp.name.replace(/\(.*$/,"")):left[i].pid)+'</td>'+
+            '<td style="'+lNameStyle+'">'+(lp?obPrintName(lp):left[i].pid)+'</td>'+
             '<td class="qty" style="'+lQtyStyle+'">'+(left[i].qty)+'</td>'+
-            '<td style="'+rNameStyle+'">'+(rItem?(rp?(rp.cat&&rp.cat.indexOf("마카롱")>=0||rp.id==="P110"||rp.id==="P111"?rp.name:rp.name.replace(/\(.*$/,"")):rItem.pid):"")+'</td>'+
+            '<td style="'+rNameStyle+'">'+(rItem?(rp?obPrintName(rp):rItem.pid):"")+'</td>'+
             '<td class="qty" style="'+rQtyStyle+'">'+(rItem?rItem.qty:'')+'</td>'+
           '</tr>';
         }
