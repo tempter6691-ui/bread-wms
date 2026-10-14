@@ -312,6 +312,10 @@ async function init() {
       var aRoll=(a.name||'').includes('도지마롤'), bRoll=(b.name||'').includes('도지마롤');
       if(aRoll&&!bRoll) return 1;
       if(!aRoll&&bRoll) return -1;
+      // 2026-10-14 수정: 마카롱류의 'OO피'(로즈피·망고피 등)는 떨어지지 않게 묶어서 마카롱 뒤로 (그 안에서는 가나다순)
+      var aPi=/피$/.test(a.name||'')&&String(a.cat||'').indexOf('마카롱')>=0, bPi=/피$/.test(b.name||'')&&String(b.cat||'').indexOf('마카롱')>=0;
+      if(aPi&&!bPi) return 1;
+      if(!aPi&&bPi) return -1;
       return (a.name||'').localeCompare(b.name||'','ko');
     });
     var catSet={};
