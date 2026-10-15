@@ -3687,9 +3687,10 @@ function drawProducts() {
   var grouped={};
   f.forEach(function(p){ if(!grouped[p.cat]) grouped[p.cat]=[]; grouped[p.cat].push(p); });
   el.innerHTML=Object.keys(grouped).map(function(cat){
-    return '<div class="card"><div class="card-title">'+cat+'</div><table><thead><tr><th>제품명</th><th>QR</th><th>재고</th>'+
-      (hasPending?'<th style="color:#c0392b;">예정출고</th><th style="color:#c0392b;">예상재고</th>':'')+
-      (hasOut?'<th style="color:#e67e22;">출고</th>':'')+
+    // 2026-10-15 수정: 재고/예정출고/예상재고/출고 제목도 가운데 정렬해서 아래 숫자와 중앙을 맞춤
+    return '<div class="card"><div class="card-title">'+cat+'</div><table><thead><tr><th>제품명</th><th>QR</th><th style="text-align:center;">재고</th>'+
+      (hasPending?'<th style="color:#c0392b;text-align:center;">예정출고</th><th style="color:#c0392b;text-align:center;">예상재고</th>':'')+
+      (hasOut?'<th style="color:#e67e22;text-align:center;">출고</th>':'')+
       '<th></th></tr></thead><tbody>'+
       grouped[cat].map(function(p){
         var q2=S.inv[p.id]||0;
@@ -3700,7 +3701,7 @@ function drawProducts() {
         var pendingLabel=pendingRaw>0?('-'+pendingRaw+(odiv>1?' ('+pending+(p.unit||'판')+')':'')):'-';
         var projected=q2-pending;
         return '<tr><td>'+p.name+'</td><td><code>'+p.qr+'</code></td>'+
-          '<td><span class="badge '+(q2===0?'bg-red':q2<=15?'bg-yellow':'bg-green')+'">'+q2+'</span></td>'+
+          '<td style="text-align:center;"><span class="badge '+(q2===0?'bg-red':q2<=15?'bg-yellow':'bg-green')+'">'+q2+'</span></td>'+
           (hasPending?'<td style="text-align:center;font-weight:bold;color:#c0392b;">'+pendingLabel+'</td>'+
             '<td style="text-align:center;"><span class="badge '+(projected<0?'bg-red':projected===0?'bg-red':projected<=15?'bg-yellow':'bg-green')+'">'+projected+'</span></td>':'')+
           (hasOut?'<td style="text-align:center;font-weight:bold;color:#e67e22;">'+(out>0?out:'-')+'</td>':'')+
