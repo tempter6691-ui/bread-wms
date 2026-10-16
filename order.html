@@ -385,7 +385,7 @@ function renderProds() {
     var qty=S.cart[p.id]||0;
     return '<div class="product-item">'+
       (function(){ var sno=siteNoFor(p); // 2026-10-16: 쇼핑몰에 있는 제품은 이름 누르면 사진 페이지 열림
-        return '<div style="flex:1;"><div class="product-name"'+(sno?' onclick="openSite(\''+sno+'\')" style="cursor:pointer;" title="사진 보기"':'')+'>'+p.name+(sno?' <span style="display:inline-block;margin-left:.4rem;padding:.15rem .55rem;border-radius:12px;background:#c9a96e;color:#fff;font-size:.78rem;font-weight:600;vertical-align:middle;">📷 사진</span>':'')+'</div><div class="product-cat">'+p.cat+'</div></div>';
+        return '<div style="flex:1;"><div class="product-name"'+(sno?' onclick="openSite(\''+sno+'\')" style="cursor:pointer;" title="사진 보기"':'')+'>'+p.name+(sno?' <span style="display:inline-block;margin-left:.3rem;padding:.05rem .4rem;border-radius:10px;background:#c9a96e;color:#fff;font-size:.65rem;font-weight:600;vertical-align:middle;">📷 사진</span>':'')+'</div><div class="product-cat">'+p.cat+'</div></div>';
       })()+
       '<div class="qty-control">'+
         '<button class="qty-btn" onclick="changeQty(\''+p.id+'\',-1)">−</button>'+
