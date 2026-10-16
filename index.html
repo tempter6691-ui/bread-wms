@@ -4998,8 +4998,8 @@ function priceInputBtn(r, refreshName) {
 }
 
 // 이카운트 전송용 품목명/단가 보정: "N단" 접미사 제거 + 마카롱 1단은 단가 절반
-// 2026-10-16 추가: 거래처에는 1판(봉)으로 나가지만 이카운트에는 kg 단위로 들어가야 하는 상품
-// 예) 벨기에와플(5kg/봉) 1판 35,000원 → 이카운트 수량 5, 단가 7,000 (금액은 그대로 35,000)
+// 2026-10-16 추가: 거래처에는 1판(봉)으로 나가지만 비즈모아에는 kg 단위로 들어가야 하는 상품
+// 예) 벨기에와플(5kg/봉) 1판 35,000원 → 비즈모아 수량 5, 단가 7,000 (금액은 그대로 35,000)
 var EC_KG_SPLIT = ['벨기에와플'];
 function ecKgSplit(prod){
   var n=(prod&&prod.name||'').replace(/\s/g,'');
@@ -5066,7 +5066,7 @@ async function ecPreview() {
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
             // 2026-10-07 수정(10-13 복구): 순서표 매칭용으로 원래 상품명(origName)도 저장
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(item.qty||1)*mult*ecKgSplit(prod),origQty:item.qty||1,mult:mult*ecKgSplit(prod),WH_CD:'100',PRICE:ecKgSplit(prod)>1&&adj.price?Math.round(adj.price/ecKgSplit(prod)):adj.price,pid:item.pid,clientId:client?client.id:null});
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:item.pid,clientId:client?client.id:null});
           });
         });
       }
@@ -5101,7 +5101,7 @@ async function ecPreview() {
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
       // 2026-10-07 수정(10-13 복구): 순서표 매칭용으로 원래 상품명(origName)도 저장
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(d.qty||1)*mult*ecKgSplit(prod),origQty:d.qty||1,mult:mult*ecKgSplit(prod),WH_CD:'100',PRICE:ecKgSplit(prod)>1&&adj.price?Math.round(adj.price/ecKgSplit(prod)):adj.price,pid:d.pid,clientId:client?client.id:null});
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:d.pid,clientId:client?client.id:null});
     });
     }
     // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순으로 정렬
@@ -5271,7 +5271,7 @@ async function bmPreview() {
             var client=S.clients.find(function(c){return c.name===clientName||(c.aliases&&c.aliases.indexOf(clientName)!==-1);});
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
-            var boxMult=bmBoxMult(prod.name);
+            var boxMult=(Number(prod.bmMult)||bmBoxMult(prod.name))*ecKgSplit(prod); // 2026-10-16: 상품에 bmMult(비즈모아 수량배수)가 있으면 우선 적용 // 2026-10-16: 벨기에와플(5kg/봉) → 비즈모아엔 kg 단위
             // 2026-10-07 수정(10-13 복구): 순서표 매칭용으로 원래 상품명(origName)도 저장
             rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:item.pid,clientId:client?client.id:null});
           });
@@ -5306,7 +5306,7 @@ async function bmPreview() {
       var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
-      var boxMult=bmBoxMult(prod.name);
+      var boxMult=(Number(prod.bmMult)||bmBoxMult(prod.name))*ecKgSplit(prod); // 2026-10-16: 상품에 bmMult(비즈모아 수량배수)가 있으면 우선 적용 // 2026-10-16: 벨기에와플(5kg/봉) → 비즈모아엔 kg 단위
       // 2026-10-07 수정(10-13 복구): 순서표 매칭용으로 원래 상품명(origName)도 저장
       rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:d.pid,clientId:client?client.id:null});
     });
