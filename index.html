@@ -3749,10 +3749,16 @@ async function showProdHistory(pid, pname) {
     var snap = await db.collection('logs').where('pid','==',pid).get();
     var inDayMap = {};
     var outMap = {}; // {date+'|'+client -> {date, client, qty}}
+    var adjRows = []; // 2026-10-16: 재고 조정(제품 수정) 기록
     snap.forEach(function(d){
       var data = d.data();
       var t = data.ts && data.ts.toDate ? data.ts.toDate() : null;
       var tsDateStr = t ? (t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')) : '날짜없음';
+      // 2026-10-16 추가: 제품 수정으로 바꾼 재고(조정)는 입고/출고 합계에 섞지 않고 따로 보여줌
+      if(data.adjust || /수정으로 재고 변경/.test(data.memo||'')){
+        adjRows.push({date: data.date || tsDateStr, diff: (data.type==='inbound'?1:-1)*(data.qty||0), reason: data.reason || (data.memo||'').replace(/^수정으로 재고 변경 \([^)]*\)\s*-?\s*/,'') || '(사유 없음)', memo: data.memo||''});
+        return;
+      }
       if(data.type === 'inbound'){
         if(!inDayMap[tsDateStr]) inDayMap[tsDateStr] = 0;
         inDayMap[tsDateStr] += (data.qty||1);
@@ -3787,6 +3793,16 @@ async function showProdHistory(pid, pname) {
     window._prodHistData = { pname: pname, inDates: inDates, inDayMap: inDayMap, outRows: outRows, inTotal: inTotal, outTotal: outTotal };
 
     var html = '<button class="btn btn-success btn-sm" style="margin-bottom:.75rem;" onclick="exportProdHistory()">📊 엑셀 다운로드</button>';
+    // 2026-10-16 추가: 재고 조정 내역 (폐기·실사 등)
+    if(adjRows.length){
+      adjRows.sort(function(a,b){return b.date.localeCompare(a.date);});
+      html += '<div style="font-weight:bold;margin-bottom:.5rem;">🛠 재고 조정 내역</div>';
+      html += '<table style="margin-bottom:1rem;"><thead><tr><th>날짜</th><th>변경</th><th>사유</th></tr></thead><tbody>';
+      adjRows.forEach(function(r){
+        html += '<tr><td>'+r.date+'</td><td style="text-align:center;font-weight:bold;color:'+(r.diff<0?'#dc2626':'#16a34a')+';">'+(r.diff>0?'+':'')+r.diff+'개</td><td title="'+String(r.memo).replace(/"/g,'&quot;')+'">'+r.reason+'</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
     html += '<div style="font-weight:bold;margin-bottom:.5rem;">📥 입고 내역</div>';
     if(inDates.length){
       html += '<div style="margin-bottom:.5rem;padding:.5rem;background:#f0f4ff;border-radius:4px;font-weight:bold;">누적 총 입고: '+inTotal+'개</div>';
@@ -3915,6 +3931,14 @@ async function doEditProd(pid) {
   if(qr && S.prods.some(function(x){return x.id!==pid && x.qr===qr;})){
     toast('이미 다른 상품이 쓰고 있는 QR코드예요','err'); return;
   }
+  // 2026-10-16 추가: 재고 숫자를 바꾸면 사유를 꼭 받아서 기록 (예: 이물질 전량 폐기, 실사 조정)
+  var adjReason='';
+  if(inv!==oldInv){
+    adjReason=prompt('재고 '+oldInv+' → '+inv+' ('+(inv-oldInv>0?'+':'')+(inv-oldInv)+')\n변경 사유를 적어주세요 (예: 이물질 전량 폐기, 재고실사 조정)','');
+    if(adjReason===null) return; // 취소하면 저장 안 함
+    adjReason=adjReason.trim();
+    if(!adjReason){ toast('재고를 바꿀 땐 사유를 꼭 적어주세요','err'); return; }
+  }
   try {
     var actualDiff=0;
     await safeWrite(async function() {
@@ -3935,7 +3959,9 @@ async function doEditProd(pid) {
           pid: p.id,
           pname: name,
           qty: Math.abs(diff),
-          memo: '수정으로 재고 변경 ('+oldInv+'→'+inv+')',
+          memo: '수정으로 재고 변경 ('+oldInv+'→'+inv+') - '+adjReason,
+          adjust: true, reason: adjReason, oldQty: oldInv, newQty: inv, // 2026-10-16: 재고 조정 기록
+          date: (function(){var t=new Date();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');})(),
           ts: firebase.firestore.FieldValue.serverTimestamp()
         });
       }
