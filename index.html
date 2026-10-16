@@ -1898,11 +1898,35 @@ function ordJumpTo(name){
   },delay);
 }
 
+
+// 2026-10-16 추가: 거래처별 고정 메모 (지워지거나 덮어써지지 않음, 화면/인쇄/기사앱에 항상 표시)
+var FIXED_MEMOS = [
+  {match:'더시그너스', memo:'명세서2장요망'},
+  {match:'센트리움',   memo:'명세서2장요망'}
+];
+function fixedMemoFor(name){
+  var n=(name||'').replace(/\s/g,'');
+  for(var i=0;i<FIXED_MEMOS.length;i++){ if(n.indexOf(FIXED_MEMOS[i].match)>=0) return FIXED_MEMOS[i].memo; }
+  return '';
+}
+// 고정 메모를 뺀 나머지(사용자가 입력한 메모)
+function stripFixedMemo(name, memo){
+  var f=fixedMemoFor(name); memo=(memo||'').trim();
+  if(!f) return memo;
+  return memo.split(f).join('').replace(/^[\s\/·,]+|[\s\/·,]+$/g,'').trim();
+}
+// 고정 메모 + 나머지 메모 합친 표시용 문자열
+function fullMemo(name, memo){
+  var f=fixedMemoFor(name), rest=stripFixedMemo(name, memo);
+  return f ? (rest ? f+' / '+rest : f) : rest;
+}
+
 function drawOrdCard(name, data) {
   var items=(data||{}).items||[], cl=S.clients.find(function(c){return c.name===name;}), sid=safeid(name);
   var drv = (data||{}).driver || (cl && cl.driver) || '';
   var locked = (data||{}).locked || false;
-  var memo = (data||{}).memo || '';
+  var memo = stripFixedMemo(name, (data||{}).memo || ''); // 2026-10-16: 고정 메모는 따로 표시
+  var fixedM = fixedMemoFor(name);
   var en = esc(name);
   var driverBadge = drv ? '<span class="badge bg-blue" style="margin-left:.4rem;font-size:.7rem;">'+drv+'</span>' : '<span class="badge" style="margin-left:.4rem;font-size:.7rem;background:#eee;color:#888;">미배정</span>';
   var lockBadge = locked ? ' <span style="font-size:.7rem;color:#27ae60;font-weight:600;">[잠김]</span>' : '';
@@ -1916,6 +1940,7 @@ function drawOrdCard(name, data) {
   return '<div class="card" id="ocard_'+sid+'" data-ord-client="'+lcH(name)+'"'+(locked?' style="background:#f8fff8;border:1px solid #a8e6b0;"':'')+xlDrop+'>'+
     '<div style="display:flex;align-items:center;margin-bottom:.6rem;gap:.5rem;">'+
       '<div style="font-weight:bold;white-space:nowrap;">'+name+codeBadge+driverBadge+lockBadge+'</div>'+
+    (fixedM?'<span title="고정 메모 (삭제 불가)" style="white-space:nowrap;padding:.3rem .6rem;font-size:.8rem;font-weight:700;border-radius:6px;background:#ffe0e0;color:#d00;">📌 '+fixedM+'</span>':'')+
     '<input type="text" placeholder="📝 특이사항 메모..." value="'+memo.replace(/"/g,'&quot;')+'" style="flex:1;padding:.3rem .6rem;font-size:.8rem;border:1px solid #e0e0e0;border-radius:6px;background:#fffde7;color:#555;min-width:0;" onchange="saveMemo(\''+en+'\',this.value)" onblur="saveMemo(\''+en+'\',this.value)">'+
       lockBtn+
       '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="moveOrdClient(\''+en+'\')" >이동</button>'+
@@ -3134,7 +3159,7 @@ function printOrders() {
       var items = (todayOrd[name].items||[]);
       var pCl = S.clients.find(function(c){return c.name===name;});
       var pCode = pCl&&pCl.code ? ' ('+pCl.code+')' : '';
-      var memo = (todayOrd[name].memo||'').trim();
+      var memo = fullMemo(name, todayOrd[name].memo); // 2026-10-16: 고정 메모 포함
       var memoPrint = memo ? ' <span style="color:#ff0000;font-weight:900;font-style:italic;">'+memo+'</span>' : '';
       html += '<div class="client-block"><div class="client-name">■ '+name+pCode+memoPrint+'</div>';
       if(items.length){

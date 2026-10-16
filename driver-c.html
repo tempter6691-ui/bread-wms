@@ -142,6 +142,28 @@ tr:last-child td{border-bottom:none;}
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script>
+// 2026-10-16 추가: 거래처별 고정 메모 (지워지거나 덮어써지지 않음, 화면/인쇄/기사앱에 항상 표시)
+var FIXED_MEMOS = [
+  {match:'더시그너스', memo:'명세서2장요망'},
+  {match:'센트리움',   memo:'명세서2장요망'}
+];
+function fixedMemoFor(name){
+  var n=(name||'').replace(/\s/g,'');
+  for(var i=0;i<FIXED_MEMOS.length;i++){ if(n.indexOf(FIXED_MEMOS[i].match)>=0) return FIXED_MEMOS[i].memo; }
+  return '';
+}
+// 고정 메모를 뺀 나머지(사용자가 입력한 메모)
+function stripFixedMemo(name, memo){
+  var f=fixedMemoFor(name); memo=(memo||'').trim();
+  if(!f) return memo;
+  return memo.split(f).join('').replace(/^[\s\/·,]+|[\s\/·,]+$/g,'').trim();
+}
+// 고정 메모 + 나머지 메모 합친 표시용 문자열
+function fullMemo(name, memo){
+  var f=fixedMemoFor(name), rest=stripFixedMemo(name, memo);
+  return f ? (rest ? f+' / '+rest : f) : rest;
+}
+
 var DRIVER_FULL = 'C서영덕';
 var DRIVER_NAME = localStorage.getItem('driverName_C서영덕') || '서영덕';
 
@@ -448,7 +470,7 @@ function buildCard(name, data) {
     : '<span class="badge client-status-badge">'+items.length+'품목</span>';
   var lockMark = locked ? ' <span class="locked-badge">🔒</span>' : '';
 
-  var memo = (data.memo||'').trim();
+  var memo = fullMemo(name, data.memo); // 2026-10-16: 고정 메모 포함
   var sid2=safeid(name); var html = '<div class="'+cardCls+'" id="card_'+sid2+'">';
   var memoHtml = memo ? ' <span style="color:#ffee00;font-weight:900;font-size:.8rem;font-style:italic;">'+memo+'</span>' : '';
   html += '<div class="'+headerCls+'"><span>'+name+lockMark+memoHtml+'</span>'+statusBadge+'</div>';
