@@ -1792,6 +1792,8 @@ function pgOrders() {
     '</div>'+
     // 2026-10-13 수정: Enter → 검색 결과에 입력된 거래처가 1곳뿐이면 그 카드로 이동
     '<input id="ord-q" type="text" style="width:100%;padding:.45rem;margin-bottom:.6rem;" placeholder="거래처 검색... (입력된 거래처 1곳만 남으면 Enter로 이동)" oninput="filterOrdClients()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ordQEnter();}">'+
+    // 2026-10-16 추가: 칩 색깔 범례
+    '<div style="font-size:.72rem;color:#666;margin-bottom:.3rem;"><span style="display:inline-block;width:.7rem;height:.7rem;background:#7b3fc4;border-radius:2px;vertical-align:middle;"></span> 발주관리 시스템 &nbsp; <span style="display:inline-block;width:.7rem;height:.7rem;background:#2d7dd2;border-radius:2px;vertical-align:middle;"></span> 수동 입력</div>'+
     '<div id="ord-clients" style="display:flex;flex-wrap:wrap;gap:.3rem;max-height:180px;overflow-y:auto;margin-bottom:.75rem;">'+
       ordChipsHtml('', allC)+ // 2026-10-13 수정: 칩 그리는 코드를 검색(filterOrdClients)과 같이 쓰도록 ordChipsHtml로 옮김
     '</div></div>'+
@@ -1838,7 +1840,11 @@ function ordChipsHtml(q, allC){
   }
   _ordQEntered = q ? entered : [];
   var orderedBtns=entered.map(function(n){
-    return '<div style="display:inline-flex;align-items:center;background:#2d7dd2;color:#fff;border-radius:4px;margin:.15rem;">'+
+    // 2026-10-16 추가: 발주관리 시스템(order-admin)에서 등록된 거래처는 보라색, 수동 입력은 파란색
+    // order-admin이 등록할 때 orderContributions(주문id별 반영수량)를 남기므로 이걸로 구분
+    var oc=(todayOrd[n]||{}).orderContributions;
+    var fromReq=oc&&Object.keys(oc).length>0;
+    return '<div style="display:inline-flex;align-items:center;background:'+(fromReq?'#7b3fc4':'#2d7dd2')+';color:#fff;border-radius:4px;margin:.15rem;"'+(fromReq?' title="발주관리 시스템에서 등록"':'')+'>'+
       '<span data-n="'+lcH(n)+'" onclick="ordJumpTo(this.getAttribute(\'data-n\'))" title="아래 카드로 이동" style="padding:.35rem .6rem;font-size:.78rem;cursor:pointer;">'+n+'</span>'+
       '<button onclick="removeOrdClient(\''+esc(n)+'\')" style="background:none;border:none;color:#fff;cursor:pointer;padding:.35rem .5rem;font-size:.85rem;border-left:1px solid rgba(255,255,255,.3);">✕</button>'+
     '</div>';
