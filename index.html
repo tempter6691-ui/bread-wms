@@ -3797,7 +3797,7 @@ async function showProdHistory(pid, pname) {
     if(adjRows.length){
       adjRows.sort(function(a,b){return b.date.localeCompare(a.date);});
       html += '<div style="font-weight:bold;margin-bottom:.5rem;">🛠 재고 조정 내역</div>';
-      html += '<table style="margin-bottom:1rem;"><thead><tr><th>날짜</th><th>변경</th><th>사유</th></tr></thead><tbody>';
+      html += '<table style="margin-bottom:1rem;"><thead><tr><th>날짜</th><th style="text-align:center;">변경</th><th>사유</th></tr></thead><tbody>';
       adjRows.forEach(function(r){
         html += '<tr><td>'+r.date+'</td><td style="text-align:center;font-weight:bold;color:'+(r.diff<0?'#dc2626':'#16a34a')+';">'+(r.diff>0?'+':'')+r.diff+'개</td><td title="'+String(r.memo).replace(/"/g,'&quot;')+'">'+r.reason+'</td></tr>';
       });
@@ -3806,7 +3806,7 @@ async function showProdHistory(pid, pname) {
     html += '<div style="font-weight:bold;margin-bottom:.5rem;">📥 입고 내역</div>';
     if(inDates.length){
       html += '<div style="margin-bottom:.5rem;padding:.5rem;background:#f0f4ff;border-radius:4px;font-weight:bold;">누적 총 입고: '+inTotal+'개</div>';
-      html += '<table><thead><tr><th>날짜</th><th>입고 수량</th></tr></thead><tbody>';
+      html += '<table><thead><tr><th>날짜</th><th style="text-align:center;">입고 수량</th></tr></thead><tbody>';
       inDates.forEach(function(d){
         html += '<tr><td>'+d+'</td><td style="text-align:center;font-weight:bold;">'+inDayMap[d]+'개</td></tr>';
       });
@@ -3818,7 +3818,7 @@ async function showProdHistory(pid, pname) {
     html += '<div style="font-weight:bold;margin:1.25rem 0 .5rem;">📤 출고 내역</div>';
     if(outRows.length){
       html += '<div style="margin-bottom:.5rem;padding:.5rem;background:#fff0f0;border-radius:4px;font-weight:bold;">누적 총 출고: '+outTotal+'개</div>';
-      html += '<table><thead><tr><th>날짜</th><th>거래처</th><th>출고 수량</th></tr></thead><tbody>';
+      html += '<table><thead><tr><th>날짜</th><th>거래처</th><th style="text-align:center;">출고 수량</th></tr></thead><tbody>';
       outRows.forEach(function(r){
         html += '<tr><td>'+r.date+'</td><td>'+r.client+'</td><td style="text-align:center;font-weight:bold;">'+r.qty+'개</td></tr>';
       });
