@@ -4950,7 +4950,8 @@ function ecRowCompare(a,b){
 function pgEcount() {
   var today = todayStr();
   var d7 = new Date(); d7.setDate(d7.getDate()-7);
-  var from7 = d7.toISOString().slice(0,10);
+  // 2026-10-19 수정: toISOString()은 UTC라 오전 9시 전에는 하루 어긋났음 → 로컬 날짜로
+  var from7 = d7.getFullYear()+'-'+String(d7.getMonth()+1).padStart(2,'0')+'-'+String(d7.getDate()).padStart(2,'0');
   return '<div class="card">'+
     '<div class="card-title">📤 이카운트 판매 전송</div>'+
     '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">'+
@@ -5039,6 +5040,27 @@ function ecKgSplit(prod){
   var m=n.match(/\((\d+(?:\.\d+)?)kg\//i);
   return m?Number(m[1]):1;
 }
+// 2026-10-19 추가: 이카운트/비즈모아 미리보기용 출고 로그 조회.
+// 예전엔 ts(스캔 시각) 범위로 조회한 뒤 date(배송일)로 다시 걸러서, 늦게 수동/일괄완료한 출고
+// (예: 9/15 주문을 10/12에 완료)나 전날 스캔한 출고가 날짜를 짧게 잡으면 어느 조회에도 안 잡혔음.
+// → date 필드로 직접 조회. 2026-07-03 이전 거래처 출고 로그에는 date가 없는 게 있어서 그 이전 기간만 ts 조회를 합침.
+// (type 조건까지 같이 걸면 복합 인덱스가 필요해서 date 범위만 걸고 outbound는 여기서 거름)
+var LOG_DATE_FIELD_SINCE = '2026-07-04';
+async function fetchOutboundLogsByDate(fromRaw, toRaw) {
+  var byId = {};
+  var snap = await db.collection('logs').where('date','>=',fromRaw).where('date','<=',toRaw).get();
+  snap.forEach(function(doc){ if(doc.data().type==='outbound') byId[doc.id]=doc; });
+  if (fromRaw < LOG_DATE_FIELD_SINCE) {
+    var startTs = firebase.firestore.Timestamp.fromDate(new Date(fromRaw+'T00:00:00'));
+    var endTs = firebase.firestore.Timestamp.fromDate(new Date(toRaw+'T23:59:59.999'));
+    var snap2 = await db.collection('logs').where('type','==','outbound')
+      .where('ts','>=',startTs).where('ts','<=',endTs).get();
+    snap2.forEach(function(doc){ byId[doc.id]=doc; });
+  }
+  var docs = Object.keys(byId).map(function(id){ return byId[id]; });
+  return { docs: docs, size: docs.length, forEach: function(fn){ docs.forEach(fn); } };
+}
+
 function ecAdjustNamePrice(prod, price) {
   var rawName = (prod.name||'').trim();
   var tierMatch = rawName.match(/(\d+)\s*단\s*$/);
@@ -5105,10 +5127,8 @@ async function ecPreview() {
     } else {
     // 전체 로그를 다 읽어온 뒤 날짜로 걸러내던 방식 → Firestore 쿼리 단계에서
     // 미리 기간으로 좁혀서 읽어옴 (Quota 절약, 2026-08-21)
-    var ecStartTs = firebase.firestore.Timestamp.fromDate(new Date(fromRaw+'T00:00:00'));
-    var ecEndTs = firebase.firestore.Timestamp.fromDate(new Date(toRaw+'T23:59:59.999'));
-    var snap=await db.collection('logs').where('type','==','outbound')
-      .where('ts','>=',ecStartTs).where('ts','<=',ecEndTs).get();
+    // 2026-10-19 수정: ts 범위 → date(배송일) 기준 조회 (fetchOutboundLogsByDate 주석 참고)
+    var snap=await fetchOutboundLogsByDate(fromRaw, toRaw);
     // priceHistory 지연 로딩: 이 기간 로그에 실제로 등장하는 거래처만 미리 파악해서 그만큼만 불러옴
     var neededClientIds2=new Set();
     snap.forEach(function(doc){
@@ -5312,10 +5332,8 @@ async function bmPreview() {
     } else {
     // 전체 로그를 다 읽어온 뒤 날짜로 걸러내던 방식 → Firestore 쿼리 단계에서
     // 미리 기간으로 좁혀서 읽어옴 (Quota 절약, 2026-08-21)
-    var bmStartTs = firebase.firestore.Timestamp.fromDate(new Date(fromRaw+'T00:00:00'));
-    var bmEndTs = firebase.firestore.Timestamp.fromDate(new Date(toRaw+'T23:59:59.999'));
-    var snap=await db.collection('logs').where('type','==','outbound')
-      .where('ts','>=',bmStartTs).where('ts','<=',bmEndTs).get();
+    // 2026-10-19 수정: ts 범위 → date(배송일) 기준 조회 (fetchOutboundLogsByDate 주석 참고)
+    var snap=await fetchOutboundLogsByDate(fromRaw, toRaw);
     // priceHistory 지연 로딩: 이 기간 로그에 실제로 등장하는 거래처만 미리 파악해서 그만큼만 불러옴
     var bmNeededClientIds2=new Set();
     snap.forEach(function(doc){
