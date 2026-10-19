@@ -5,7 +5,8 @@ GitHub에 "Add files via upload"로 올려서 배포함.
 
 ## 파일
 - `index.html` — 메인 WMS(재고, 입고/출고 스캔, 주문, 거래처, 이카운트 전송, 백업/복원). **실제로 수정할 파일은 이것.**
-- `index (2).html`, `index.html.html` — 옛날 사본으로 보임. 사용자가 요청하지 않으면 수정하지 말 것.
+- 옛 사본 `index (2).html`, `index.html.html`, `배송기사.zip`은 2026-10-19에 삭제함(운영 Firestore에 연결된 채 배포돼 있었고,
+  복원 기능이 products를 merge 없이 덮어써서 ecountCode 등을 지울 위험이 있었음). 다시 올리지 말 것.
 - `production.html` — 생산 관리(`production_*`, `recipes`, `batch_counters`, `ingredientEcountMap`).
 - `order.html` / `order-admin.html` — 거래처 주문 요청(`orders_request`, `client_messages`, `settings`). SDK 9.22.1 사용.
 - `driver-a~e.html` — 배송기사별 페이지(`orders` 읽기).
@@ -51,7 +52,7 @@ WMS 재고는 판/박스 단위로 세지만, 비즈모아 전송 시에는 개 
 - `index.html` 기본 상품 목록과 **실제 Firestore `products`**: `마카롱엘로우1단` / `마카롱엘로우2단`(P053/P054) ← **"엘로우"**
 - `index.html` `ecAdjustNamePrice()`의 1단 단가 절반 예외 목록: 원래 `마카롱옐로우1단`만 있어서 노랑 1단만 단가가
   절반으로 전송됐음. 2026-09-28에 `마카롱엘로우1단`을 추가함(두 표기 모두 유지).
-- 옛날 사본들: `마카롱옐로우1` / `마카롱옐로우2`
+- 9월 이전 logs의 pname에는 `마카롱옐로우2단`(P054) 같은 옛 표기가 남아 있음
 
 상품명을 문자열로 비교하는 로직(단가 보정, 이카운트 매칭, 검색)은 이 차이 때문에 조용히 매칭에 실패할 수 있음.
 상품명 비교 코드를 건드릴 때는 Firestore `products`에 실제로 저장된 이름을 확인하고, 가능하면 이름 대신 상품 ID(P053 등)로 비교할 것.
