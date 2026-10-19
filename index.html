@@ -4233,7 +4233,9 @@ async function loadLogs() {
     // 날짜+제품별로 입고는 더하고, "입고 취소"(via:inboundCancel)인 출고만 빼서 순수 입고량을 계산
     // (거래처로 나가는 진짜 출고는 별도 영역이라 여기서는 건드리지 않음)
     var dayProd = {}; // 'YYYY-MM-DD' -> { productName: qty }
-    var dayDocIds = {}; // 'YYYY-MM-DD' -> [docId, ...] (입고 기록만, 날짜수정은 입고 기준)
+    // 2026-10-19 수정: 입고취소(via:inboundCancel) 로그도 같이 담음 — 예전엔 입고만 담아서 날짜수정 시 취소분이 옛 날짜에 남았음
+    // (changeLogDate는 원래 입고취소도 dailyInbound에서 반대 부호로 옮기도록 짜여 있었음)
+    var dayDocIds = {}; // 'YYYY-MM-DD' -> [docId, ...] (입고 + 입고취소)
     snap.forEach(function(d){
       var r=d.data();
       if(r.type!=='inbound' && r.type!=='outbound') return;
@@ -4245,14 +4247,17 @@ async function loadLogs() {
       if(!dayProd[dateStr]) dayProd[dateStr]={};
       var pname=r.pname||r.pid||'-';
       if(!dayProd[dateStr][pname]) dayProd[dateStr][pname]=0;
+      if(!dayDocIds[dateStr]) dayDocIds[dateStr]=[];
+      dayDocIds[dateStr].push(d.id);
       if(r.type==='inbound'){
         dayProd[dateStr][pname]+=(r.qty||1);
-        if(!dayDocIds[dateStr]) dayDocIds[dateStr]=[];
-        dayDocIds[dateStr].push(d.id);
       } else {
         dayProd[dateStr][pname]-=(r.qty||1);
       }
     });
+    // 2026-10-19 수정: "날짜수정" 버튼이 아예 동작하지 않던 문제 — onclick="..." 안에 JSON.stringify(docIds)의
+    // 큰따옴표가 들어가서 속성이 중간에 끊겼음. ID 목록은 여기 담아두고 버튼에는 날짜만 넘김.
+    window._ibDayDocIds = dayDocIds;
 
     var dates=Object.keys(dayProd).sort(function(a,b){return b.localeCompare(a);});
     if(!dates.length){el.innerHTML='<p style="color:#aaa;">해당 날짜 입고 기록 없음</p>';return;}
@@ -4267,7 +4272,7 @@ async function loadLogs() {
           '<span>📅 '+date+'</span>'+
           '<div style="display:flex;align-items:center;gap:.5rem;">'+
             '<span>총 '+total+'개</span>'+
-            (docIds.length?'<button onclick="changeLogDate(\''+date+'\','+JSON.stringify(docIds)+')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:.2rem .5rem;border-radius:4px;cursor:pointer;font-size:.75rem;">날짜수정</button>':'')+
+            (docIds.length?'<button onclick="changeLogDate(\''+date+'\',window._ibDayDocIds[\''+date+'\'])" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:.2rem .5rem;border-radius:4px;cursor:pointer;font-size:.75rem;">날짜수정</button>':'')+
           '</div>'+
         '</div>'+
         '<table style="border-radius:0 0 4px 4px;overflow:hidden;">'+
@@ -4428,6 +4433,7 @@ async function adjustLogQty(pname, date, delta) {
 
 // ── LOG DATE CHANGE ──────────────────────────────────────────
 async function changeLogDate(oldDate, docIds) {
+  if(!docIds || !docIds.length){ alert('변경할 기록을 찾지 못했어요. 입고기록을 다시 조회해주세요.'); return; }
   var newDate = prompt('새 날짜를 입력하세요 (예: 2026-05-29)', oldDate);
   if(!newDate || newDate===oldDate) return;
   if(!/^\d{4}-\d{2}-\d{2}$/.test(newDate)){alert('날짜 형식이 올바르지 않아요. 예: 2026-05-29');return;}
