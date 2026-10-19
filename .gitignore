@@ -8,3 +8,6 @@ secrets/
 
 # 스크립트로 뽑은 Firestore 백업 (실데이터)
 backups/
+
+# 점검 보고서 (거래처별 단가·사업자번호 등 실데이터 포함 — 공개 레포라 올리지 않음)
+bug-report-*.md
