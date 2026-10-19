@@ -16,7 +16,9 @@ args.slice(1).forEach(a => {
   fields[a.slice(0, i)] = v;
 });
 // 복원 원칙과 같은 이유로, 이 스크립트로는 이름/이카운트 연결 필드를 바꾸지 않음
-const BLOCKED = ['name', 'ecountCode', 'ecountQtyMultiplier', 'orderUnitDivisor', 'qr'];
+// (2026-10-19: --allow=필드,필드 로 명시하면 해당 필드만 허용 — 예: QR 중복 정리 시 --allow=qr)
+const allowArg = (process.argv.find(a => a.startsWith('--allow=')) || '').slice(8).split(',').filter(Boolean);
+const BLOCKED = ['name', 'ecountCode', 'ecountQtyMultiplier', 'orderUnitDivisor', 'qr'].filter(k => !allowArg.includes(k));
 if (!pids.length || !Object.keys(fields).length) {
   console.error('사용법: node scripts/set-product-fields.js <pid[,pid...]> 필드=값 [필드=값...] [--apply]');
   process.exit(1);
