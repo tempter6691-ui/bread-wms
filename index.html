@@ -887,6 +887,15 @@ async function manualSetInventory(pid, targetQty, memo) {
 }
 window.manualSetInventory = manualSetInventory;
 
+// 2026-10-19 추가: 재고관리 안 하는 품목(products.noStock=true, 예: 마카롱 2단·슈가/초코도넛 2단)
+// → 입고/출고 스캔·수동완료·입고기록 수정 등 자동 경로에서 inventory를 건드리지 않음 (로그는 그대로 남김 — 이카운트 전송용).
+// 예전엔 출고 스캔은 하한 없이 -1, 수동완료는 재고만큼만 차감해서 -419 같은 음수 재고가 쌓였음.
+// 제품 수정 화면에서 재고 숫자를 직접 바꾸는 건 사용자가 의도한 것이라 그대로 반영함.
+function isNoStock(pid) {
+  var p = S.prods.find(function(x){ return x.id===pid; });
+  return !!(p && p.noStock);
+}
+
 // ── NAVIGATION ────────────────────────────────────────────────
 // 2026-10-05 수정: 메뉴/제목에서 (부장님) 삭제
 var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',labelChange:'🏷️ 라벨교체',ecount:'📤 이카운트 전송'};
@@ -1231,7 +1240,7 @@ async function doScanIn() {
     }
   }
   // 화면에 바로 보여줄 추정치 (실제 서버값은 increment로 안전하게 계산됨, 리스너가 곧 정확한 값으로 갱신해줌)
-  var estQ=(S.inv[p.id]||0)+mult; S.inv[p.id]=estQ;
+  var estQ=(S.inv[p.id]||0)+(isNoStock(p.id)?0:mult); S.inv[p.id]=estQ; // 2026-10-19: 재고관리 안 함 품목은 그대로
   var today = todayStr();
   var estTodayQ=(S.todayInbound[p.id]||0)+mult; S.todayInbound[p.id]=estTodayQ;
   if(!S.todayInboundBreakdown) S.todayInboundBreakdown={};
@@ -1240,7 +1249,7 @@ async function doScanIn() {
   var dibId = today+'_'+p.id;
   try {
     await safeWrite(async function() {
-      await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(mult)}, {merge:true});
+      if(!isNoStock(p.id)) await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(mult)}, {merge:true}); // 2026-10-19: 재고관리 안 함 품목 제외
       await db.collection('dailyInbound').doc(dibId).set({date:today,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(mult),['breakdown.'+mult]:firebase.firestore.FieldValue.increment(1)}, {merge:true});
       await db.collection('logs').add({type:'inbound',pid:p.id,pname:p.name,qty:mult,ts:firebase.firestore.FieldValue.serverTimestamp()});
     });
@@ -1251,8 +1260,9 @@ async function doScanIn() {
 
 async function manualOut(pid) {
   var p=S.prods.find(function(x){return x.id===pid;}); if(!p) return;
-  var curQ=S.inv[pid]||0; if(curQ<=0){toast('재고가 없어요!','err');return;}
-  var estQ=curQ-1; S.inv[pid]=estQ;
+  var noStock=isNoStock(pid); // 2026-10-19: 재고관리 안 함 품목은 재고 0이어도 입고취소 가능, 재고는 안 건드림
+  var curQ=S.inv[pid]||0; if(!noStock && curQ<=0){toast('재고가 없어요!','err');return;}
+  var estQ=noStock?curQ:curQ-1; S.inv[pid]=estQ;
   var today = todayStr();
   var curTodayQ=S.todayInbound[pid]||0;
   var estTodayQ=Math.max(0, curTodayQ-1); S.todayInbound[pid]=estTodayQ;
@@ -1266,7 +1276,7 @@ async function manualOut(pid) {
   var dibId = today+'_'+pid;
   try {
     await safeWrite(async function() {
-      await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+      if(!noStock) await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
       // 오늘 입고량도 같이 차감 (0 밑으로는 내려가지 않도록 보호)
       if(curTodayQ > 0) {
         var dibUpdate = {date:today,pid:pid,pname:p.name,qty: firebase.firestore.FieldValue.increment(-1)};
@@ -1281,7 +1291,7 @@ async function manualOut(pid) {
 
 async function manualIn(pid) {
   var p=S.prods.find(function(x){return x.id===pid;}); if(!p) return;
-  var estQ=(S.inv[pid]||0)+1; S.inv[pid]=estQ;
+  var estQ=(S.inv[pid]||0)+(isNoStock(pid)?0:1); S.inv[pid]=estQ; // 2026-10-19: 재고관리 안 함 품목은 그대로
   var today = todayStr();
   var estTodayQ=(S.todayInbound[pid]||0)+1; S.todayInbound[pid]=estTodayQ;
   if(!S.todayInboundBreakdown) S.todayInboundBreakdown={};
@@ -1290,7 +1300,7 @@ async function manualIn(pid) {
   var dibId = today+'_'+pid;
   try {
     await safeWrite(async function() {
-      await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
+      if(!isNoStock(pid)) await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true}); // 2026-10-19: 재고관리 안 함 품목 제외
       await db.collection('dailyInbound').doc(dibId).set({date:today,pid:pid,pname:p.name,qty:firebase.firestore.FieldValue.increment(1),['breakdown.1']:firebase.firestore.FieldValue.increment(1)}, {merge:true});
       await db.collection('logs').add({type:'inbound',pid:pid,pname:p.name,qty:1,ts:firebase.firestore.FieldValue.serverTimestamp()});
     });
@@ -1543,10 +1553,10 @@ async function doScanOut() {
   if(localIdx>=0){ localItems[localIdx].scanned=txResult.scanned; localItems[localIdx].done=txResult.scanned>=txResult.qty; }
   else { localItems.push({pid:p.id,qty:txResult.qty,scanned:txResult.scanned,done:txResult.scanned>=txResult.qty}); }
 
-  var estQ=curQ-1; S.inv[p.id]=estQ;
+  var estQ=isNoStock(p.id)?curQ:curQ-1; S.inv[p.id]=estQ; // 2026-10-19: 재고관리 안 함 품목은 그대로
   await safeWrite(async function() {
     try {
-      await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+      if(!isNoStock(p.id)) await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true}); // 2026-10-19: 재고관리 안 함 품목 제외
       await db.collection('logs').add({type:'outbound',pid:p.id,pname:p.name,client:client,qty:1,date:d,ts:firebase.firestore.FieldValue.serverTimestamp()});
       resEl.innerHTML='<div class="res-ok">✅ <strong>'+p.name+'</strong> 출고! 남은재고: '+estQ+'</div>';
     } catch(e) {
@@ -1575,14 +1585,15 @@ async function undoOb(pid) {
   } catch(e) { toast('오류:'+e.message,'err'); return; }
   if(!txResult.ok) return;
 
-  S.inv[pid]=(S.inv[pid]||0)+1;
+  var noStock=isNoStock(pid); // 2026-10-19: 재고관리 안 함 품목은 취소해도 재고 그대로
+  if(!noStock) S.inv[pid]=(S.inv[pid]||0)+1;
   if(S.orders[d] && S.orders[d][client] && S.orders[d][client].items){
     var it=S.orders[d][client].items.find(function(i){return i.pid===pid;});
     if(it){ it.scanned=Math.max(0,(it.scanned||1)-1); it.done=it.scanned>=it.qty; }
   }
 
   await safeWrite(async function() {
-    await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
+    if(!noStock) await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
     // 스캔할 때 남긴 출고 로그를 찾아서 지움 (안 지우면 이카운트 전송/제품 내역에서
     // 취소된 것도 나간 걸로 계속 잡힘 — 상쇄 로그를 추가하는 것만으론 안 없어짐)
     try {
@@ -1646,7 +1657,9 @@ async function manualCompleteOb(pid) {
   await safeWrite(async function() {
     // 재고가 있는 만큼만 차감 (미니와플·피자도우처럼 재고 관리 안 되는 품목은 0 이하로 안 떨어지게)
     var curInv=S.inv[pid]||0;
-    var deduct=Math.min(actualRemaining, curInv);
+    // 2026-10-19 수정: 재고가 음수면 deduct가 음수가 되어 invDeduct에 -219 같은 값이 남던 문제 → 0 하한.
+    // 재고관리 안 함(noStock) 품목은 차감 0.
+    var deduct=isNoStock(pid)?0:Math.max(0, Math.min(actualRemaining, curInv));
     if(deduct>0) {
       S.inv[pid]=curInv-deduct;
       await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
@@ -1711,7 +1724,7 @@ async function bulkCompleteOb() {
           var p=S.prods.find(function(x){return x.id===l.pid;});
           var pname=p?p.name:l.pid;
           var curInv=S.inv[l.pid]||0;
-          var deduct=Math.min(l.rem, curInv);
+          var deduct=isNoStock(l.pid)?0:Math.max(0, Math.min(l.rem, curInv)); // 2026-10-19 수정: 음수 방지 + noStock 제외 (manualCompleteOb와 동일)
           if(deduct>0){
             S.inv[l.pid]=curInv-deduct;
             batch.set(db.collection('inventory').doc(l.pid), {qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
@@ -1744,13 +1757,15 @@ function drawStock() {
   if(!catEl||!listEl) return;
   var selCat=catEl.value, q=(qEl?qEl.value:'').toLowerCase(), low=lowEl?lowEl.checked:false;
   var f=S.prods.filter(function(p){
-    return (selCat==='전체'||p.cat===selCat)&&(!q||p.name.toLowerCase().indexOf(q)>=0||(p.qr||'').toLowerCase().indexOf(q)>=0)&&(!low||(S.inv[p.id]||0)<=15);
+    // 2026-10-19 수정: 재고관리 안 함(noStock) 품목은 "부족만" 목록과 총 재고 합계에서 제외
+    return (selCat==='전체'||p.cat===selCat)&&(!q||p.name.toLowerCase().indexOf(q)>=0||(p.qr||'').toLowerCase().indexOf(q)>=0)&&(!low||(!p.noStock&&(S.inv[p.id]||0)<=15));
   });
-  var tot=f.reduce(function(s,p){return s+(S.inv[p.id]||0);},0);
+  var tot=f.reduce(function(s,p){return s+(p.noStock?0:(S.inv[p.id]||0));},0);
   listEl.innerHTML='<div style="color:#888;font-size:.82rem;margin-bottom:.5rem;">'+f.length+'개 제품 / 총 재고 '+tot+'개</div>'+
     '<table><thead><tr><th>제품명</th><th>분류</th><th>QR</th><th>재고</th></tr></thead><tbody>'+
     f.map(function(p){
       var q2=S.inv[p.id]||0;
+      if(p.noStock) return '<tr><td>'+p.name+'</td><td>'+p.cat+'</td><td><code>'+p.qr+'</code></td><td><span class="badge" style="background:#eee;color:#888;">관리 안 함</span></td></tr>'; // 2026-10-19
       return '<tr><td>'+p.name+'</td><td>'+p.cat+'</td><td><code>'+p.qr+'</code></td>'+
         '<td><span class="badge '+(q2===0?'bg-red':q2<=15?'bg-yellow':'bg-green')+'">'+q2+'</span></td></tr>';
     }).join('')+'</tbody></table>';
@@ -3909,6 +3924,8 @@ function editProd(pid) {
     '<div><label>재고</label><br><input id="ep-inv" type="number" value="'+(S.inv[p.id]||0)+'" style="width:100%;margin-top:.2rem;"></div>'+
     // 2026-10-16 추가: 재고 숫자를 바꾸면 나타나는 사유 입력칸
     '<div id="ep-reason-wrap" style="margin-top:.5rem;"><label style="color:#dc2626;font-weight:600;">재고 변경 사유 <span style="font-weight:400;font-size:.75rem;color:#888;">(재고 숫자를 바꿀 때만 필수)</span></label><br><input id="ep-reason" type="text" placeholder="예: 이물질 발견 전량 폐기 / 재고실사 조정" style="width:100%;margin-top:.2rem;border:1px solid #fca5a5;background:#fff5f5;"></div>'+
+    // 2026-10-19 추가: 재고관리 안 함 — 체크하면 입고/출고 스캔·수동완료 때 재고 숫자를 안 건드림 (출고 로그는 그대로 남음)
+    '<div><label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;"><input id="ep-nostock" type="checkbox"'+(p.noStock?' checked':'')+'> 재고관리 안 함 <span style="font-size:.75rem;color:#888;">(스캔·출고완료 때 재고 차감 안 함, 이카운트 전송은 그대로)</span></label></div>'+
     '<hr style="border:none;border-top:1px solid #eee;margin:.3rem 0;">'+
     '<div><label>이카운트 품목코드</label><br><input id="ep-ecode" type="text" value="'+(p.ecountCode||'')+'" placeholder="예: E-003" style="width:100%;margin-top:.2rem;"></div>'+
     '<div><label>이카운트 전송 수량 배수</label><br><input id="ep-emult" type="number" step="0.5" min="0" value="'+(p.ecountQtyMultiplier||1)+'" style="width:100%;margin-top:.2rem;">'+
@@ -3929,6 +3946,7 @@ async function doEditProd(pid) {
   var ecode=(document.getElementById('ep-ecode')||{value:p.ecountCode||''}).value.trim();
   var emult=parseFloat((document.getElementById('ep-emult')||{value:1}).value)||1;
   var orderdiv=parseInt((document.getElementById('ep-orderdiv')||{value:1}).value)||1;
+  var nsEl=document.getElementById('ep-nostock'); var noStock=nsEl?nsEl.checked:!!p.noStock; // 2026-10-19 추가
   var oldInv=S.inv[p.id]||0;
   if(qr && S.prods.some(function(x){return x.id!==pid && x.qr===qr;})){
     toast('이미 다른 상품이 쓰고 있는 QR코드예요','err'); return;
@@ -3947,7 +3965,7 @@ async function doEditProd(pid) {
         var dup = await db.collection('products').where('qr','==',qr).limit(1).get();
         if(!dup.empty && dup.docs[0].id!==pid){ throw new Error('DUPLICATE_QR'); }
       }
-      await db.collection('products').doc(p.id).update({name:name,cat:cat,qr:qr,unit:unit,ecountCode:ecode,ecountQtyMultiplier:emult,orderUnitDivisor:orderdiv});
+      await db.collection('products').doc(p.id).update({name:name,cat:cat,qr:qr,unit:unit,ecountCode:ecode,ecountQtyMultiplier:emult,orderUnitDivisor:orderdiv,noStock:noStock});
       var diff = inv - oldInv;
       if(diff !== 0) {
         actualDiff=diff;
@@ -3968,7 +3986,7 @@ async function doEditProd(pid) {
     });
     // Firestore 저장 성공 후에만 메모리 반영 (증분만큼만 반영 — 그 사이 실시간 리스너가
     // 이미 갱신했을 수도 있는 최신값을 절대값으로 덮어쓰지 않도록)
-    p.name=name; p.cat=cat; p.qr=qr; p.unit=unit; p.ecountCode=ecode; p.ecountQtyMultiplier=emult; p.orderUnitDivisor=orderdiv;
+    p.name=name; p.cat=cat; p.qr=qr; p.unit=unit; p.ecountCode=ecode; p.ecountQtyMultiplier=emult; p.orderUnitDivisor=orderdiv; p.noStock=noStock;
     S.inv[p.id]=(S.inv[p.id]||0)+actualDiff;
     saveCacheLS('products', S.prods);
     closeModal(); toast(name+' 수정됨','ok'); drawProducts();
@@ -4043,7 +4061,7 @@ async function addInboundOnDate(){
   await safeWrite(async function(){
     var ts=isToday?firebase.firestore.FieldValue.serverTimestamp():firebase.firestore.Timestamp.fromDate(new Date(date+'T12:00:00'));
     var b=db.batch();
-    b.set(db.collection('inventory').doc(p.id),{qty:firebase.firestore.FieldValue.increment(q)},{merge:true});
+    if(!isNoStock(p.id)) b.set(db.collection('inventory').doc(p.id),{qty:firebase.firestore.FieldValue.increment(q)},{merge:true}); // 2026-10-19: 재고관리 안 함 품목 제외
     b.set(db.collection('dailyInbound').doc(date+'_'+p.id),{date:date,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(q)},{merge:true});
     b.set(db.collection('logs').doc(),{type:'inbound',pid:p.id,pname:p.name,qty:q,ts:ts,adjusted:!isToday,adjustedDate:date,manual:true,memo:'입고기록 화면 직접입력'});
     await b.commit();
@@ -4178,7 +4196,7 @@ async function editProdLogQty(logId, pid, pname, dateFilter){
       var oldQty = (logDoc.exists && logDoc.data().qty) || 0;
       var diff = n - oldQty; // 재고에 반영할 차이 (입고 로그 기준이므로 그대로 더해줌)
       await db.collection('logs').doc(logId).update({qty:n});
-      if (diff !== 0) {
+      if (diff !== 0 && !isNoStock(pid)) { // 2026-10-19: 재고관리 안 함 품목 제외
         await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(diff)}, {merge:true});
       }
     });
@@ -4195,7 +4213,7 @@ async function deleteProdLog(logId, pid, pname, dateFilter){
       var logDoc = await db.collection('logs').doc(logId).get();
       var oldQty = (logDoc.exists && logDoc.data().qty) || 0;
       await db.collection('logs').doc(logId).delete();
-      if (oldQty !== 0) {
+      if (oldQty !== 0 && !isNoStock(pid)) { // 2026-10-19: 재고관리 안 함 품목 제외
         await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-oldQty)}, {merge:true});
       }
     });
@@ -4400,11 +4418,12 @@ async function adjustLogQty(pname, date, delta) {
   try {
     if(delta > 0) {
       // +1: 재고 증가 + 해당 날짜 로그 추가
-      S.inv[p.id]=(S.inv[p.id]||0)+1;
+      var noStockP=isNoStock(p.id); // 2026-10-19: 재고관리 안 함 품목은 재고 그대로
+      if(!noStockP) S.inv[p.id]=(S.inv[p.id]||0)+1;
       if(isToday){ S.todayInbound[p.id]=(S.todayInbound[p.id]||0)+1; }
       var dibId = date+'_'+p.id;
       await safeWrite(async function() {
-        await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
+        if(!noStockP) await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
         await db.collection('dailyInbound').doc(dibId).set({date:date,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(1)}, {merge:true});
         // 해당 날짜 기준 타임스탬프로 로그 기록 (오늘이면 서버타임, 과거면 그 날 정오 기준)
         var logTs = isToday ? firebase.firestore.FieldValue.serverTimestamp() : firebase.firestore.Timestamp.fromDate(new Date(date+'T12:00:00'));
@@ -4413,13 +4432,14 @@ async function adjustLogQty(pname, date, delta) {
       toast(pname+' +1 추가 ('+date+')', 'ok');
     } else {
       // -1: 재고 차감 + 해당 날짜 로그에 취소 기록
+      var noStockM=isNoStock(p.id); // 2026-10-19: 재고관리 안 함 품목은 재고 0이어도 취소 가능, 재고 그대로
       var curQ = S.inv[p.id]||0;
-      if(curQ<=0){ toast(pname+' 재고가 이미 0이에요','err'); return; }
-      S.inv[p.id]=curQ-1;
+      if(!noStockM && curQ<=0){ toast(pname+' 재고가 이미 0이에요','err'); return; }
+      if(!noStockM) S.inv[p.id]=curQ-1;
       if(isToday){ S.todayInbound[p.id]=Math.max(0,(S.todayInbound[p.id]||0)-1); }
       var dibId2 = date+'_'+p.id;
       await safeWrite(async function() {
-        await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+        if(!noStockM) await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
         await db.collection('dailyInbound').doc(dibId2).set({date:date,pid:p.id,pname:p.name,qty:firebase.firestore.FieldValue.increment(-1)}, {merge:true});
         // 해당 날짜 기준으로 취소 로그 기록
         var logTs2 = isToday ? firebase.firestore.FieldValue.serverTimestamp() : firebase.firestore.Timestamp.fromDate(new Date(date+'T12:00:01'));

@@ -308,7 +308,7 @@ async function scanInCard(clientName, inputId) {
   } catch(e){ showScanMsg(clientName, '❌ 저장 오류: '+e.message, 'err'); return; }
 
   try {
-    await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true});
+    if(!p.noStock) await db.collection('inventory').doc(p.id).set({qty: firebase.firestore.FieldValue.increment(-1)}, {merge:true}); // 2026-10-19: 재고관리 안 함(noStock) 품목은 차감 안 함 (index.html과 동일)
     await db.collection('logs').add({type:'outbound',pid:p.id,pname:p.name,client:clientName,qty:1,date:gDate,ts:firebase.firestore.FieldValue.serverTimestamp()});
   } catch(e){ showScanMsg(clientName, '⚠️ 스캔은 반영됐지만 재고/로그 기록 오류: '+e.message, 'err'); }
 
