@@ -1980,7 +1980,10 @@ function drawOrdCard(name, data) {
           var qtyShow=changed?'<span style="color:#aaa;text-decoration:line-through;">'+origQty+'</span> &rarr; <span style="color:#e67e22;font-weight:bold;">'+item.qty+'</span>':'<input type="number" min="1" value="'+item.qty+'" style="width:3.4em;text-align:center;border:1px solid #ccc;border-radius:4px;padding:.15rem .2rem;" onchange="setQty(\''+en+'\',\''+item.pid+'\',this.value)">'; // 2026-09-30 수정: 수량을 숫자로 직접 입력 가능하게
           return '<tr draggable="'+ (!locked?'true':'false') +'" data-pid="'+item.pid+'" data-client="'+en+'" ondragstart="ordDragStart(event)" style="cursor:'+ (!locked?'grab':'default') +';">'+
             '<td style="color:#888;font-weight:600;">'+(offset+i+1)+'.</td>'+
-            '<td>'+(p?p.name:item.pid)+'</td>'+
+            // 2026-10-20 수정: "N단" 품목은 이름을 누르면 같은 이름의 다른 단으로 바꾸는 버튼이 펼쳐짐 (잠긴 카드 제외)
+            (!locked&&danSiblings(item.pid,item.pname).length
+              ?'<td class="dan-name" style="cursor:pointer;text-decoration:underline dotted #999;" title="눌러서 다른 단으로 바꾸기" onclick="toggleDanSw(event,\''+en+'\',\''+item.pid+'\',this)">'+(p?p.name:item.pid)+'</td>'
+              :'<td>'+(p?p.name:item.pid)+'</td>')+
             '<td><button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',-1)">-</button> '+qtyShow+' <button class="btn btn-gray btn-sm" onclick="chgQty(\''+en+'\',\''+item.pid+'\',1)">+</button></td>'+
             (!locked?'<td><button class="btn btn-danger btn-sm" onclick="rmItem(\''+en+'\',\''+item.pid+'\')">X</button></td>':'<td></td>')+
             (!locked?'<td style="color:#bbb;font-size:1rem;cursor:grab;user-select:none;text-align:center;">⠿</td>':'')+
@@ -2854,6 +2857,70 @@ async function rmItem(clientName, pid) {
   await safeWrite(async function() {
     await db.collection('orders').doc(S.ordDate).set({[clientName]: data}, {merge:true});
     var el=document.getElementById('ocard_'+sid); if(el){var tmp=document.createElement('div');tmp.innerHTML=drawOrdCard(clientName,data);el.parentNode.replaceChild(tmp.firstChild,el);}
+  });
+}
+
+// ── 출고지시서 단 바꾸기 (2026-10-20 추가) ──
+// 2026-10-20 수정: 이름이 "N단"으로 끝나는 품목(갈릭파이1단, 마카롱엘로우1단 등)을 같은 이름의 다른 단 제품으로 바꿈
+// 공백 제거 후 끝의 "\d단"을 뗀 기본이름이 같은 제품을 찾음. name/pname 둘 다 확인, noStock·orderHidden 제품도 포함
+// 이름 표기는 고치지 않음(CLAUDE.md "마카롱엘로우" 참고) — 같은 표기끼리만 형제로 묶임
+function danBase(n){ var s=String(n||'').replace(/\s+/g,''); return /\d단$/.test(s)?s.replace(/\d단$/,''):null; }
+function danSiblings(pid, pname){
+  var p=S.prods.find(function(x){return x.id===pid;});
+  var bases=[p&&danBase(p.name), p&&danBase(p.pname), danBase(pname)].filter(Boolean);
+  if(!bases.length) return [];
+  return S.prods.filter(function(x){
+    if(x.id===pid) return false;
+    var b1=danBase(x.name), b2=danBase(x.pname);
+    return (b1&&bases.indexOf(b1)>=0)||(b2&&bases.indexOf(b2)>=0);
+  }).sort(function(a,b){ return String(a.name).replace(/\s+/g,'').localeCompare(String(b.name).replace(/\s+/g,''),'ko',{numeric:true}); });
+}
+function closeDanSw(){ document.querySelectorAll('tr.dan-sw-row').forEach(function(r){r.remove();}); }
+function toggleDanSw(ev, clientName, pid, td){
+  if(ev) ev.stopPropagation();
+  var tr=td.closest('tr');
+  var open=tr.nextElementSibling&&tr.nextElementSibling.classList.contains('dan-sw-row');
+  closeDanSw();
+  if(open) return; // 다시 누르면 접힘
+  var data=(S.orders[S.ordDate]||{})[clientName]; if(!data||!data.items||data.locked) return;
+  var item=data.items.find(function(i){return i.pid===pid;}); if(!item) return;
+  var sibs=danSiblings(pid,item.pname); if(!sibs.length) return;
+  var row=document.createElement('tr');
+  row.className='dan-sw-row';
+  row.innerHTML='<td></td><td colspan="'+(tr.children.length-1)+'" style="padding:.2rem 0 .4rem;">'+
+    sibs.map(function(s){
+      var inCard=data.items.some(function(i){return i.pid===s.id;});
+      return '<button class="client-btn" style="font-size:.76rem;'+(inCard?'border-color:#e67e22;':'')+'" onclick="event.stopPropagation();swapDan(\''+esc(clientName)+'\',\''+pid+'\',\''+s.id+'\')">'+lcH(s.name)+(inCard?' (카드에 있음)':'')+'</button>';
+    }).join('')+'</td>';
+  tr.parentNode.insertBefore(row,tr.nextSibling);
+}
+document.addEventListener('click', function(e){
+  if(e.target.closest&&(e.target.closest('tr.dan-sw-row')||e.target.closest('td.dan-name'))) return;
+  closeDanSw();
+});
+async function swapDan(clientName, fromPid, toPid){
+  var d=S.ordDate;
+  var data=(S.orders[d]||{})[clientName]; if(!data||!data.items) return;
+  if(data.locked){ closeDanSw(); return toast('잠긴 카드는 바꿀 수 없습니다','err'); }
+  var item=data.items.find(function(i){return i.pid===fromPid;}); if(!item) return;
+  var np=S.prods.find(function(x){return x.id===toPid;}); if(!np) return;
+  if((item.scanned||0)>0){ closeDanSw(); return toast('이미 스캔이 진행된 품목은 단을 바꿀 수 없습니다 (스캔 취소 후 바꾸세요)','err'); }
+  var ex=data.items.find(function(i){return i.pid===toPid;});
+  if(ex){
+    if((ex.scanned||0)>0){ closeDanSw(); return toast('카드에 있는 '+np.name+'이(가) 이미 스캔 진행 중이라 합칠 수 없습니다','err'); }
+    if(!confirm(np.name+'이(가) 이미 카드에 있습니다 ('+ex.qty+'개).\n수량을 합쳐서 '+((ex.qty||0)+(item.qty||0))+'개 한 줄로 정리할까요?')) return;
+    // 바꾼 행 위치·메모 등은 그대로 두고, 기존 행 수량을 합친 뒤 기존 행은 삭제
+    item.qty=(item.qty||0)+(ex.qty||0);
+    data.items=data.items.filter(function(i){return i!==ex;});
+  }
+  item.pid=toPid;
+  if(item.pname!==undefined) item.pname=np.name;
+  item.done=false;
+  var sid=safeid(clientName);
+  await safeWrite(async function() {
+    await db.collection('orders').doc(d).set({[clientName]: data}, {merge:true});
+    var el=document.getElementById('ocard_'+sid); if(el){var tmp=document.createElement('div');tmp.innerHTML=drawOrdCard(clientName,data);el.parentNode.replaceChild(tmp.firstChild,el);}
+    toast(np.name+'(으)로 바꿈','ok');
   });
 }
 
