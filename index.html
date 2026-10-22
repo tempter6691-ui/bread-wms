@@ -2062,7 +2062,8 @@ function pgOrders() {
       '<label>날짜: <input type="date" value="'+S.ordDate+'" onchange="S.ordDate=this.value;ensureOrdersLoaded(this.value);render();" style="padding:.45rem;"></label>'+
       '<button class="btn btn-gray btn-sm" onclick="clearOrders()">초기화</button>'+
       '<button class="btn btn-success btn-sm" onclick="exportExcel()">📊 엑셀 다운로드</button>'+
-      '<button class="btn btn-primary btn-sm" onclick="printOrders()">🖨️ '+(S.ordDriver==='전체'?'':S.ordDriver+' ')+'인쇄</button>'+ // 2026-10-13 수정: 선택한 기사 탭에 맞게 버튼 글자
+      '<button class="btn btn-primary btn-sm" onclick="printOrders()">🖨️ '+(S.ordDriver==='전체'?'':S.ordDriver+' ')+'인쇄</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="openPrintSelect()" style="background:#4f46e5;">☑️ 선택 인쇄</button>'+ // 2026-10-22 추가: 거래처 골라서 인쇄 // 2026-10-13 수정: 선택한 기사 탭에 맞게 버튼 글자
       '<button class="btn btn-success btn-sm" onclick="xlbPickFile()">📥 엑셀로 거래처 등록</button>'+ // 2026-10-06 수정: 여러 거래처 엑셀 일괄 등록
     '</div>'+
     '<div class="driver-tabs"><div class="dtab'+(S.ordDriver==='전체'?' active':'')+'" onclick="S.ordDriver=\'전체\';render();">전체</div>'+
@@ -3462,7 +3463,56 @@ async function exportExcel() {
   toast('엑셀 다운로드 완료!','ok');
 }
 
-function printOrders() {
+// ── 출고지시서 선택 인쇄 (2026-10-22 추가) ──
+// 현재 날짜·기사 탭 기준으로 거래처 목록을 체크박스로 보여주고, 체크한 거래처만 printOrders(onlyNames)로 인쇄.
+// 기사 판단은 printOrders와 같음 (주문 driver || 거래처 driver), 전체 탭이면 기사별로 묶고 맨 뒤에 미배정.
+function openPrintSelect(){
+  var todayOrd = S.orders[S.ordDate] || {};
+  var names = Object.keys(todayOrd).filter(function(n){ return ((todayOrd[n]||{}).items||[]).length; });
+  if(!names.length){ toast('출고지시서가 없어요','err'); return; }
+  function drvOf(name){ var cl=S.clients.find(function(c){return c.name===name;}); return (todayOrd[name].driver||'')||(cl?cl.driver:'')||''; }
+  var allDrv = S.ordDriver==='전체';
+  var groups = (allDrv?DRIVERS:[S.ordDriver]).map(function(d){ return {drv:d, names:names.filter(function(n){return drvOf(n)===d;})}; });
+  if(allDrv) groups.push({drv:'미배정', names:names.filter(function(n){return DRIVERS.indexOf(drvOf(n))===-1;})});
+  groups = groups.filter(function(g){return g.names.length;});
+  if(!groups.length){ toast('이 기사 담당 출고지시서가 없어요','err'); return; }
+  var body = '<div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.6rem;">'+
+      '<input id="ps-q" type="text" placeholder="거래처 검색" oninput="psFilter()" style="flex:1;min-width:140px;">'+
+      '<button class="btn btn-gray btn-sm" onclick="psAll(true)">전체 선택</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="psAll(false)">전체 해제</button>'+
+    '</div>'+
+    '<div style="max-height:55vh;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:.4rem .6rem;">'+
+    groups.map(function(g){
+      g.names.sort(function(a,b){return a.localeCompare(b,'ko');});
+      return '<div class="ps-grp" style="margin:.3rem 0 .5rem;"><label style="font-weight:700;font-size:.82rem;display:flex;align-items:center;gap:.35rem;border-bottom:1px solid var(--border);padding-bottom:.2rem;margin-bottom:.25rem;">'+
+        '<input type="checkbox" onchange="psGroup(this)"> 🚚 '+lcH(g.drv)+' <span style="color:var(--sub);font-weight:400;">('+g.names.length+')</span></label>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.15rem .6rem;">'+
+        g.names.map(function(n){
+          var cnt=(todayOrd[n].items||[]).length;
+          return '<label class="ps-item" data-n="'+lcH(n)+'" style="display:flex;align-items:center;gap:.35rem;font-size:.82rem;padding:.15rem 0;cursor:pointer;">'+
+            '<input type="checkbox" class="ps-cb" value="'+lcH(n)+'" onchange="psCount()"> '+lcH(n)+' <span style="color:var(--sub);font-size:.72rem;">'+cnt+'품목</span></label>';
+        }).join('')+'</div></div>';
+    }).join('')+'</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:.75rem;">'+
+      '<span id="ps-count" style="font-size:.85rem;color:var(--sub);">0곳 선택</span>'+
+      '<span><button class="btn btn-gray btn-sm" onclick="closeModal()">취소</button> '+
+      '<button class="btn btn-primary btn-sm" onclick="psPrint()">🖨️ 선택한 거래처 인쇄</button></span>'+
+    '</div>';
+  openModal('☑️ 선택 인쇄 — '+S.ordDate+(allDrv?'':' / '+S.ordDriver), body);
+}
+function psCount(){ var n=document.querySelectorAll('.ps-cb:checked').length; var el=document.getElementById('ps-count'); if(el) el.textContent=n+'곳 선택'; }
+function psAll(on){ document.querySelectorAll('.ps-item').forEach(function(l){ if(l.style.display!=='none') l.querySelector('.ps-cb').checked=on; }); psCount(); }
+function psGroup(cb){ cb.closest('.ps-grp').querySelectorAll('.ps-item').forEach(function(l){ if(l.style.display!=='none') l.querySelector('.ps-cb').checked=cb.checked; }); psCount(); }
+function psFilter(){ var q=(document.getElementById('ps-q').value||'').replace(/\s/g,''); document.querySelectorAll('.ps-item').forEach(function(l){ l.style.display=(!q||l.getAttribute('data-n').replace(/\s/g,'').indexOf(q)>=0)?'':'none'; }); }
+function psPrint(){
+  var sel=[].map.call(document.querySelectorAll('.ps-cb:checked'), function(c){return c.value;});
+  if(!sel.length){ toast('거래처를 선택해주세요','err'); return; }
+  closeModal();
+  printOrders(sel);
+}
+
+// 2026-10-22 수정: onlyNames(거래처명 배열)를 주면 그 거래처만 인쇄 (☑️ 선택 인쇄). 없으면 기존과 동일.
+function printOrders(onlyNames) {
   var todayOrd = S.orders[S.ordDate] || {};
   if(!Object.keys(todayOrd).length){ toast('출고지시서가 없어요','err'); return; }
 
@@ -3479,6 +3529,9 @@ function printOrders() {
   });
   if(allDrv){
     sections.push({drv:'미배정', names:Object.keys(todayOrd).filter(function(name){ return DRIVERS.indexOf(ordDrvOf(name))===-1; })});
+  }
+  if(Array.isArray(onlyNames)){ // 2026-10-22 추가: 선택 인쇄
+    sections.forEach(function(sec){ sec.names = sec.names.filter(function(n){ return onlyNames.indexOf(n)>=0; }); });
   }
   if(!sections.some(function(s){return s.names.length;})){ toast(allDrv?'출고지시서가 없어요':'이 기사 담당 출고지시서가 없어요','err'); return; }
 
