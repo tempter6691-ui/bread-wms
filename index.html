@@ -177,6 +177,8 @@ tr:hover td{background:#fafafa;}
   <!-- 2026-10-05 수정: 메뉴/제목에서 (부장님) 삭제 -->
   <div class="nav-item" onclick="go('outbound')">🚚 출고</div>
   <div class="nav-item" onclick="go('stock')">📋 재고 현황</div>
+  <!-- 2026-10-22 추가: 주간 출고 분석 -->
+  <div class="nav-item" onclick="go('weekly')">📈 주간 출고 분석</div>
   <div class="nav-section">설정</div>
   <div class="nav-item" onclick="go('orders')">📝 출고지시서</div>
   <div class="nav-item" onclick="go('templates')">📅 요일 템플릿</div>
@@ -898,7 +900,7 @@ function isNoStock(pid) {
 
 // ── NAVIGATION ────────────────────────────────────────────────
 // 2026-10-05 수정: 메뉴/제목에서 (부장님) 삭제
-var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',labelChange:'🏷️ 라벨교체',ecount:'📤 이카운트 전송'};
+var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',labelChange:'🏷️ 라벨교체',ecount:'📤 이카운트 전송',weekly:'📈 주간 출고 분석'};
 
 function go(page) {
   if(S.page === 'inbound' && page !== 'inbound') { clearInterval(_ibPollTimer); clearInterval(_ibMultPollTimer); }
@@ -923,11 +925,277 @@ function render() {
     case 'logs':      c.innerHTML = pgLogs(); setTimeout(function(){loadLogs();fillLogProdList();},40); break;
     case 'labelChange': c.innerHTML = pgLabelChange(); setTimeout(function(){fillLcProdList();loadLabelChanges();},40); break; // 2026-10-13 추가: 라벨교체 기록
     case 'ecount':    c.innerHTML = pgEcount(); break;
+    case 'weekly':    c.innerHTML = pgWeekly(); setTimeout(afterWeekly,40); break; // 2026-10-22 추가: 주간 출고 분석
   }
   c.scrollTop = prevScrollTop;
   setTimeout(function(){ c.scrollTop = prevScrollTop; }, 0);
   setTimeout(function(){ c.scrollTop = prevScrollTop; }, 60);
   setTimeout(function(){ c.scrollTop = prevScrollTop; }, 200);
+}
+
+// ── 주간 출고 분석 (2026-10-22 추가) ─────────────────────────────
+// 출고지시서(orders)를 주(월~일) 단위로 모아서 제품별 출고 수량을 표/그래프로 보여줌.
+// 날짜별 orders 문서만 읽음(선택한 주 7건 + 전주 7건) → logs(2만건+)를 안 읽으므로 일일 읽기 한도에 거의 영향 없음.
+// 수량 기준: 출고지시서 수량(qty). "완료된 것만" 체크 시 실제 출고 처리된 수량(scanned)만 셈.
+// 단위: orderUnitDivisor가 있는 제품은 재고 단위로 환산(제품관리 예정출고와 같은 방식).
+var WK = {start:null, cache:{}, cat:'전체', q:'', sort:'total', doneOnly:false, rows:[]};
+var WK_DAYS = ['월','화','수','목','금','토','일'];
+var WK_UNIT_COLOR = {'판':'#3f3f46','봉':'#9b59b6','개':'#e67e22','박스':'#2980b9'};
+function wkFmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function wkParse(s){ var a=String(s).split('-'); return new Date(+a[0], +a[1]-1, +a[2]); }
+function wkMonday(d){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()-((x.getDay()+6)%7)); return x; }
+function wkAdd(d,n){ var x=new Date(d.getFullYear(),d.getMonth(),d.getDate()); x.setDate(x.getDate()+n); return x; }
+function wkNum(n){ n=Math.round(n*100)/100; return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+
+async function wkLoad(monday){
+  var s=wkFmt(monday), e=wkFmt(wkAdd(monday,6));
+  if(WK.cache[s]) return WK.cache[s];
+  var snap=await db.collection('orders')
+    .where(firebase.firestore.FieldPath.documentId(),'>=',s)
+    .where(firebase.firestore.FieldPath.documentId(),'<=',e).get();
+  var r={}; snap.forEach(function(d){ r[d.id]=d.data(); });
+  WK.cache[s]=r;
+  return r;
+}
+
+// orders(한 주) → {pid: {pid,name,cat,unit,days:[7],total,clients:{}}}
+function wkAgg(orders){
+  var out={};
+  Object.keys(orders).forEach(function(ds){
+    var di=(wkParse(ds).getDay()+6)%7;
+    var day=orders[ds]||{};
+    Object.keys(day).forEach(function(client){
+      var items=(day[client]||{}).items||[];
+      items.forEach(function(it){
+        if(!it||!it.pid) return;
+        var raw=WK.doneOnly?(it.scanned||0):(it.qty||0);
+        if(!raw) return;
+        var p=S.prods.find(function(x){return x.id===it.pid;});
+        var odiv=(p&&p.orderUnitDivisor)||1;
+        var q=odiv>1?raw/odiv:raw;
+        if(!out[it.pid]) out[it.pid]={pid:it.pid,name:p?p.name:(it.pname||it.pid),cat:p?(p.cat||'기타'):'(삭제된 제품)',unit:(p&&p.unit)||'판',days:[0,0,0,0,0,0,0],total:0,clients:{}};
+        var o=out[it.pid];
+        o.days[di]+=q; o.total+=q; o.clients[client]=1;
+      });
+    });
+  });
+  return out;
+}
+
+function pgWeekly(){
+  if(!WK.start) WK.start=wkMonday(new Date());
+  var cats=['전체'].concat(uniqueCats());
+  return '<div class="card" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;">'+
+      '<button class="btn btn-gray btn-sm" onclick="wkMove(-7)">◀ 이전주</button>'+
+      '<strong id="wk-label" style="min-width:15rem;text-align:center;font-size:.95rem;"></strong>'+
+      '<button class="btn btn-gray btn-sm" onclick="wkMove(7)">다음주 ▶</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="wkThis()">이번주</button>'+
+      '<input type="date" id="wk-date" onchange="wkPick(this.value)" style="padding:.35rem;" title="날짜를 고르면 그 주로 이동">'+
+      '<span style="flex:1;"></span>'+
+      '<button class="btn btn-gray btn-sm" onclick="wkReload()">🔄 다시 불러오기</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="wkExcel()">📥 엑셀</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="wkPrint(false)">🖨️ 인쇄</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="wkPrint(true)" title="그래프 없이 표만">🖨️ 표만 인쇄</button>'+
+    '</div>'+
+    '<div class="card" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;padding:.8rem 1.25rem;">'+
+      '<select id="wk-cat" onchange="WK.cat=this.value;wkDraw()">'+cats.map(function(c){return '<option'+(c===WK.cat?' selected':'')+'>'+lcH(c)+'</option>';}).join('')+'</select>'+
+      '<input id="wk-q" type="text" placeholder="제품명 검색" value="'+lcH(WK.q)+'" oninput="WK.q=this.value;wkDraw()" style="min-width:160px;">'+
+      '<select id="wk-sort" onchange="WK.sort=this.value;wkDraw()">'+
+        [['total','많이 나간 순'],['cat','분류순'],['up','전주 대비 늘어난 순'],['down','전주 대비 줄어든 순']].map(function(o){return '<option value="'+o[0]+'"'+(o[0]===WK.sort?' selected':'')+'>'+o[1]+'</option>';}).join('')+
+      '</select>'+
+      '<label style="font-size:.82rem;display:flex;align-items:center;gap:.3rem;"><input type="checkbox" '+(WK.doneOnly?'checked':'')+' onchange="WK.doneOnly=this.checked;wkRun()">완료(실제 출고)된 것만</label>'+
+    '</div>'+
+    '<div id="wk-body"><div class="card" style="text-align:center;color:#aaa;">⏳ 불러오는 중...</div></div>';
+}
+function afterWeekly(){ wkRun(); }
+function wkMove(n){ WK.start=wkAdd(WK.start,n); wkRun(); }
+function wkThis(){ WK.start=wkMonday(new Date()); wkRun(); }
+function wkPick(v){ if(!v) return; WK.start=wkMonday(wkParse(v)); wkRun(); }
+function wkReload(){ WK.cache={}; wkRun(); }
+
+async function wkRun(){
+  var lbl=document.getElementById('wk-label'); if(!lbl) return;
+  var mon=WK.start, sun=wkAdd(mon,6), prev=wkAdd(mon,-7);
+  lbl.textContent=wkFmt(mon)+'(월) ~ '+wkFmt(sun).slice(5)+'(일)';
+  var dEl=document.getElementById('wk-date'); if(dEl) dEl.value=wkFmt(mon);
+  // 이번 주는 계속 바뀌니까 매번 새로 읽음
+  if(wkFmt(mon)===wkFmt(wkMonday(new Date()))) delete WK.cache[wkFmt(mon)];
+  try{
+    var cur=await wkLoad(mon), old=await wkLoad(prev);
+    if(wkFmt(WK.start)!==wkFmt(mon)) return; // 그 사이 다른 주로 이동함
+    var a=wkAgg(cur), b=wkAgg(old);
+    WK.rows=Object.keys(a).map(function(pid){ var r=a[pid]; r.prev=b[pid]?b[pid].total:0; return r; });
+    Object.keys(b).forEach(function(pid){ if(!a[pid]){ var r=b[pid]; WK.rows.push({pid:pid,name:r.name,cat:r.cat,unit:r.unit,days:[0,0,0,0,0,0,0],total:0,clients:{},prev:r.total}); } });
+    WK.orderDays=Object.keys(cur).length;
+    wkDraw();
+  }catch(e){
+    var body=document.getElementById('wk-body'); if(body) body.innerHTML='<div class="card" style="color:#dc2626;">❌ 불러오기 오류: '+lcH(e.message)+'</div>';
+  }
+}
+
+function wkFiltered(){
+  var q=(WK.q||'').replace(/\s/g,'').toLowerCase();
+  var rows=WK.rows.filter(function(r){
+    if(WK.cat!=='전체' && r.cat!==WK.cat) return false;
+    if(q && String(r.name).replace(/\s/g,'').toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+  rows.sort(function(x,y){
+    if(WK.sort==='cat'){ var c=catRank(x.cat)-catRank(y.cat); if(c) return c; return String(x.name).localeCompare(String(y.name),'ko'); }
+    if(WK.sort==='up') return (y.total-y.prev)-(x.total-x.prev);
+    if(WK.sort==='down') return (x.total-x.prev)-(y.total-y.prev);
+    return y.total-x.total || String(x.name).localeCompare(String(y.name),'ko');
+  });
+  return rows;
+}
+
+function wkUnitSum(rows, key){
+  var u={}; rows.forEach(function(r){ var v=key?r[key]:r.total; if(v) u[r.unit]=(u[r.unit]||0)+v; });
+  return ['판','봉','개','박스'].filter(function(k){return u[k];}).map(function(k){return '<span style="color:'+WK_UNIT_COLOR[k]+';">'+wkNum(u[k])+k+'</span>';}).join(' · ')||'0';
+}
+
+function wkDraw(){
+  var body=document.getElementById('wk-body'); if(!body) return;
+  var rows=wkFiltered();
+  var act=rows.filter(function(r){return r.total>0;});
+  if(!WK.orderDays){ body.innerHTML='<div class="card" style="text-align:center;color:#aaa;padding:2rem;">📭 이 주에는 출고지시서가 없습니다</div>'; return; }
+
+  // 요약
+  var clients={}; act.forEach(function(r){ Object.keys(r.clients).forEach(function(c){clients[c]=1;}); });
+  var tot=act.reduce(function(s,r){return s+r.total;},0), ptot=rows.reduce(function(s,r){return s+r.prev;},0);
+  var diff=ptot?Math.round((tot-ptot)/ptot*100):null;
+  var tile=function(lbl,val,sub){ return '<div class="card" style="flex:1;min-width:170px;margin:0;"><div style="font-size:.75rem;color:var(--sub);">'+lbl+'</div><div style="font-size:1.25rem;font-weight:700;margin-top:.25rem;">'+val+'</div>'+(sub?'<div style="font-size:.72rem;color:var(--sub);margin-top:.15rem;">'+sub+'</div>':'')+'</div>'; };
+  var html='<div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem;">'+
+    tile('총 출고', wkUnitSum(act), '전주: '+wkUnitSum(rows,'prev'))+
+    tile('출고된 품목', act.length+'개')+
+    tile('거래처', Object.keys(clients).length+'곳')+
+    tile('전주 대비 (수량 합)', diff==null?'-':'<span style="color:'+(diff>=0?'#16a34a':'#dc2626')+';">'+(diff>=0?'▲ ':'▼ ')+Math.abs(diff)+'%</span>', wkNum(ptot)+' → '+wkNum(tot))+
+  '</div>';
+
+  // 그래프: TOP 15 / 요일별 / 분류별
+  var top=act.slice().sort(function(x,y){return y.total-x.total;}).slice(0,15);
+  var tmax=top.length?top[0].total:1;
+  var bar=function(label,val,max,color,txt){
+    return '<div style="display:flex;align-items:center;gap:.5rem;margin:.22rem 0;font-size:.78rem;">'+
+      '<div style="width:9.5rem;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+lcH(label)+'">'+lcH(label)+'</div>'+
+      '<div style="flex:1;background:#f4f4f5;border-radius:4px;height:16px;"><div style="width:'+Math.max(2,val/max*100)+'%;background:'+color+';height:16px;border-radius:4px;"></div></div>'+
+      '<div style="width:4.5rem;text-align:right;font-weight:600;">'+txt+'</div></div>';
+  };
+  var topHtml=top.map(function(r){ return bar(r.name,r.total,tmax,WK_UNIT_COLOR[r.unit]||'#3f3f46',wkNum(r.total)+r.unit); }).join('')||'<div style="color:#aaa;">없음</div>';
+
+  var dayTot=[0,0,0,0,0,0,0]; act.forEach(function(r){ r.days.forEach(function(v,i){dayTot[i]+=v;}); });
+  var dmax=Math.max.apply(null,dayTot)||1;
+  var dayHtml='<div style="display:flex;align-items:flex-end;gap:.5rem;height:150px;padding-top:.5rem;">'+dayTot.map(function(v,i){
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">'+
+      '<div style="font-size:.72rem;font-weight:600;margin-bottom:.2rem;">'+(v?wkNum(v):'')+'</div>'+
+      '<div style="width:70%;background:#2563eb;border-radius:4px 4px 0 0;height:'+(v?Math.max(3,v/dmax*110):0)+'px;"></div>'+
+      '<div style="font-size:.75rem;color:var(--sub);margin-top:.25rem;">'+WK_DAYS[i]+'<br>'+wkFmt(wkAdd(WK.start,i)).slice(5)+'</div></div>';
+  }).join('')+'</div>';
+
+  var catTot={}; act.forEach(function(r){ catTot[r.cat]=(catTot[r.cat]||0)+r.total; });
+  var catKeys=Object.keys(catTot).sort(function(x,y){return catTot[y]-catTot[x];});
+  var cmax=catKeys.length?catTot[catKeys[0]]:1;
+  var catHtml=catKeys.map(function(c){ return bar(c,catTot[c],cmax,'#16a34a',wkNum(catTot[c])); }).join('')||'<div style="color:#aaa;">없음</div>';
+
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1rem;">'+
+    '<div class="card" style="margin:0;"><div class="card-title">🏆 많이 나간 제품 TOP 15</div>'+topHtml+
+      '<div style="font-size:.7rem;color:var(--sub);margin-top:.5rem;">색: <span style="color:#3f3f46;">■판</span> <span style="color:#9b59b6;">■봉</span> <span style="color:#e67e22;">■개</span> <span style="color:#2980b9;">■박스</span></div></div>'+
+    '<div class="card" style="margin:0;"><div class="card-title">📅 요일별 출고 (수량 합)</div>'+dayHtml+
+      '<div class="card-title" style="margin-top:1rem;">🗂️ 분류별 (수량 합)</div>'+catHtml+'</div>'+
+  '</div>';
+
+  // 표
+  var cellMax=0; rows.forEach(function(r){ r.days.forEach(function(v){ if(v>cellMax) cellMax=v; }); });
+  var c='text-align:center;';
+  html+='<div class="card"><div class="card-title">📋 제품별 주간 출고 ('+rows.length+'개)</div><div style="overflow-x:auto;"><table style="font-size:.8rem;"><thead><tr>'+
+    '<th>#</th><th>제품명</th><th>분류</th>'+WK_DAYS.map(function(d,i){return '<th style="'+c+'">'+d+'<br><span style="font-weight:400;">'+wkFmt(wkAdd(WK.start,i)).slice(5)+'</span></th>';}).join('')+
+    '<th style="'+c+'">합계</th><th style="'+c+'">전주</th><th style="'+c+'">증감</th><th style="'+c+'">거래처</th></tr></thead><tbody>'+
+    rows.map(function(r,i){
+      var d=r.total-r.prev;
+      var dTxt=d===0?'-':'<span style="color:'+(d>0?'#16a34a':'#dc2626')+';font-weight:600;">'+(d>0?'▲':'▼')+wkNum(Math.abs(d))+'</span>';
+      return '<tr><td style="color:var(--sub);">'+(i+1)+'</td><td style="font-weight:600;color:'+(WK_UNIT_COLOR[r.unit]||'#111')+';">'+lcH(r.name)+'</td><td style="color:var(--sub);font-size:.72rem;">'+lcH(r.cat)+'</td>'+
+        r.days.map(function(v){ var a=cellMax?v/cellMax:0; return '<td style="'+c+(v?'background:rgba(37,99,235,'+(0.06+a*0.45).toFixed(2)+');':'')+'">'+(v?wkNum(v):'')+'</td>'; }).join('')+
+        '<td style="'+c+'font-weight:700;">'+(r.total?wkNum(r.total)+r.unit:'-')+'</td>'+
+        '<td style="'+c+'color:var(--sub);">'+(r.prev?wkNum(r.prev):'-')+'</td>'+
+        '<td style="'+c+'">'+dTxt+'</td>'+
+        '<td style="'+c+'">'+(Object.keys(r.clients).length||'-')+'</td></tr>';
+    }).join('')+
+  '</tbody></table></div>'+
+  '<div style="font-size:.72rem;color:var(--sub);margin-top:.5rem;">기준: 출고지시서 수량'+(WK.doneOnly?' 중 실제 출고 처리된 수량':'')+' · 주문단위 환산 제품은 재고 단위로 표시</div></div>';
+
+  body.innerHTML=html;
+}
+
+// 2026-10-22 추가: 주간 출고 분석 인쇄 (A4 가로). tableOnly=true면 요약+표만.
+// 화면에 걸린 필터(분류/검색/정렬/완료만)가 그대로 적용됨.
+function wkPrint(tableOnly){
+  var rows=wkFiltered(); if(!WK.orderDays||!rows.length) return toast('인쇄할 데이터가 없습니다','err');
+  var act=rows.filter(function(r){return r.total>0;});
+  var mon=WK.start, today=wkFmt(new Date());
+  var unitSum=function(key){ var u={}; rows.forEach(function(r){ var v=key?r[key]:r.total; if(v) u[r.unit]=(u[r.unit]||0)+v; });
+    return ['판','봉','개','박스'].filter(function(k){return u[k];}).map(function(k){return wkNum(u[k])+k;}).join(' · ')||'0'; };
+  var clients={}; act.forEach(function(r){ Object.keys(r.clients).forEach(function(c){clients[c]=1;}); });
+  var tot=act.reduce(function(s,r){return s+r.total;},0), ptot=rows.reduce(function(s,r){return s+r.prev;},0);
+  var diff=ptot?Math.round((tot-ptot)/ptot*100):null;
+  var filt=[]; if(WK.cat!=='전체') filt.push('분류: '+WK.cat); if(WK.q) filt.push('검색: '+WK.q); if(WK.doneOnly) filt.push('완료된 것만');
+  var bar=function(label,val,max,color,txt){
+    return '<div class="bar"><div class="bl">'+lcH(label)+'</div><div class="bt"><div style="width:'+(val?Math.max(2,val/max*100):0)+'%;background:'+color+';"></div></div><div class="bv">'+txt+'</div></div>'; };
+  var charts='';
+  if(!tableOnly){
+    var top=act.slice().sort(function(x,y){return y.total-x.total;}).slice(0,15), tmax=top.length?top[0].total:1;
+    var dayTot=[0,0,0,0,0,0,0]; act.forEach(function(r){ r.days.forEach(function(v,i){dayTot[i]+=v;}); });
+    var dmax=Math.max.apply(null,dayTot)||1;
+    var catTot={}; act.forEach(function(r){ catTot[r.cat]=(catTot[r.cat]||0)+r.total; });
+    var ck=Object.keys(catTot).sort(function(x,y){return catTot[y]-catTot[x];}), cmax=ck.length?catTot[ck[0]]:1;
+    charts='<div class="grid"><div class="box"><div class="bt2">🏆 많이 나간 제품 TOP 15</div>'+
+      top.map(function(r){return bar(r.name,r.total,tmax,WK_UNIT_COLOR[r.unit]||'#3f3f46',wkNum(r.total)+r.unit);}).join('')+'</div>'+
+      '<div class="box"><div class="bt2">📅 요일별 출고 (수량 합)</div>'+
+      dayTot.map(function(v,i){return bar(WK_DAYS[i]+' '+wkFmt(wkAdd(mon,i)).slice(5),v,dmax,'#2563eb',v?wkNum(v):'-');}).join('')+
+      '<div class="bt2" style="margin-top:8px;">🗂️ 분류별 (수량 합)</div>'+
+      ck.map(function(c){return bar(c,catTot[c],cmax,'#16a34a',wkNum(catTot[c]));}).join('')+'</div></div>';
+  }
+  var table='<table><thead><tr><th>#</th><th>제품명</th><th>분류</th>'+WK_DAYS.map(function(d,i){return '<th>'+d+'<br>'+wkFmt(wkAdd(mon,i)).slice(5)+'</th>';}).join('')+
+    '<th>합계</th><th>전주</th><th>증감</th><th>거래처</th></tr></thead><tbody>'+
+    rows.map(function(r,i){ var d=r.total-r.prev;
+      return '<tr><td class="c">'+(i+1)+'</td><td class="n" style="color:'+(WK_UNIT_COLOR[r.unit]||'#222')+';">'+lcH(r.name)+'</td><td class="s">'+lcH(r.cat)+'</td>'+
+        r.days.map(function(v){return '<td class="c">'+(v?wkNum(v):'')+'</td>';}).join('')+
+        '<td class="c b">'+(r.total?wkNum(r.total)+r.unit:'-')+'</td><td class="c">'+(r.prev?wkNum(r.prev):'-')+'</td>'+
+        '<td class="c" style="color:'+(d>0?'#16a34a':d<0?'#dc2626':'#999')+';">'+(d===0?'-':(d>0?'▲':'▼')+wkNum(Math.abs(d)))+'</td>'+
+        '<td class="c">'+(Object.keys(r.clients).length||'-')+'</td></tr>'; }).join('')+'</tbody></table>';
+  var w=window.open('','_blank'); if(!w) return toast('팝업이 차단됐어요. 팝업 허용 후 다시 눌러주세요','err');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>주간 출고 분석 '+wkFmt(mon)+'</title><style>'+
+    '@page{size:A4 landscape;margin:10mm;}'+
+    'body{font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:9.5pt;color:#222;margin:0;}'+
+    '.t{text-align:center;font-size:15pt;font-weight:bold;}.st{text-align:center;font-size:8.5pt;color:#666;margin:2px 0 10px;}'+
+    '.sum{display:flex;gap:8px;margin-bottom:10px;}.sum div{flex:1;border:1px solid #ddd;border-radius:6px;padding:5px 8px;}.sum small{color:#666;display:block;font-size:8pt;}.sum b{font-size:11pt;}'+
+    '.grid{display:flex;gap:10px;margin-bottom:10px;break-inside:avoid;page-break-inside:avoid;}.box{flex:1;border:1px solid #ddd;border-radius:6px;padding:6px 8px;}'+
+    '.bt2{font-weight:700;font-size:9.5pt;margin-bottom:4px;}'+
+    '.bar{display:flex;align-items:center;gap:6px;margin:2px 0;font-size:8.5pt;}.bl{width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'+
+    '.bt{flex:1;background:#f2f2f2;height:10px;border-radius:3px;}.bt div{height:10px;border-radius:3px;}.bv{width:55px;text-align:right;font-weight:600;}'+
+    'table{width:100%;border-collapse:collapse;}thead{display:table-header-group;}tr{page-break-inside:avoid;}'+
+    'th,td{border:1px solid #ccc;padding:3px 5px;font-size:8.5pt;}th{background:#f2f2f2;text-align:center;}'+
+    '.c{text-align:center;}.n{font-weight:600;}.s{color:#666;font-size:7.5pt;}.b{font-weight:700;}'+
+    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'+
+    '</style></head><body>'+
+    '<div class="t">📈 주간 출고 분석 — '+wkFmt(mon)+'(월) ~ '+wkFmt(wkAdd(mon,6)).slice(5)+'(일)</div>'+
+    '<div class="st">㈜더브레드뱅크 | 출력일: '+today+' | 기준: 출고지시서 수량'+(filt.length?' | '+lcH(filt.join(', ')):'')+'</div>'+
+    '<div class="sum"><div><small>총 출고</small><b>'+unitSum()+'</b><small>전주: '+unitSum('prev')+'</small></div>'+
+      '<div><small>출고된 품목</small><b>'+act.length+'개</b></div><div><small>거래처</small><b>'+Object.keys(clients).length+'곳</b></div>'+
+      '<div><small>전주 대비 (수량 합)</small><b>'+(diff==null?'-':(diff>=0?'▲ ':'▼ ')+Math.abs(diff)+'%')+'</b><small>'+wkNum(ptot)+' → '+wkNum(tot)+'</small></div></div>'+
+    charts+table+'</body></html>');
+  w.document.close();
+  setTimeout(function(){ w.print(); }, 500);
+}
+
+function wkExcel(){
+  var rows=wkFiltered(); if(!rows.length) return toast('내보낼 데이터가 없습니다','err');
+  var head=['제품명','분류','단위'].concat(WK_DAYS.map(function(d,i){return d+'('+wkFmt(wkAdd(WK.start,i)).slice(5)+')';})).concat(['합계','전주','증감','거래처수']);
+  var aoa=[head].concat(rows.map(function(r){
+    return [r.name,r.cat,r.unit].concat(r.days).concat([r.total,r.prev,r.total-r.prev,Object.keys(r.clients).length]);
+  }));
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '주간출고');
+  XLSX.writeFile(wb, '주간출고_'+wkFmt(WK.start)+'.xlsx');
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────
