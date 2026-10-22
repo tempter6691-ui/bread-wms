@@ -5757,7 +5757,14 @@ async function bmPreview() {
       '<span style="font-size:.85rem;color:#555;">총 <b>'+rows.length+'</b>건 (거래처 <b>'+(new Set(rows.map(function(r){return r.clientName;}))).size+'</b>곳)</span>'+
       (fromOrders?'<span style="color:#2563eb;font-size:.8rem;">📝 출고지시서(예정) 기준 — 아직 실물 출고 스캔 전</span>':'')+
       (noPrice.length>0?'<span style="color:#d97706;font-size:.8rem;">💰 단가 확인 필요 '+noPrice.length+'건 (0원으로 나감)</span>':'')+
-      '<button class="btn btn-gray btn-sm" style="margin-left:auto;" onclick="bmExportExcel()">📥 거래처별 엑셀 다운로드</button>'+
+      // 2026-10-22 수정: 이카운트처럼 거래처 하나만 골라서 받기 추가 (기존 "거래처별 전부"는 그대로)
+      '<span style="margin-left:auto;display:inline-flex;gap:.3rem;align-items:center;flex-wrap:wrap;">'+
+        '<select id="bm-client-sel" style="padding:.3rem;font-size:.8rem;max-width:200px;"><option value="">거래처 선택…</option>'+
+          (function(){ var c={}; rows.forEach(function(r){c[r.clientName]=(c[r.clientName]||0)+1;}); return Object.keys(c).sort(function(a,b){return a.localeCompare(b,'ko');}).map(function(n){return '<option value="'+lcH(n)+'">'+lcH(n)+' ('+c[n]+'건)</option>';}).join(''); })()+
+        '</select>'+
+        '<button class="btn btn-gray btn-sm" onclick="bmExportClient()">📥 선택 거래처</button>'+
+        '<button class="btn btn-gray btn-sm" onclick="bmExportExcel()" title="거래처마다 파일 하나씩">📥 거래처별 전부</button>'+
+      '</span>'+
       (fromOrders?'':'<button class="btn btn-gray btn-sm" onclick="bmMarkSent()">✅ 전송완료 처리</button>')+
     '</div>'+
     (fromOrders?'<div style="font-size:.72rem;color:#2563eb;margin-bottom:.5rem;">⚠️ 아직 실제 출고 스캔 전인 "예정 수량" 기준입니다. 나중에 실제로 스캔하면 그 항목은 출고 로그 쪽에서 별도로 다시 잡히니, 이 목록으로 이미 비즈모아에 반영했다면 실제 스캔 후 뜨는 로그 쪽 중복 전송에 주의해주세요. 안전을 위해 이 모드에서는 엑셀 다운로드만 가능해요.</div>':
@@ -5790,9 +5797,19 @@ async function bmPreview() {
 }
 
 // 비즈모아 매출전표 Excel 가져오기 양식: 품목코드/No/품명/수량/규격/단가/금액/할인율/비고 — 거래처(전표) 1개당 파일 1개
-function bmExportExcel() {
+// 2026-10-22 수정: onlyClient를 주면 그 거래처 파일 하나만 받음. 없으면 기존처럼 거래처마다 파일 하나씩 전부.
+function bmExportClient(){
+  var sel=document.getElementById('bm-client-sel'); var v=sel?sel.value:'';
+  if(!v){ alert('거래처를 선택해주세요.'); return; }
+  bmExportExcel(v);
+}
+function bmExportExcel(onlyClient) {
   var rows = window._bmRows || [];
   if (rows.length === 0) { alert('먼저 미리보기를 조회해주세요.'); return; }
+  if (onlyClient) {
+    rows = rows.filter(function(r){ return r.clientName === onlyClient; });
+    if (!rows.length) { alert(onlyClient+' 거래처 데이터가 없어요.'); return; }
+  }
   if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
 
   var byClient = {};
@@ -5806,7 +5823,7 @@ function bmExportExcel() {
   // 한꺼번에 여러 파일을 순식간에 다운로드시키면 브라우저(특히 크롬)가 뒤쪽 몇 개를
   // 조용히 막아버리는 경우가 있어서, 파일 사이에 약간의 간격을 두고 하나씩 처리함
   function downloadOne(i){
-    if(i>=clientNames.length){ toast(fileCount+'개 거래처 파일 다운로드 완료!','ok'); return; }
+    if(i>=clientNames.length){ toast(onlyClient?(onlyClient+' 파일 다운로드 완료!'):(fileCount+'개 거래처 파일 다운로드 완료!'),'ok'); return; }
     var clientName = clientNames[i];
     var no = 1;
     var sheetRows = byClient[clientName].map(function(r){
@@ -5828,7 +5845,7 @@ function bmExportExcel() {
     ws['!cols'] = headers.map(function(){ return {wch:12}; });
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '품목내역');
-    XLSX.writeFile(wb, '비즈모아_'+clientName+'_'+dateTag+'.xlsx');
+    XLSX.writeFile(wb, '비즈모아_'+String(clientName).replace(/[\\\/:*?"<>|]/g,'_')+'_'+dateTag+'.xlsx');
     fileCount++;
     setTimeout(function(){ downloadOne(i+1); }, 350);
   }
