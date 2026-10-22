@@ -5529,7 +5529,15 @@ async function ecPreview() {
       (noCust.length>0?'<span style="color:#dc2626;font-size:.8rem;">⚠️ 거래처코드 없음 '+noCust.length+'건 (전송 제외됨)</span>':'')+
       (noPrice.length>0?'<span style="color:#d97706;font-size:.8rem;">💰 단가 확인 필요 '+noPrice.length+'건 (0원으로 전송됨)</span>':'')+
       (fromOrders?'':'<button class="btn btn-success btn-sm" style="margin-left:auto;" onclick="ecSend()">📤 이카운트 전송</button>')+
-      '<button class="btn btn-gray btn-sm"'+(fromOrders?' style="margin-left:auto;"':'')+' onclick="ecExportExcel()">📥 엑셀 다운로드</button>'+
+      '<button class="btn btn-gray btn-sm"'+(fromOrders?' style="margin-left:auto;"':'')+' onclick="ecExportExcel()">📥 엑셀 다운로드(전체)</button>'+
+      // 2026-10-22 추가: 거래처별 엑셀 다운로드
+      '<span style="display:inline-flex;gap:.3rem;align-items:center;">'+
+        '<select id="ec-client-sel" style="padding:.3rem;font-size:.8rem;max-width:200px;"><option value="">거래처 선택…</option>'+
+          (function(){ var c={}; rows.forEach(function(r){c[r.clientName]=(c[r.clientName]||0)+1;}); return Object.keys(c).sort(function(a,b){return a.localeCompare(b,'ko');}).map(function(n){return '<option value="'+lcH(n)+'">'+lcH(n)+' ('+c[n]+'건)</option>';}).join(''); })()+
+        '</select>'+
+        '<button class="btn btn-gray btn-sm" onclick="ecExportClient()">📥 선택 거래처</button>'+
+        '<button class="btn btn-gray btn-sm" onclick="ecExportAllClients()" title="거래처마다 파일 하나씩">📥 거래처별 전부</button>'+
+      '</span>'+
       (fromOrders?'':'<button class="btn btn-gray btn-sm" onclick="ecMarkSent()">✅ 전송완료 처리</button>')+
     '</div>'+
     (fromOrders?'<div style="font-size:.72rem;color:#2563eb;margin-bottom:.5rem;">⚠️ 아직 실제 출고 스캔 전인 "예정 수량" 기준입니다. 나중에 실제로 스캔하면 그 항목은 출고 로그 쪽에서 별도로 다시 잡히니, 이 목록으로 이미 이카운트에 반영했다면 실제 스캔 후 뜨는 로그 쪽 중복 전송에 주의해주세요. 안전을 위해 이 모드에서는 엑셀 다운로드만 가능해요.</div>':
@@ -5564,9 +5572,14 @@ async function ecPreview() {
 }
 
 // 엑셀 다운로드 — 이카운트 실제 "판매입력" 엑셀양식(Template.xlsx) 컬럼 순서에 맞춤
-function ecExportExcel() {
+// 2026-10-22 수정: onlyClient를 주면 그 거래처 행만 따로 엑셀로 받음 (거래처별 다운로드). 없으면 기존처럼 전체.
+function ecExportExcel(onlyClient) {
   var rows = window._ecRows || [];
   if (rows.length === 0) { alert('먼저 미리보기를 조회해주세요.'); return; }
+  if (onlyClient) {
+    rows = rows.filter(function(r){ return r.clientName === onlyClient; });
+    if (!rows.length) { alert(onlyClient+' 거래처 데이터가 없어요.'); return; }
+  }
   if (typeof XLSX === 'undefined') { alert('엑셀 기능을 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
 
   // 같은 날짜+거래처 = 같은 전표(순번)로 묶기 — 이카운트는 "일자+순번"이 같은 행끼리 한 전표로 합칩니다.
@@ -5618,8 +5631,23 @@ function ecExportExcel() {
   XLSX.utils.book_append_sheet(wb, ws, '판매입력');
 
   var fromEl=document.getElementById('ec-from'), toEl=document.getElementById('ec-to');
-  var fname = '이카운트_판매입력_'+((fromEl&&fromEl.value)||'')+'_'+((toEl&&toEl.value)||'')+'.xlsx';
+  var fname = '이카운트_판매입력_'+(onlyClient?String(onlyClient).replace(/[\\\/:*?"<>|]/g,'_')+'_':'')+((fromEl&&fromEl.value)||'')+'_'+((toEl&&toEl.value)||'')+'.xlsx';
   XLSX.writeFile(wb, fname);
+}
+// 2026-10-22 추가: 거래처별 엑셀 — 선택한 거래처 1곳 / 모든 거래처 각각 파일로
+function ecClientList(){
+  var cnt={}; (window._ecRows||[]).forEach(function(r){ cnt[r.clientName]=(cnt[r.clientName]||0)+1; });
+  return Object.keys(cnt).sort(function(a,b){return a.localeCompare(b,'ko');}).map(function(n){return {name:n,count:cnt[n]};});
+}
+function ecExportClient(){
+  var sel=document.getElementById('ec-client-sel'); var v=sel?sel.value:'';
+  if(!v){ alert('거래처를 선택해주세요.'); return; }
+  ecExportExcel(v);
+}
+function ecExportAllClients(){
+  var list=ecClientList(); if(!list.length){ alert('먼저 미리보기를 조회해주세요.'); return; }
+  if(!confirm('거래처 '+list.length+'곳을 각각 엑셀 파일로 받을까요?\n(브라우저가 "여러 파일 다운로드 허용"을 물어보면 허용을 눌러주세요)')) return;
+  list.forEach(function(c,i){ setTimeout(function(){ ecExportExcel(c.name); }, i*400); });
 }
 
 // ── 비즈모아(BizMore) ERP 전송 ──────────────────────────────────
