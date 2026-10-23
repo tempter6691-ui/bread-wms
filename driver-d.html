@@ -218,16 +218,33 @@ function confirmItem(clientName, pid) {
   localConfirmed[clientName][pid]=true;
 
   // Firestore done 필드 저장
+  // 2026-10-23 수정: 예전엔 done/scanned만 저장하고 출고 로그·재고 차감을 안 해서, 확인 버튼으로 완료된 품목이
+  // 이카운트/비즈모아 전송 목록에서 통째로 빠지고 재고도 그대로 남았음 (10/23 하늘정원 3호생크림 5박스 누락 건).
+  // → WMS 출고 화면 "👆완료"(manualCompleteOb)와 똑같이: 남은 수량만큼 출고 로그(manual:true) + 재고는 있는 만큼만 차감(noStock 제외)
   if(gAllOrders[clientName] && gAllOrders[clientName].items) {
     var item = gAllOrders[clientName].items.find(function(i){return i.pid===pid;});
-    if(item) {
+    var rem = 0;
+    if(item && !item.done) {
+      rem = (item.qty||0) - (item.scanned||0);
       item.done = true;
       item.scanned = item.qty;
     }
     db.collection('orders').doc(gDate).set(
       {[clientName]: {items: gAllOrders[clientName].items}},
       {merge: true}
-    ).catch(function(e){ console.warn('완료 저장 오류:', e.message); });
+    ).then(async function(){
+      if(rem <= 0) return;
+      var p = prods.find(function(x){ return x.id===pid; });
+      var pname = p ? p.name : pid;
+      var deduct = 0;
+      if(!(p && p.noStock)) {
+        var invDoc = await db.collection('inventory').doc(pid).get();
+        var cur = invDoc.exists ? (invDoc.data().qty||0) : 0;
+        deduct = Math.max(0, Math.min(rem, cur));
+        if(deduct > 0) await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
+      }
+      await db.collection('logs').add({type:'outbound',pid:pid,pname:pname,client:clientName,qty:rem,invDeduct:deduct,manual:true,driverConfirm:true,date:gDate,ts:firebase.firestore.FieldValue.serverTimestamp()});
+    }).catch(function(e){ console.warn('완료 저장 오류:', e.message); alert('⚠️ 완료 저장 중 오류: '+e.message); });
   }
 
   // 해당 행 UI 업데이트
