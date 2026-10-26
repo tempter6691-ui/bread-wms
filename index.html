@@ -1217,15 +1217,17 @@ async function chkCompute(FROM, TO){
     db.collection('logs').where('date','>=',FROM).where('date','<=',TO).get()
   ]);
   var od=res[0], lg=res[1];
+  // 2026-10-26 수정: 거래처 별칭(aliases)·옛 이름은 같은 거래처로 묶어서 비교 (이름 바꾼 뒤 로그만 옛 이름으로 남은 경우 빠짐/초과로 둘 다 뜨던 문제)
+  function canon(n){ var c=S.clients.find(function(x){return x.name===n||(x.aliases&&x.aliases.indexOf(n)>=0);}); return c?c.name:n; }
   var sum={};
-  lg.forEach(function(d){ var x=d.data(); if(x.type!=='outbound'||!x.client||!x.pid) return; var k=x.date+'|'+x.client+'|'+x.pid; sum[k]=(sum[k]||0)+(x.qty||0); });
+  lg.forEach(function(d){ var x=d.data(); if(x.type!=='outbound'||!x.client||!x.pid) return; var k=x.date+'|'+canon(x.client)+'|'+x.pid; sum[k]=(sum[k]||0)+(x.qty||0); });
   var rows=[], seen={};
   od.forEach(function(doc){
     var day=doc.data()||{};
     Object.keys(day).forEach(function(c){
       ((day[c]||{}).items||[]).forEach(function(it){
         if(!it.pid) return;
-        var k=doc.id+'|'+c+'|'+it.pid; seen[k]=1;
+        var k=doc.id+'|'+canon(c)+'|'+it.pid; seen[k]=(seen[k]||0)+1;
         var sc=it.scanned||0, got=sum[k]||0;
         if(sc!==got){ var p=S.prods.find(function(x){return x.id===it.pid;});
           rows.push({date:doc.id, client:c, pid:it.pid, name:p?p.name:(it.pname||it.pid), qty:it.qty||0, scanned:sc, logged:got, diff:got-sc}); }
@@ -5566,6 +5568,8 @@ function pgEcount() {
     '</div>'+
     '<div style="margin-bottom:1rem;font-size:.82rem;">'+
       '<label style="cursor:pointer;"><input type="checkbox" id="ec-from-orders"> 아직 출고 스캔 전이어도, 출고지시서(예정 수량) 기준으로 미리보기 — 실제 스캔 안 한 항목만 대상, 이 경우 엑셀 다운로드만 가능(중복 방지를 위해 직접전송/전송완료 버튼은 비활성화됨)</label>'+
+      // 2026-10-26 추가: 데이터 점검 "자동 채우기"로 만든 기록(backfill)만 보기 — 예전 날짜에 빠졌던 것만 골라서 추가로 올릴 때
+      '<br><label style="cursor:pointer;"><input type="checkbox" id="ec-only-bf"> 🔧 채운 기록만 보기 (데이터 점검·자동 채우기로 만든 빠진 기록만)</label>'+
     '</div>'+
     '<div id="ec-preview"></div>'+
   '</div>'+
@@ -5579,6 +5583,8 @@ function pgEcount() {
     '<div style="font-size:.72rem;color:var(--sub);margin-bottom:.5rem;">비즈모아 "매출전표 → Excel 가져오기" 양식(품목코드/No/품명/수량/규격/단가/금액/할인율/비고)에 맞춰 거래처별로 파일이 따로 생성돼요. 이카운트 전송 여부(ecSent)와는 별도로 관리돼요.</div>'+
     '<div style="margin-bottom:1rem;font-size:.82rem;">'+
       '<label style="cursor:pointer;"><input type="checkbox" id="bm-from-orders"> 아직 출고 스캔 전이어도, 출고지시서(예정 수량) 기준으로 미리보기 — 실제 스캔 안 한 항목만 대상, 이 경우 엑셀 다운로드만 가능(중복 방지를 위해 전송완료 버튼은 비활성화됨)</label>'+
+      // 2026-10-26 추가: 데이터 점검 "자동 채우기"로 만든 기록(backfill)만 보기 — 예전 날짜에 빠졌던 것만 골라서 추가로 올릴 때
+      '<br><label style="cursor:pointer;"><input type="checkbox" id="bm-only-bf"> 🔧 채운 기록만 보기 (데이터 점검·자동 채우기로 만든 빠진 기록만)</label>'+
     '</div>'+
     '<div id="bm-preview"></div>'+
   '</div>';
@@ -5747,6 +5753,7 @@ async function ecPreview() {
     snap.forEach(function(doc){
       var d=doc.data();
       if(d.ecSent)return;
+      if((document.getElementById('ec-only-bf')||{}).checked && !d.backfill) return; // 2026-10-26: 채운 기록만 보기
       if(preCov.covered[doc.id]) return; var effQ=(preCov.eff[doc.id]!=null)?preCov.eff[doc.id]:d.qty; // 2026-10-26: 예정 기준으로 이미 올린 수량만큼 빼기 // 이미 이카운트로 전송 완료된 로그는 제외 (중복 전송 방지)
       var logDate=''; if(d.date){logDate=d.date.replace(/-/g,'');} else if(d.ts&&d.ts.toDate){var dt=d.ts.toDate();logDate=dt.getFullYear()+''+String(dt.getMonth()+1).padStart(2,'0')+''+String(dt.getDate()).padStart(2,'0');}
       if(logDate<from||logDate>to)return;
@@ -5984,6 +5991,7 @@ async function bmPreview() {
     snap.forEach(function(doc){
       var d=doc.data();
       if(d.bmSent)return;
+      if((document.getElementById('bm-only-bf')||{}).checked && !d.backfill) return; // 2026-10-26: 채운 기록만 보기
       if(preCov.covered[doc.id]) return; var effQ=(preCov.eff[doc.id]!=null)?preCov.eff[doc.id]:d.qty; // 2026-10-26: 예정 기준으로 이미 올린 수량만큼 빼기 // 비즈모아로 이미 보낸 로그는 제외 (이카운트 ecSent와는 별개)
       var logDate=''; if(d.date){logDate=d.date.replace(/-/g,'');} else if(d.ts&&d.ts.toDate){var dt=d.ts.toDate();logDate=dt.getFullYear()+''+String(dt.getMonth()+1).padStart(2,'0')+''+String(dt.getDate()).padStart(2,'0');}
       if(logDate<from||logDate>to)return;
