@@ -1938,7 +1938,8 @@ async function manualCompleteOb(pid) {
     var curInv=S.inv[pid]||0;
     // 2026-10-19 수정: 재고가 음수면 deduct가 음수가 되어 invDeduct에 -219 같은 값이 남던 문제 → 0 하한.
     // 재고관리 안 함(noStock) 품목은 차감 0.
-    var deduct=isNoStock(pid)?0:Math.max(0, Math.min(actualRemaining, curInv));
+    // 2026-10-26 수정: 스캔 출고와 같은 기준으로 통일 — 나간 수량만큼 그대로 차감(재고가 모자라면 마이너스로 보임 = 입고 누락 신호). 재고관리 안 함(noStock)만 제외
+    var deduct=isNoStock(pid)?0:actualRemaining;
     if(deduct>0) {
       S.inv[pid]=curInv-deduct;
       await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
@@ -2003,7 +2004,7 @@ async function bulkCompleteOb() {
           var p=S.prods.find(function(x){return x.id===l.pid;});
           var pname=p?p.name:l.pid;
           var curInv=S.inv[l.pid]||0;
-          var deduct=isNoStock(l.pid)?0:Math.max(0, Math.min(l.rem, curInv)); // 2026-10-19 수정: 음수 방지 + noStock 제외 (manualCompleteOb와 동일)
+          var deduct=isNoStock(l.pid)?0:l.rem; // 2026-10-26 수정: 스캔과 같은 기준(나간 만큼 차감, 마이너스 허용). noStock만 제외
           if(deduct>0){
             S.inv[l.pid]=curInv-deduct;
             batch.set(db.collection('inventory').doc(l.pid), {qty: firebase.firestore.FieldValue.increment(-deduct)}, {merge:true});
@@ -3105,6 +3106,11 @@ async function addItem(clientName, pid, sid) {
 // 출고지시서에서 줄만 빼거나 수량을 줄이면 이미 빠진 재고와 출고 로그(이카운트 전송 대상)는 그대로 남아서 서로 어긋남
 // → 나간 수량보다 줄이기·품목 삭제·카드 삭제·다른 날짜로 이동은 막고, 출고 화면 ↩️로 먼저 취소하도록 안내
 function shippedOf(it){ return (it && (it.scanned||0)) || 0; }
+function preSentOk(item, newQty){ // 2026-10-26: 예정 기준으로 이카운트/비즈모아에 올린 수량보다 줄이면 확인
+  var ec=item.ecPreW!=null?item.ecPreW:(item.ecPreSent||0), bm=item.bmPreW!=null?item.bmPreW:(item.bmPreSent||0), pre=Math.max(ec,bm);
+  if(newQty>=pre) return true;
+  return confirm('이 품목은 예정 기준으로 '+(ec?'이카운트 '+ec+'개':'')+(ec&&bm?', ':'')+(bm?'비즈모아 '+bm+'개':'')+' 이미 올라가 있어요.\n'+newQty+'개로 줄이면 이카운트·비즈모아 전표도 직접 고쳐야 해요. 계속할까요?');
+}
 function shippedItemsOf(data){ return ((data&&data.items)||[]).filter(function(i){return shippedOf(i)>0;}); }
 function shippedMsg(name, list){
   return '이미 출고된 품목이 있어요:\n'+list.map(function(i){ var p=S.prods.find(function(x){return x.id===i.pid;}); return '· '+(p?p.name:i.pid)+' '+shippedOf(i)+'개'; }).join('\n')+
@@ -3117,6 +3123,7 @@ async function chgQty(clientName, pid, delta) {
   var item=data.items.find(function(i){return i.pid===pid;}); if(!item) return;
   var nq=Math.max(1,(item.qty||1)+delta);
   if(nq<shippedOf(item)){ alert('이미 '+shippedOf(item)+'개 출고돼서 그보다 적게 줄일 수 없어요.\n출고 화면에서 ↩️로 먼저 취소해주세요.'); return; } // 2026-10-26
+  if(!preSentOk(item, nq)) return; // 2026-10-26: 예정 기준으로 이미 올린 수량보다 줄이면 확인
   item.qty=nq;
   if(shippedOf(item)>0 || item.done) item.done = shippedOf(item)>=item.qty; // 2026-10-26: 수량 늘리면 완료 풀림 → 늘어난 만큼 다시 출고
   var sid=safeid(clientName);
@@ -3133,6 +3140,7 @@ async function setQty(clientName, pid, value) {
   var data=(S.orders[S.ordDate]||{})[clientName]; if(!data||!data.items) return;
   var item=data.items.find(function(i){return i.pid===pid;}); if(!item) return;
   if(n<shippedOf(item)){ alert('이미 '+shippedOf(item)+'개 출고돼서 '+n+'개로 줄일 수 없어요.\n출고 화면에서 ↩️로 먼저 취소해주세요.'); var el0=document.getElementById('ocard_'+safeid(clientName)); if(el0){var t0=document.createElement('div');t0.innerHTML=drawOrdCard(clientName,data);el0.parentNode.replaceChild(t0.firstChild,el0);} return; } // 2026-10-26: 입력칸 원래 수량으로 되돌림
+  if(!preSentOk(item, n)){ var el1=document.getElementById('ocard_'+safeid(clientName)); if(el1){var t1=document.createElement('div');t1.innerHTML=drawOrdCard(clientName,data);el1.parentNode.replaceChild(t1.firstChild,el1);} return; } // 2026-10-26
   item.qty=n;
   if(shippedOf(item)>0 || item.done) item.done = shippedOf(item)>=item.qty; // 2026-10-26: 수량 늘리면 완료 풀림
   var sid=safeid(clientName);
@@ -3147,6 +3155,7 @@ async function rmItem(clientName, pid) {
   var data=(S.orders[S.ordDate]||{})[clientName]; if(!data||!data.items) return;
   var rmIt=data.items.find(function(i){return i.pid===pid;}); // 2026-10-26: 출고된 품목은 삭제 막음
   if(rmIt && shippedOf(rmIt)>0){ alert(shippedMsg(clientName,[rmIt])); return; }
+  if(rmIt && !preSentOk(rmIt, 0)) return; // 2026-10-26
   var before=data.items.length;
   data.items=data.items.filter(function(i){return i.pid!==pid;});
   if(data.items.length===before) return; // 이미 없음
@@ -5560,7 +5569,7 @@ async function ecPreview() {
         Object.keys(dayOrders).forEach(function(clientName){
           var entry=dayOrders[clientName]; if(!entry||!entry.items) return;
           entry.items.forEach(function(item){
-            if(item.done) return; // 이미 스캔 완료된 건 logs 쪽에서 이미 잡히므로 중복 방지 위해 제외
+            var preRem=ecPreRemain(item,'ec'); if(preRem<=0) return; // 2026-10-26 수정: 이미 나간(스캔·완료, 로그로 잡힘) 수량과 예정 기준으로 이미 올린 수량을 뺀 나머지만 — 예전: if(item.done) return; // 이미 스캔 완료된 건 logs 쪽에서 이미 잡히므로 중복 방지 위해 제외
             if(!item.pid||!item.qty) return;
             var prod=S.prods.find(function(p){return p.id===item.pid;});
             if(!prod) return;
@@ -5571,7 +5580,7 @@ async function ecPreview() {
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
             var adj=ecAdjustNamePrice(prod, price);
             // 2026-10-07 수정(10-13 복구): 순서표 매칭용으로 원래 상품명(origName)도 저장
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(item.qty||1)*mult,origQty:item.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:item.pid,clientId:client?client.id:null});
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',QTY:preRem*mult,origQty:preRem,mult:mult,WH_CD:'100',PRICE:adj.price,pid:item.pid,clientId:client?client.id:null});
           });
         });
       }
@@ -5580,6 +5589,7 @@ async function ecPreview() {
     // 미리 기간으로 좁혀서 읽어옴 (Quota 절약, 2026-08-21)
     // 2026-10-19 수정: ts 범위 → date(배송일) 기준 조회 (fetchOutboundLogsByDate 주석 참고)
     var snap=await fetchOutboundLogsByDate(fromRaw, toRaw);
+    var preCov=await ecPreCoverage(snap, fromRaw, toRaw, 'ec'); // 2026-10-26: 예정 기준으로 이미 올린 분 제외
     // priceHistory 지연 로딩: 이 기간 로그에 실제로 등장하는 거래처만 미리 파악해서 그만큼만 불러옴
     var neededClientIds2=new Set();
     snap.forEach(function(doc){
@@ -5591,7 +5601,8 @@ async function ecPreview() {
     await ensurePriceHistoryLoaded(neededClientIds2);
     snap.forEach(function(doc){
       var d=doc.data();
-      if(d.ecSent)return; // 이미 이카운트로 전송 완료된 로그는 제외 (중복 전송 방지)
+      if(d.ecSent)return;
+      if(preCov.covered[doc.id]) return; var effQ=(preCov.eff[doc.id]!=null)?preCov.eff[doc.id]:d.qty; // 2026-10-26: 예정 기준으로 이미 올린 수량만큼 빼기 // 이미 이카운트로 전송 완료된 로그는 제외 (중복 전송 방지)
       var logDate=''; if(d.date){logDate=d.date.replace(/-/g,'');} else if(d.ts&&d.ts.toDate){var dt=d.ts.toDate();logDate=dt.getFullYear()+''+String(dt.getMonth()+1).padStart(2,'0')+''+String(dt.getDate()).padStart(2,'0');}
       if(logDate<from||logDate>to)return;
       if(!d.client||!d.pid||!d.qty)return;
@@ -5604,7 +5615,7 @@ async function ecPreview() {
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
       var adj=ecAdjustNamePrice(prod, price);
       // 2026-10-07 수정(10-13 복구): 순서표 매칭용으로 원래 상품명(origName)도 저장
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(d.qty||1)*mult,origQty:d.qty||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:d.pid,clientId:client?client.id:null});
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,CUST:custCode,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',QTY:(effQ||1)*mult,origQty:effQ||1,mult:mult,WH_CD:'100',PRICE:adj.price,pid:d.pid,clientId:client?client.id:null});
     });
     }
     // 거래처별로 묶여서 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순으로 정렬
@@ -5635,6 +5646,8 @@ async function ecPreview() {
         '<button class="btn btn-gray btn-sm" onclick="ecExportAllClients()" title="거래처마다 파일 하나씩">📥 거래처별 전부</button>'+
       '</span>'+
       (fromOrders?'':'<button class="btn btn-gray btn-sm" onclick="ecMarkSent()">✅ 전송완료 처리</button>')+
+      (fromOrders?'<button class="btn btn-gray btn-sm" onclick="ecMarkPreSent(\'ec\')" title="이 예정 엑셀을 이카운트에 올렸으면 눌러주세요. 나중에 스캔된 로그가 다시 뜨지 않게 기록해둡니다">✅ 예정분 전송완료 처리</button>':'')+
+      ((typeof preCov!=='undefined'&&preCov&&preCov.count)?'<span style="color:#16a34a;font-size:.8rem;">📝 예정 기준으로 이미 올린 '+preCov.count+'건 제외됨</span>':'')+
     '</div>'+
     (fromOrders?'<div style="font-size:.72rem;color:#2563eb;margin-bottom:.5rem;">⚠️ 아직 실제 출고 스캔 전인 "예정 수량" 기준입니다. 나중에 실제로 스캔하면 그 항목은 출고 로그 쪽에서 별도로 다시 잡히니, 이 목록으로 이미 이카운트에 반영했다면 실제 스캔 후 뜨는 로그 쪽 중복 전송에 주의해주세요. 안전을 위해 이 모드에서는 엑셀 다운로드만 가능해요.</div>':
     '<div style="font-size:.72rem;color:var(--sub);margin-bottom:.5rem;">서버 전송이 안 될 땐 "엑셀 다운로드"로 받아서 이카운트에 직접 업로드하시고, 업로드 끝나면 "전송완료 처리"를 눌러주세요 (다음에 중복으로 안 뜨게 표시만 해두는 거예요).</div>')+
@@ -5793,7 +5806,7 @@ async function bmPreview() {
         Object.keys(dayOrders).forEach(function(clientName){
           var entry=dayOrders[clientName]; if(!entry||!entry.items) return;
           entry.items.forEach(function(item){
-            if(item.done) return; // 이미 스캔 완료된 건 logs 쪽에서 별도로 잡히므로 중복 방지 위해 제외
+            var preRem=ecPreRemain(item,'bm'); if(preRem<=0) return; // 2026-10-26 수정: ecPreview와 동일 — 예전: if(item.done) return; // 이미 스캔 완료된 건 logs 쪽에서 별도로 잡히므로 중복 방지 위해 제외
             if(!item.pid||!item.qty) return;
             var prod=S.prods.find(function(p){return p.id===item.pid;});
             if(!prod){ noProdWarnings.push(clientName+' - '+item.pid+' ('+dstr+')'); return; }
@@ -5804,7 +5817,7 @@ async function bmPreview() {
             var adj=ecAdjustNamePrice(prod, price);
             var boxMult=(Number(prod.bmMult)||bmBoxMult(prod.name))*ecKgSplit(prod); // 2026-10-16: 상품에 bmMult(비즈모아 수량배수)가 있으면 우선 적용 // 2026-10-16: 벨기에와플(5kg/봉) → 비즈모아엔 kg 단위
             // 2026-10-07 수정(10-13 복구): 순서표 매칭용으로 원래 상품명(origName)도 저장
-            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',unit:prod.unit||'',QTY:(item.qty||1)*mult*boxMult,origQty:item.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:item.pid,clientId:client?client.id:null});
+            rows.push({logId:null,fromOrder:true,IO_DATE:dstr.replace(/-/g,''),clientName:clientName,PROD_CD:ecCode,prodName:adj.name||item.pid,origName:prod.name||'',cat:prod.cat||'',unit:prod.unit||'',QTY:preRem*mult*boxMult,origQty:preRem,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:item.pid,clientId:client?client.id:null});
           });
         });
       }
@@ -5813,6 +5826,7 @@ async function bmPreview() {
     // 미리 기간으로 좁혀서 읽어옴 (Quota 절약, 2026-08-21)
     // 2026-10-19 수정: ts 범위 → date(배송일) 기준 조회 (fetchOutboundLogsByDate 주석 참고)
     var snap=await fetchOutboundLogsByDate(fromRaw, toRaw);
+    var preCov=await ecPreCoverage(snap, fromRaw, toRaw, 'bm'); // 2026-10-26: 예정 기준으로 이미 올린 분 제외
     // priceHistory 지연 로딩: 이 기간 로그에 실제로 등장하는 거래처만 미리 파악해서 그만큼만 불러옴
     var bmNeededClientIds2=new Set();
     snap.forEach(function(doc){
@@ -5824,7 +5838,8 @@ async function bmPreview() {
     await ensurePriceHistoryLoaded(bmNeededClientIds2);
     snap.forEach(function(doc){
       var d=doc.data();
-      if(d.bmSent)return; // 비즈모아로 이미 보낸 로그는 제외 (이카운트 ecSent와는 별개)
+      if(d.bmSent)return;
+      if(preCov.covered[doc.id]) return; var effQ=(preCov.eff[doc.id]!=null)?preCov.eff[doc.id]:d.qty; // 2026-10-26: 예정 기준으로 이미 올린 수량만큼 빼기 // 비즈모아로 이미 보낸 로그는 제외 (이카운트 ecSent와는 별개)
       var logDate=''; if(d.date){logDate=d.date.replace(/-/g,'');} else if(d.ts&&d.ts.toDate){var dt=d.ts.toDate();logDate=dt.getFullYear()+''+String(dt.getMonth()+1).padStart(2,'0')+''+String(dt.getDate()).padStart(2,'0');}
       if(logDate<from||logDate>to)return;
       if(!d.client||!d.pid||!d.qty)return;
@@ -5837,7 +5852,7 @@ async function bmPreview() {
       var adj=ecAdjustNamePrice(prod, price);
       var boxMult=(Number(prod.bmMult)||bmBoxMult(prod.name))*ecKgSplit(prod); // 2026-10-16: 상품에 bmMult(비즈모아 수량배수)가 있으면 우선 적용 // 2026-10-16: 벨기에와플(5kg/봉) → 비즈모아엔 kg 단위
       // 2026-10-07 수정(10-13 복구): 순서표 매칭용으로 원래 상품명(origName)도 저장
-      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',unit:prod.unit||'',QTY:(d.qty||1)*mult*boxMult,origQty:d.qty||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:d.pid,clientId:client?client.id:null});
+      rows.push({logId:doc.id,fromOrder:false,IO_DATE:logDate,clientName:d.client,PROD_CD:ecCode,prodName:adj.name||d.pid,origName:prod.name||'',cat:prod.cat||'',unit:prod.unit||'',QTY:(effQ||1)*mult*boxMult,origQty:effQ||1,mult:mult*boxMult,boxMult:boxMult,PRICE:boxMult>1&&adj.price?Math.round(adj.price/boxMult):adj.price,pid:d.pid,clientId:client?client.id:null});
     });
     }
     // ecPreview와 동일하게, 거래처별로 묶여 보이도록 날짜 → 거래처 → 분류(카테고리 고정 순서) → 제품명 순 정렬
@@ -5862,6 +5877,8 @@ async function bmPreview() {
         '<button class="btn btn-gray btn-sm" onclick="bmExportExcel()" title="거래처마다 파일 하나씩">📥 거래처별 전부</button>'+
       '</span>'+
       (fromOrders?'':'<button class="btn btn-gray btn-sm" onclick="bmMarkSent()">✅ 전송완료 처리</button>')+
+      (fromOrders?'<button class="btn btn-gray btn-sm" onclick="ecMarkPreSent(\'bm\')" title="이 예정 엑셀을 비즈모아에 올렸으면 눌러주세요. 나중에 스캔된 로그가 다시 뜨지 않게 기록해둡니다">✅ 예정분 전송완료 처리</button>':'')+
+      ((typeof preCov!=='undefined'&&preCov&&preCov.count)?'<span style="color:#16a34a;font-size:.8rem;">📝 예정 기준으로 이미 올린 '+preCov.count+'건 제외됨</span>':'')+
     '</div>'+
     (fromOrders?'<div style="font-size:.72rem;color:#2563eb;margin-bottom:.5rem;">⚠️ 아직 실제 출고 스캔 전인 "예정 수량" 기준입니다. 나중에 실제로 스캔하면 그 항목은 출고 로그 쪽에서 별도로 다시 잡히니, 이 목록으로 이미 비즈모아에 반영했다면 실제 스캔 후 뜨는 로그 쪽 중복 전송에 주의해주세요. 안전을 위해 이 모드에서는 엑셀 다운로드만 가능해요.</div>':
     '<div style="font-size:.72rem;color:var(--sub);margin-bottom:.5rem;">비즈모아에 업로드 끝나면 "전송완료 처리"를 눌러주세요 (이카운트 전송 상태와는 별도로 관리돼요).</div>')+
@@ -5972,6 +5989,82 @@ async function bmMarkSent() {
 // 2026-10-08 수정: 이카운트 미리보기에서 같은 날짜+거래처+제품+단가 행을 한 줄로 합침 (수량 합산)
 // 출고 스캔은 1개당 로그 1건이라 예전엔 슈크림 8개면 8줄로 나왔음. 합친 행은 원래 로그 ID들을 logIds에 모아둬서
 // 전송완료 표시는 원래 로그 전부에 그대로 찍힘. 순서는 처음 나온 위치 유지(2026-10-13: 합친 뒤 ecRowCompare로 다시 정렬함)
+// ── 예정(출고지시서) 기준 업로드 기록 (2026-10-26 추가) ─────────────────────
+// 예전엔 "출고지시서(예정) 기준"으로 엑셀을 받아 올려도 아무 표시가 안 남아서, 같은 날을 다시 예정 기준으로 받거나
+// 나중에 로그 기준으로 미리보기하면 같은 품목이 또 떠서 두 번 올라갈 위험이 있었음.
+// → "예정분 전송완료 처리"를 누르면 출고지시서 품목에 ecPreSent/bmPreSent(올린 수량)를 기록하고,
+//   ① 예정 기준 미리보기: 수량 - max(이미 올린 수량, 이미 나간 수량) 만 다시 뜸
+//   ② 로그 기준 미리보기: 같은 날짜·거래처·품목의 출고 로그를 올린 수량만큼 자동으로 빼고(전송완료 처리 시 함께 표시)
+// 품목 필드: [ec|bm]PreSent = 예정으로 올린 수량 합, [ec|bm]PreW = 몇 번째 개수까지 이카운트에 잡혔는지(이미 나간 수량 + 예정으로 올린 수량),
+//            [ec|bm]PreAt = 처음 예정분을 기록한 시각(ms) — 이 시각 이후에 생긴 출고 로그만 예정분으로 상쇄 (그 전에 나간 건 로그로 따로 올려야 하므로)
+function ecPreRemain(item, prefix){
+  var w = item[prefix+'PreW']!=null ? item[prefix+'PreW'] : (item[prefix+'PreSent']||0);
+  return Math.max(0, (item.qty||0) - Math.max(w, item.scanned||0));
+}
+async function ecPreCoverage(snap, fromRaw, toRaw, prefix){
+  var res={eff:{}, covered:{}, count:0};
+  window['_'+prefix+'PreCovered']=[];
+  var FP=firebase.firestore.FieldPath.documentId();
+  var od=await db.collection('orders').where(FP,'>=',fromRaw).where(FP,'<=',toRaw).get();
+  var left={}, at={};
+  od.forEach(function(doc){
+    var day=doc.data()||{};
+    Object.keys(day).forEach(function(c){
+      ((day[c]||{}).items||[]).forEach(function(it){
+        var v=it[prefix+'PreSent']||0; if(v>0){ var k=doc.id+'|'+c+'|'+it.pid; left[k]=(left[k]||0)+v; at[k]=it[prefix+'PreAt']||0; }
+      });
+    });
+  });
+  if(!Object.keys(left).length) return res;
+  var docs=snap.docs.slice().sort(function(a,b){
+    var ta=a.data().ts&&a.data().ts.toMillis?a.data().ts.toMillis():0, tb=b.data().ts&&b.data().ts.toMillis?b.data().ts.toMillis():0; return ta-tb;
+  });
+  docs.forEach(function(doc){
+    var d=doc.data(); if(d[prefix+'Sent']||!d.date||!d.client) return;
+    var k=d.date+'|'+d.client+'|'+d.pid, L=left[k]||0; if(L<=0) return;
+    var lt=d.ts&&d.ts.toMillis?d.ts.toMillis():Infinity; if(lt<(at[k]||0)) return; // 예정분 기록 전에 나간 건 상쇄 안 함
+    var q=d.qty||0, cov=Math.min(q,L); left[k]=L-cov;
+    if(cov>=q){ res.covered[doc.id]=true; res.count++; } else { res.eff[doc.id]=q-cov; }
+  });
+  window['_'+prefix+'PreCovered']=Object.keys(res.covered);
+  return res;
+}
+async function ecMarkPreSent(prefix){
+  var rows=(window['_'+prefix+'Rows']||[]).filter(function(r){ return r.fromOrder && (prefix!=='ec' || r.CUST); });
+  var label=prefix==='bm'?'비즈모아':'이카운트';
+  if(!rows.length){ alert('표시할 예정 데이터가 없어요. 먼저 "출고지시서(예정) 기준"으로 미리보기 해주세요.'); return; }
+  if(!confirm(rows.length+'건을 '+label+' "예정분 전송완료"로 기록할까요?\n(이 엑셀을 '+label+'에 실제로 올린 경우에만 눌러주세요.)\n\n기록해두면 같은 품목이 예정 기준·로그 기준 미리보기에 다시 뜨지 않아요.')) return;
+  var byDate={};
+  rows.forEach(function(r){ var d=r.IO_DATE.slice(0,4)+'-'+r.IO_DATE.slice(4,6)+'-'+r.IO_DATE.slice(6,8); (byDate[d]=byDate[d]||[]).push(r); });
+  var n=0, miss=[];
+  try{
+    for(var d in byDate){
+      var ref=db.collection('orders').doc(d);
+      var missD=[], cntD=0;
+      await db.runTransaction(async function(tx){
+        var doc=await tx.get(ref); var data=doc.exists?(doc.data()||{}):{}; var upd={}; var cnt=0; missD=[]; var miss=missD;
+        byDate[d].forEach(function(r){
+          var card=upd[r.clientName]||(data[r.clientName]?{items:(data[r.clientName].items||[]).map(function(i){return Object.assign({},i);})}:null);
+          if(!card){ miss.push(r.clientName+' '+r.prodName); return; }
+          var it=card.items.find(function(i){return i.pid===r.pid;});
+          if(!it){ miss.push(r.clientName+' '+r.prodName); return; }
+          var w0=it[prefix+'PreW']!=null?it[prefix+'PreW']:(it[prefix+'PreSent']||0);
+          it[prefix+'PreW']=Math.max(w0, it.scanned||0)+(r.origQty||0);
+          it[prefix+'PreSent']=(it[prefix+'PreSent']||0)+(r.origQty||0);
+          if(!it[prefix+'PreAt']) it[prefix+'PreAt']=Date.now();
+          upd[r.clientName]=card; cnt++;
+        });
+        if(Object.keys(upd).length) tx.set(ref, upd, {merge:true});
+        cntD=cnt;
+      });
+      n+=cntD; miss=miss.concat(missD);
+    }
+    toast('✅ '+label+' 예정분 '+n+'건 기록'+(miss.length?' (못 찾은 '+miss.length+'건)':''),'ok');
+    if(miss.length) alert('출고지시서에서 못 찾아서 기록 못 한 품목:\n'+miss.join('\n'));
+    if(prefix==='bm') bmPreview(); else ecPreview();
+  }catch(e){ alert('기록 오류: '+e.message); }
+}
+
 function ecMergeRows(rows) {
   var out=[], byKey={};
   rows.forEach(function(r){
@@ -5994,6 +6087,8 @@ function ecMergeRows(rows) {
 async function ecMarkLogsSent(rows, prefix) {
   prefix=prefix||'ec';
   var ids=[];
+  // 2026-10-26: 예정 기준으로 이미 올려서 미리보기에서 빠진 로그도 같이 전송완료 표시 (한 번만)
+  (window['_'+prefix+'PreCovered']||[]).forEach(function(id){ ids.push(id); }); window['_'+prefix+'PreCovered']=[];
   rows.forEach(function(r){
     (r.logIds||(r.logId?[r.logId]:[])).forEach(function(id){ ids.push(id); });
   });
