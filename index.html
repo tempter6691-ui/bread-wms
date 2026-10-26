@@ -188,6 +188,8 @@ tr:hover td{background:#fafafa;}
   <!-- 2026-10-13 추가: 라벨교체 기록 메뉴 -->
   <div class="nav-item" onclick="go('labelChange')">🏷️ 라벨교체</div>
   <div class="nav-item" onclick="go('ecount')">📤 이카운트 전송</div>
+  <!-- 2026-10-26 추가: 출고 기록 자동 점검 -->
+  <div class="nav-item" onclick="go('check')">🩺 데이터 점검</div>
   <div id="sidebar-footer">
     <button class="btn btn-warning btn-sm" onclick="doBackup()" style="width:100%;margin-bottom:.4rem;">💾 데이터 백업</button>
     <button class="btn btn-gray btn-sm" onclick="document.getElementById('restore-input').click()" style="width:100%;">📂 데이터 복원</button>
@@ -900,7 +902,7 @@ function isNoStock(pid) {
 
 // ── NAVIGATION ────────────────────────────────────────────────
 // 2026-10-05 수정: 메뉴/제목에서 (부장님) 삭제
-var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',labelChange:'🏷️ 라벨교체',ecount:'📤 이카운트 전송',weekly:'📈 주간 출고 분석'};
+var TITLES = {dashboard:'📊 대시보드',inbound:'📦 입고 (생산라인)',outbound:'🚚 출고',stock:'📋 재고 현황',orders:'📝 출고지시서',templates:'📅 요일 템플릿',clients:'🏢 거래처 관리',products:'🏷️ 제품 관리',logs:'🕐 입출고 로그',labelChange:'🏷️ 라벨교체',ecount:'📤 이카운트 전송',weekly:'📈 주간 출고 분석',check:'🩺 데이터 점검'};
 
 function go(page) {
   if(S.page === 'inbound' && page !== 'inbound') { clearInterval(_ibPollTimer); clearInterval(_ibMultPollTimer); }
@@ -914,7 +916,8 @@ function render() {
   if (!c) return;
   var prevScrollTop = c.scrollTop;
   switch(S.page) {
-    case 'dashboard': c.innerHTML = pgDash(); break;
+    case 'dashboard': c.innerHTML = '<div id="dash-check"></div>'+pgDash(); setTimeout(dashCheck,300); break; // 2026-10-26: 출고 기록 점검 알림
+    case 'check':     c.innerHTML = pgCheck(); setTimeout(afterCheck,40); break; // 2026-10-26 추가: 데이터 점검
     case 'inbound':   c.innerHTML = pgInbound(); afterInbound(); break;
     case 'outbound':  c.innerHTML = pgOutbound(); afterOutbound(); break;
     case 'stock':     c.innerHTML = pgStock(); setTimeout(drawStock,40); break;
@@ -1196,6 +1199,148 @@ function wkExcel(){
   var wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '주간출고');
   XLSX.writeFile(wb, '주간출고_'+wkFmt(WK.start)+'.xlsx');
+}
+
+// ── 🩺 데이터 점검 (2026-10-26 추가) ─────────────────────────────
+// 출고지시서의 "나간 수량(scanned)"과 출고 로그 합계를 날짜·거래처·품목별로 비교.
+//  · 로그 부족 (나갔는데 로그가 모자람) → 이카운트·비즈모아에서 빠지고 재고도 안 빠진 상태 → [자동 채우기]로 해결
+//  · 로그 초과 (로그가 더 많음) → 중복 스캔·카드 수정 등 사람이 봐야 하는 경우라 목록만 보여줌
+// 대시보드는 하루 한 번(기기별) 최근 3일만 검사해서 알림 카드를 띄움 (logs 읽기량 절약)
+var CHK = {from:'', to:'', rows:[], loading:false};
+function chkFmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function chkDaysAgo(n){ var d=new Date(); d.setDate(d.getDate()-n); return chkFmt(d); }
+
+async function chkCompute(FROM, TO){
+  var FP=firebase.firestore.FieldPath.documentId();
+  var res=await Promise.all([
+    db.collection('orders').where(FP,'>=',FROM).where(FP,'<=',TO).get(),
+    db.collection('logs').where('date','>=',FROM).where('date','<=',TO).get()
+  ]);
+  var od=res[0], lg=res[1];
+  var sum={};
+  lg.forEach(function(d){ var x=d.data(); if(x.type!=='outbound'||!x.client||!x.pid) return; var k=x.date+'|'+x.client+'|'+x.pid; sum[k]=(sum[k]||0)+(x.qty||0); });
+  var rows=[], seen={};
+  od.forEach(function(doc){
+    var day=doc.data()||{};
+    Object.keys(day).forEach(function(c){
+      ((day[c]||{}).items||[]).forEach(function(it){
+        if(!it.pid) return;
+        var k=doc.id+'|'+c+'|'+it.pid; seen[k]=1;
+        var sc=it.scanned||0, got=sum[k]||0;
+        if(sc!==got){ var p=S.prods.find(function(x){return x.id===it.pid;});
+          rows.push({date:doc.id, client:c, pid:it.pid, name:p?p.name:(it.pname||it.pid), qty:it.qty||0, scanned:sc, logged:got, diff:got-sc}); }
+      });
+    });
+  });
+  Object.keys(sum).forEach(function(k){ if(seen[k]) return; var a=k.split('|'); var p=S.prods.find(function(x){return x.id===a[2];});
+    rows.push({date:a[0], client:a[1], pid:a[2], name:p?p.name:a[2], qty:0, scanned:0, logged:sum[k], diff:sum[k], noCard:true}); });
+  rows.sort(function(a,b){ return a.date.localeCompare(b.date) || a.client.localeCompare(b.client,'ko'); });
+  return rows;
+}
+
+function pgCheck(){
+  if(!CHK.from){ CHK.from=chkDaysAgo(6); CHK.to=chkFmt(new Date()); }
+  return '<div class="card" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;">'+
+      '<span style="font-size:.95rem;">기간</span>'+
+      '<input type="date" id="chk-from" value="'+CHK.from+'"> ~ <input type="date" id="chk-to" value="'+CHK.to+'">'+
+      '<button class="btn btn-primary" onclick="runCheck()" style="font-size:1rem;padding:.55rem 1.2rem;">🩺 검사하기</button>'+
+      '<span style="font-size:.8rem;color:var(--sub);">기간이 길수록 읽는 양이 많아요 (1주일 권장)</span>'+
+    '</div><div id="chk-body"></div>';
+}
+function afterCheck(){ if(CHK.rows.length) chkDraw(); }
+
+async function runCheck(){
+  var f=(document.getElementById('chk-from')||{}).value, t=(document.getElementById('chk-to')||{}).value;
+  if(!f||!t||f>t){ alert('기간을 확인해주세요'); return; }
+  CHK.from=f; CHK.to=t;
+  var body=document.getElementById('chk-body'); if(body) body.innerHTML='<div class="card" style="text-align:center;font-size:1.1rem;">⏳ 검사 중...</div>';
+  try{ CHK.rows=await chkCompute(f,t); CHK.done=true; chkSaveDash(f,t); chkDraw(); }
+  catch(e){ if(body) body.innerHTML='<div class="card" style="color:#dc2626;">❌ 오류: '+lcH(e.message)+'</div>'; }
+}
+
+function chkDraw(){
+  var body=document.getElementById('chk-body'); if(!body) return;
+  var miss=CHK.rows.filter(function(r){return r.diff<0;}), over=CHK.rows.filter(function(r){return r.diff>0;});
+  var big=function(n,label,color){ return '<div class="card" style="flex:1;min-width:200px;margin:0;text-align:center;"><div style="font-size:2.6rem;font-weight:800;color:'+color+';">'+n+'</div><div style="font-size:1rem;">'+label+'</div></div>'; };
+  var html='<div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">'+
+    big(miss.length, '🔴 로그가 빠진 것<br><span style="font-size:.8rem;color:var(--sub);">버튼 한 번으로 채움</span>', miss.length?'#dc2626':'#16a34a')+
+    big(over.length, '🟠 로그가 더 많은 것<br><span style="font-size:.8rem;color:var(--sub);">사람이 확인 필요</span>', over.length?'#d97706':'#16a34a')+
+  '</div>';
+  if(!miss.length && !over.length){
+    html+='<div class="card" style="text-align:center;font-size:1.3rem;color:#16a34a;padding:2rem;">✅ '+CHK.from+' ~ '+CHK.to+' 모두 정상이에요</div>';
+    body.innerHTML=html; return;
+  }
+  if(miss.length){
+    var mq=miss.reduce(function(s,r){return s-r.diff;},0);
+    html+='<div class="card" style="border:2px solid #fecaca;">'+
+      '<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.6rem;">'+
+        '<div style="font-size:1.05rem;font-weight:700;">🔴 출고됐는데 로그가 빠진 것 — '+miss.length+'건 ('+wkNum(mq)+'개)</div>'+
+        '<button class="btn btn-danger" style="font-size:1.05rem;padding:.6rem 1.4rem;margin-left:auto;" onclick="chkFillMissing()">🔧 자동으로 채우기</button>'+
+      '</div>'+
+      '<div style="font-size:.85rem;color:var(--sub);margin-bottom:.5rem;">채우면 출고 로그가 생기고 재고도 그만큼 빠져요. 이카운트·비즈모아 미리보기에 "미전송"으로 떠서 올리면 돼요.<br>⚠️ 그 날짜를 이미 이카운트에 올렸는데 이 품목만 빠진 거라면 그대로 추가로 올리면 되고, 예정 기준으로 올리고 "예정분 전송완료 처리"까지 했으면 자동으로 빠져요.</div>'+
+      chkTable(miss,false)+'</div>';
+  }
+  if(over.length){
+    html+='<div class="card" style="border:2px solid #fed7aa;">'+
+      '<div style="font-size:1.05rem;font-weight:700;margin-bottom:.4rem;">🟠 로그가 출고 수량보다 많은 것 — '+over.length+'건</div>'+
+      '<div style="font-size:.85rem;color:var(--sub);margin-bottom:.5rem;">이미 나간 뒤에 출고지시서 수량을 줄였거나, 카드를 지웠거나, 같은 걸 두 번 기록한 경우예요. 실제로 몇 개 나갔는지 확인한 뒤 출고 화면 ↩️나 로그 수정으로 맞춰주세요.</div>'+
+      chkTable(over,true)+'</div>';
+  }
+  body.innerHTML=html;
+}
+function chkTable(rows, isOver){
+  return '<div style="overflow-x:auto;"><table style="font-size:.95rem;"><thead><tr><th>날짜</th><th>거래처</th><th>제품</th><th style="text-align:center;">지시</th><th style="text-align:center;">나간 수량</th><th style="text-align:center;">로그</th><th style="text-align:center;">'+(isOver?'초과':'빠진 수량')+'</th></tr></thead><tbody>'+
+    rows.map(function(r){ return '<tr><td>'+r.date.slice(5)+'</td><td>'+lcH(r.client)+'</td><td style="font-weight:600;">'+lcH(r.name)+'</td>'+
+      '<td style="text-align:center;">'+(r.noCard?'(카드 없음)':r.qty)+'</td><td style="text-align:center;">'+r.scanned+'</td><td style="text-align:center;">'+r.logged+'</td>'+
+      '<td style="text-align:center;font-weight:800;font-size:1.05rem;color:'+(isOver?'#d97706':'#dc2626')+';">'+Math.abs(r.diff)+'</td></tr>'; }).join('')+
+  '</tbody></table></div>';
+}
+
+async function chkFillMissing(){
+  var miss=CHK.rows.filter(function(r){return r.diff<0;});
+  if(!miss.length) return;
+  if(!confirm('로그가 빠진 '+miss.length+'건을 채울까요?\n(출고 로그 생성 + 재고 차감)')) return;
+  var n=0;
+  try{
+    for(var i=0;i<miss.length;i+=200){
+      var batch=db.batch();
+      miss.slice(i,i+200).forEach(function(r){
+        var q=-r.diff, ded=isNoStock(r.pid)?0:q;
+        if(ded>0){ batch.set(db.collection('inventory').doc(r.pid), {qty: firebase.firestore.FieldValue.increment(-ded)}, {merge:true}); S.inv[r.pid]=(S.inv[r.pid]||0)-ded; }
+        batch.set(db.collection('logs').doc(), {type:'outbound',pid:r.pid,pname:r.name,client:r.client,qty:q,invDeduct:ded,manual:true,backfill:true,via:'dataCheck',date:r.date,ts:firebase.firestore.FieldValue.serverTimestamp()});
+        n++;
+      });
+      await batch.commit();
+    }
+    try{ localStorage.removeItem('chkDash'); }catch(e){}
+    toast('✅ '+n+'건 채웠어요','ok');
+    runCheck();
+  }catch(e){ alert('채우기 오류: '+e.message+' ('+n+'건까지 처리)'); }
+}
+
+// 대시보드 알림: 기기별 하루 1회 최근 3일 검사 (결과는 localStorage에 캐시)
+function chkSaveDash(f,t){
+  if(f!==chkDaysAgo(2) || t!==chkFmt(new Date())) return; // 대시보드와 같은 범위일 때만 캐시 갱신
+  var miss=CHK.rows.filter(function(r){return r.diff<0;}).length, over=CHK.rows.filter(function(r){return r.diff>0;}).length;
+  try{ localStorage.setItem('chkDash', JSON.stringify({day:chkFmt(new Date()), miss:miss, over:over})); }catch(e){}
+}
+async function dashCheck(){
+  var el=document.getElementById('dash-check'); if(!el) return;
+  var today=chkFmt(new Date()), c=null;
+  try{ c=JSON.parse(localStorage.getItem('chkDash')||'null'); }catch(e){}
+  if(!c || c.day!==today){
+    try{
+      var rows=await chkCompute(chkDaysAgo(2), today);
+      c={day:today, miss:rows.filter(function(r){return r.diff<0;}).length, over:rows.filter(function(r){return r.diff>0;}).length};
+      try{ localStorage.setItem('chkDash', JSON.stringify(c)); }catch(e){}
+    }catch(e){ return; }
+  }
+  el=document.getElementById('dash-check'); if(!el) return;
+  if(!c.miss && !c.over){ el.innerHTML=''; return; }
+  el.innerHTML='<div class="card" style="border:2px solid #fecaca;background:#fef2f2;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;cursor:pointer;" onclick="CHK.from=chkDaysAgo(2);CHK.to=chkFmt(new Date());go(\'check\');setTimeout(runCheck,60);">'+
+    '<div style="font-size:2rem;">🩺</div><div style="flex:1;"><div style="font-size:1.1rem;font-weight:800;color:#b91c1c;">최근 3일 출고 기록이 안 맞는 게 있어요</div>'+
+    '<div style="font-size:.9rem;">로그 빠짐 <b>'+c.miss+'</b>건 · 로그 초과 <b>'+c.over+'</b>건 — 눌러서 확인/자동 채우기</div></div>'+
+    '<button class="btn btn-danger">점검하기 →</button></div>';
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────
