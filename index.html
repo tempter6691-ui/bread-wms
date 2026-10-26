@@ -1854,16 +1854,14 @@ async function undoOb(pid) {
   if(!txResult.ok) return;
 
   var noStock=isNoStock(pid); // 2026-10-19: 재고관리 안 함 품목은 취소해도 재고 그대로
-  if(!noStock) S.inv[pid]=(S.inv[pid]||0)+1;
-  if(S.orders[d] && S.orders[d][client] && S.orders[d][client].items){
-    var it=S.orders[d][client].items.find(function(i){return i.pid===pid;});
-    if(it){ it.scanned=Math.max(0,(it.scanned||1)-1); it.done=it.scanned>=it.qty; }
-  }
+  // 2026-10-26 수정: 여기서 로컬 scanned를 한 번 더 -1 하던 코드 삭제 — updateOrderItemTx가 이미 S.orders의 같은 객체를 -1 해서
+  // 화면엔 2개 줄어든 걸로 보였고, 빠르게 두 번 누르면 서버에도 1개 더 줄어든 값이 저장될 수 있었음
 
   await safeWrite(async function() {
-    if(!noStock) await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(1)}, {merge:true});
-    // 스캔할 때 남긴 출고 로그를 찾아서 지움 (안 지우면 이카운트 전송/제품 내역에서
-    // 취소된 것도 나간 걸로 계속 잡힘 — 상쇄 로그를 추가하는 것만으론 안 없어짐)
+    // 2026-10-26 수정: 👆완료·기사앱 확인·일괄완료로 생긴 로그는 "7개짜리 한 건"이라, 예전처럼 최신 로그를 통째로 지우면
+    // 이카운트에서 7개가 다 사라지고 재고는 1개만 돌아왔음. → 로그 수량이 2 이상이면 지우지 않고 1만 줄임.
+    // 재고도 그 로그가 실제로 뺀 만큼(invDeduct)만 돌려놓음 (재고 0일 때 완료해서 안 빠졌던 건 안 늘림).
+    var restore = noStock ? 0 : 1;
     try {
       var logSnap = await db.collection('logs')
         .where('type','==','outbound').where('pid','==',pid)
@@ -1875,9 +1873,22 @@ async function undoOb(pid) {
           var tb=b.data().ts&&b.data().ts.toMillis?b.data().ts.toMillis():0;
           return tb-ta; // 최신 것부터
         });
-        await candidates[0].ref.delete();
+        var lg = candidates[0].data(), lq = lg.qty||1;
+        var hasInv = (lg.invDeduct !== undefined && lg.invDeduct !== null);
+        if(!noStock && hasInv) restore = lg.invDeduct > 0 ? 1 : 0;
+        if(lq > 1){
+          var upd = {qty: lq-1};
+          if(hasInv) upd.invDeduct = Math.max(0, lg.invDeduct - restore);
+          await candidates[0].ref.update(upd);
+        } else {
+          await candidates[0].ref.delete();
+        }
       }
-    } catch(e){ console.error('출고 로그 삭제 실패(취소는 정상 처리됨):', e); }
+    } catch(e){ console.error('출고 로그 정리 실패(취소는 정상 처리됨):', e); }
+    if(restore > 0){
+      S.inv[pid]=(S.inv[pid]||0)+restore;
+      await db.collection('inventory').doc(pid).set({qty: firebase.firestore.FieldValue.increment(restore)}, {merge:true});
+    }
     toast('1개 취소됨','ok'); var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
   });
 }
@@ -3090,11 +3101,24 @@ async function addItem(clientName, pid, sid) {
   });
 }
 
+// 2026-10-26 추가: 이미 출고(스캔/완료)된 수량이 있는 품목·카드 보호
+// 출고지시서에서 줄만 빼거나 수량을 줄이면 이미 빠진 재고와 출고 로그(이카운트 전송 대상)는 그대로 남아서 서로 어긋남
+// → 나간 수량보다 줄이기·품목 삭제·카드 삭제·다른 날짜로 이동은 막고, 출고 화면 ↩️로 먼저 취소하도록 안내
+function shippedOf(it){ return (it && (it.scanned||0)) || 0; }
+function shippedItemsOf(data){ return ((data&&data.items)||[]).filter(function(i){return shippedOf(i)>0;}); }
+function shippedMsg(name, list){
+  return '이미 출고된 품목이 있어요:\n'+list.map(function(i){ var p=S.prods.find(function(x){return x.id===i.pid;}); return '· '+(p?p.name:i.pid)+' '+shippedOf(i)+'개'; }).join('\n')+
+    '\n\n재고·출고로그(이카운트)가 어긋나지 않게, 출고 화면에서 ↩️로 먼저 취소한 뒤 다시 해주세요.';
+}
+
 async function chgQty(clientName, pid, delta) {
   // pid 기준으로 수량 변경 (인덱스는 동시 수정 시 어긋날 수 있음)
   var data=(S.orders[S.ordDate]||{})[clientName]; if(!data||!data.items) return;
   var item=data.items.find(function(i){return i.pid===pid;}); if(!item) return;
-  item.qty=Math.max(1,(item.qty||1)+delta);
+  var nq=Math.max(1,(item.qty||1)+delta);
+  if(nq<shippedOf(item)){ alert('이미 '+shippedOf(item)+'개 출고돼서 그보다 적게 줄일 수 없어요.\n출고 화면에서 ↩️로 먼저 취소해주세요.'); return; } // 2026-10-26
+  item.qty=nq;
+  if(shippedOf(item)>0 || item.done) item.done = shippedOf(item)>=item.qty; // 2026-10-26: 수량 늘리면 완료 풀림 → 늘어난 만큼 다시 출고
   var sid=safeid(clientName);
   await safeWrite(async function() {
     await db.collection('orders').doc(S.ordDate).set({[clientName]: data}, {merge:true});
@@ -3108,7 +3132,9 @@ async function setQty(clientName, pid, value) {
   if (isNaN(n) || n < 1) n = 1;
   var data=(S.orders[S.ordDate]||{})[clientName]; if(!data||!data.items) return;
   var item=data.items.find(function(i){return i.pid===pid;}); if(!item) return;
+  if(n<shippedOf(item)){ alert('이미 '+shippedOf(item)+'개 출고돼서 '+n+'개로 줄일 수 없어요.\n출고 화면에서 ↩️로 먼저 취소해주세요.'); var el0=document.getElementById('ocard_'+safeid(clientName)); if(el0){var t0=document.createElement('div');t0.innerHTML=drawOrdCard(clientName,data);el0.parentNode.replaceChild(t0.firstChild,el0);} return; } // 2026-10-26: 입력칸 원래 수량으로 되돌림
   item.qty=n;
+  if(shippedOf(item)>0 || item.done) item.done = shippedOf(item)>=item.qty; // 2026-10-26: 수량 늘리면 완료 풀림
   var sid=safeid(clientName);
   await safeWrite(async function() {
     await db.collection('orders').doc(S.ordDate).set({[clientName]: data}, {merge:true});
@@ -3119,6 +3145,8 @@ async function setQty(clientName, pid, value) {
 async function rmItem(clientName, pid) {
   // pid 기준으로 삭제 (인덱스는 동시 수정 시 어긋날 수 있어서 사용 안 함)
   var data=(S.orders[S.ordDate]||{})[clientName]; if(!data||!data.items) return;
+  var rmIt=data.items.find(function(i){return i.pid===pid;}); // 2026-10-26: 출고된 품목은 삭제 막음
+  if(rmIt && shippedOf(rmIt)>0){ alert(shippedMsg(clientName,[rmIt])); return; }
   var before=data.items.length;
   data.items=data.items.filter(function(i){return i.pid!==pid;});
   if(data.items.length===before) return; // 이미 없음
@@ -3300,6 +3328,13 @@ async function moveOrdClientConfirm() {
     var fromOrd = S.orders[fromDate] || {};
     var data = fromOrd[name];
     if(!data) { alert('데이터가 없어요'); return; }
+    if(targetDate !== fromDate) {
+      // 2026-10-26: 출고된 품목이 있으면 날짜 이동 막음 (출고 로그는 원래 날짜에 남아서 어긋남)
+      var shp3=shippedItemsOf(data); if(shp3.length){ alert(shippedMsg(name,shp3)); return; }
+      // 2026-10-26: 옮길 날짜에 같은 거래처 카드가 이미 있으면 통째로 덮어써서 기존 품목이 사라졌음 → 막음
+      var tdoc = await db.collection('orders').doc(targetDate).get();
+      if(tdoc.exists && (tdoc.data()||{})[name]) { alert(targetDate+'에 이미 "'+name+'" 출고지시서가 있어요.\n덮어쓰면 기존 품목이 사라져서 이동을 막았어요. 그 날짜 카드에 품목을 직접 추가해주세요.'); return; }
+    }
     data.driver = targetDriver;
 
     if(targetDate === fromDate) {
@@ -3354,8 +3389,12 @@ async function copyOrdClientConfirm() {
     var fromOrd = S.orders[fromDate] || {};
     var src = fromOrd[name];
     if(!src) { alert('데이터가 없어요'); return; }
-    if(targetDate === fromDate && (S.orders[targetDate]||{})[name]) {
-      if(!confirm('같은 날짜에 '+name+' 출고지시서가 이미 있습니다. 덮어쓸까요?')) return;
+    // 2026-10-26 수정: 다른 날짜에도 같은 거래처 카드가 있으면 확인 (예전엔 같은 날짜만 확인하고 다른 날짜는 그냥 덮어씀)
+    var tdoc2 = await db.collection('orders').doc(targetDate).get();
+    var tcard = tdoc2.exists ? (tdoc2.data()||{})[name] : null;
+    if(tcard) {
+      if(shippedItemsOf(tcard).length){ alert(targetDate+' "'+name+'" 카드에 이미 출고된 품목이 있어서 덮어쓸 수 없어요.'); return; }
+      if(!confirm(targetDate+'에 '+name+' 출고지시서가 이미 있습니다. 덮어쓸까요? (기존 품목은 사라져요)')) return;
     }
     // 원본은 그대로 두고, 품목/수량만 복사한 새 데이터 생성 (잠금·이전수량이력은 초기화)
     var data = {
@@ -3379,6 +3418,7 @@ async function copyOrdClientConfirm() {
 async function toggleOrdClient(name) {
   var d=S.ordDate; if(!S.orders[d]) S.orders[d]={};
   if(S.orders[d][name]){
+    var shp2=shippedItemsOf(S.orders[d][name]); if(shp2.length){ alert(shippedMsg(name,shp2)); return; } // 2026-10-26
     if(!confirm(name+' 제거할까요?')) return;
     try {
       await safeWrite(async function() {
@@ -3414,6 +3454,7 @@ async function toggleOrdClient(name) {
 }
 
 async function removeOrdClient(name) {
+  var shp=shippedItemsOf((S.orders[S.ordDate]||{})[name]); if(shp.length){ alert(shippedMsg(name,shp)); return; } // 2026-10-26
   if(!confirm('"'+name+'" 거래처를 정말 삭제하시겠습니까?')) return;
   try {
     await safeWrite(async function() {
@@ -3850,7 +3891,9 @@ async function updClientName(cid, newName) {
   saveCacheLS('clients', S.clients);
   try {
     // 1. clients 컬렉션 이름 업데이트
-    await db.collection('clients').doc(cid).update({name:newName});
+    // 2026-10-26 수정: 옛 이름을 별칭(aliases)에 남김 — 옛 이름으로 남은 출고로그·단가·발주링크(?c=옛이름)가 계속 이 거래처로 연결되게
+    await db.collection('clients').doc(cid).update({name:newName, aliases: firebase.firestore.FieldValue.arrayUnion(oldName)});
+    if(!c.aliases) c.aliases=[]; if(c.aliases.indexOf(oldName)<0) c.aliases.push(oldName);
 
     // batch는 한 번에 최대 500개 작업까지만 가능하므로, 500개씩 끊어서 커밋
     var pendingOps = [];

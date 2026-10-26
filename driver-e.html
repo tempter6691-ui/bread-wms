@@ -207,6 +207,26 @@ var localConfirmed = {}; // {거래처명: {pid: true}} 보기용 완료 상태
 var gAllOrders = {}; // 전역 주문 데이터 (Firestore 저장용)
 var gDate = ''; // 현재 날짜
 
+// 2026-10-26 추가: 출고지시서 품목 하나만 안전하게 바꾸기 (트랜잭션)
+// 기사앱은 아침에 한 번 불러온 뒤 자동 새로고침을 안 해서, 예전엔 저장할 때 그 오래된 품목 목록을 통째로 덮어써
+// 그 사이 창고 스캔·사무실 수량변경·품목추가가 사라질 수 있었음 → 저장 직전에 서버 최신값을 읽고 그 품목만 바꿔서 저장.
+async function txUpdateItem(clientName, pid, mutate){
+  var ref = db.collection('orders').doc(gDate);
+  var out = await db.runTransaction(async function(tx){
+    var doc = await tx.get(ref);
+    var cd = doc.exists ? (doc.data()||{})[clientName] : null;
+    if(!cd || !cd.items) return {ok:false, reason:'NO_CARD'};
+    var items = cd.items.map(function(i){ return Object.assign({}, i); });
+    var it = items.find(function(i){ return i.pid===pid; });
+    var r = mutate(it) || {ok:false};
+    if(r.ok) tx.set(ref, {[clientName]: {items: items}}, {merge:true});
+    r.items = items; r.item = it;
+    return r;
+  });
+  if(out.items){ if(!gAllOrders[clientName]) gAllOrders[clientName]={}; gAllOrders[clientName].items = out.items; }
+  return out;
+}
+
 function confirmItem(clientName, pid) {
   if(!localConfirmed[clientName]) localConfirmed[clientName]={};
   localConfirmed[clientName][pid]=true;
@@ -215,19 +235,16 @@ function confirmItem(clientName, pid) {
   // 2026-10-23 수정: 예전엔 done/scanned만 저장하고 출고 로그·재고 차감을 안 해서, 확인 버튼으로 완료된 품목이
   // 이카운트/비즈모아 전송 목록에서 통째로 빠지고 재고도 그대로 남았음 (10/23 하늘정원 3호생크림 5박스 누락 건).
   // → WMS 출고 화면 "👆완료"(manualCompleteOb)와 똑같이: 남은 수량만큼 출고 로그(manual:true) + 재고는 있는 만큼만 차감(noStock 제외)
-  if(gAllOrders[clientName] && gAllOrders[clientName].items) {
-    var item = gAllOrders[clientName].items.find(function(i){return i.pid===pid;});
+  // 2026-10-26 수정: 서버 최신값 기준으로 그 품목만 완료 처리 (txUpdateItem) — 남은 수량도 최신값으로 계산
+  {
     var rem = 0;
-    if(item && !item.done) {
-      rem = (item.qty||0) - (item.scanned||0);
-      item.done = true;
-      item.scanned = item.qty;
-    }
-    db.collection('orders').doc(gDate).set(
-      {[clientName]: {items: gAllOrders[clientName].items}},
-      {merge: true}
-    ).then(async function(){
-      if(rem <= 0) return;
+    txUpdateItem(clientName, pid, function(it){
+      if(!it || it.done) return {ok:false};
+      rem = (it.qty||0) - (it.scanned||0);
+      it.done = true; it.scanned = it.qty;
+      return {ok:true};
+    }).then(async function(res){
+      if(!res.ok || rem <= 0) return;
       var p = prods.find(function(x){ return x.id===pid; });
       var pname = p ? p.name : pid;
       var deduct = 0;

@@ -817,6 +817,15 @@ async function exportToOrder(id) {
       }
     });
 
+    // 2026-10-26 추가: 재등록으로 수량이 이미 출고(스캔/완료)된 수량보다 작아지면 막음
+    // (출고지시서 수량만 줄고 이미 빠진 재고·출고로그는 그대로 남아 어긋남). 늘어난 경우엔 완료 표시를 풀어 다시 출고되게.
+    var underShipped = Object.keys(mergedMap).map(function(k){ return mergedMap[k]; }).filter(function(it){ return (it.scanned||0) > Math.max(0, it.qty||0); });
+    if (underShipped.length) {
+      alert('⛔ 이미 출고된 수량보다 적게 바뀌는 품목이 있어서 등록을 멈췄어요:\n'+underShipped.map(function(it){ return '· '+it.pid+' 출고 '+(it.scanned||0)+'개 → 새 수량 '+Math.max(0,it.qty||0)+'개'; }).join('\n')+'\n\n출고관리 화면에서 ↩️로 먼저 취소한 뒤 다시 등록해주세요.');
+      return;
+    }
+    Object.keys(mergedMap).forEach(function(k){ var it=mergedMap[k]; if((it.scanned||0)>0 || it.done) it.done = (it.scanned||0) >= (it.qty||0); });
+
     // 수량이 0 이하로 떨어진 항목은 정리 (재등록 과정에서 빼고 다시 더했는데 0이 된 경우)
     var finalItems = Object.keys(mergedMap).map(function(k){ return mergedMap[k]; }).filter(function(it){ return (it.qty||0) > 0; });
     // 같은 품목군(분류)끼리 자동으로 묶어서 정렬
