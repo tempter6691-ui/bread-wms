@@ -3990,6 +3990,7 @@ function printOrders(onlyNames) {
           if(String(p.name||'').indexOf('벨기에와플')===0) return '벨기에와플(5kg/봉)';
           if(String(p.name||'').indexOf('미니와플')===0) return '미니와플(박스)'; // 2026-10-14 추가
           if((p.cat&&p.cat.indexOf("마카롱")>=0)||p.id==="P110"||p.id==="P111") return p.name;
+          if(/\(라온\)/.test(p.name)) return p.name; // 2026-10-27 추가: 3호생크림 원형(라온) 등 '(라온)'은 인쇄에도 표시
           return p.name.replace(/\(.*$/,"");
         }
         for(var i=0; i<left.length; i++){
