@@ -1829,7 +1829,129 @@ function drawObItems() {
     '<td><span style="font-size:1.1rem;font-weight:bold;color:'+boxColor+';">'+totalBoxRemaining+'</span></td>'+
     '<td colspan="2"></td></tr>'; }
   return '<table><thead><tr><th>제품명</th><th>출고수량</th><th>남은수량</th><th>상태</th><th></th></tr></thead><tbody>'+rows+
-    '</tbody><tfoot>'+tfoot+'</tfoot></table>';
+    '</tbody><tfoot>'+tfoot+'</tfoot></table>'+obxPanel(); // 2026-10-27: 엑셀 대조표
+}
+
+// ── 📋 엑셀 대조표 (2026-10-27 추가) ─────────────────────────────
+// 거래처별로 이카운트 판매 엑셀(품목코드·품명·수량)을 올려두면, QR 출고 스캔 수량과 품목코드로 맞춰서
+// 엑셀 줄마다 완료/스캔중/대기를 자동 표시. 엑셀 수량 = WMS 수량 × 이카운트 전송 배수(ecountQtyMultiplier).
+// 저장: obExcel/{날짜}__{거래처} — 다른 PC·다음날 아침에도 그대로 보임. orders 문서는 건드리지 않음.
+S.obx = S.obx || {};
+function obxKey(){ return S.ordDate+'__'+S.outClient; }
+function obxNorm(s){ return String(s==null?'':s).replace(/\s+/g,'').replace(/[()（）]/g,'').toLowerCase(); }
+async function obxLoad(key){
+  if(S.obx[key]!==undefined) return;
+  S.obx[key]=null;
+  try{
+    var d=await db.collection('obExcel').doc(key).get();
+    S.obx[key]=d.exists?d.data():false;
+  }catch(e){ S.obx[key]=false; }
+  if(key===obxKey()){ var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems(); }
+}
+function obxPickFile(){
+  var inp=document.getElementById('obxFile');
+  if(!inp){ inp=document.createElement('input'); inp.type='file'; inp.id='obxFile'; inp.accept='.xlsx,.xls,.csv'; inp.style.display='none';
+    inp.onchange=function(){ var f=inp.files[0]; inp.value=''; if(f) obxRead(f); }; document.body.appendChild(inp); }
+  inp.click();
+}
+function obxRead(f){
+  var key=obxKey(), client=S.outClient, date=S.ordDate;
+  var fr=new FileReader();
+  fr.onload=async function(){
+    try{
+      var wb=XLSX.read(new Uint8Array(fr.result),{type:'array'});
+      var aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true,blankrows:false});
+      var h=-1,cCode=-1,cName=-1,cQty=-1,cSpec=-1;
+      for(var i=0;i<Math.min(aoa.length,15)&&h<0;i++){
+        var r=aoa[i].map(function(v){return String(v).replace(/\s/g,'');});
+        var q=r.indexOf('수량'); if(q<0) continue;
+        h=i; cQty=q; cCode=r.indexOf('품목코드');
+        cName=r.findIndex(function(v){return v==='품명'||v==='품목명'||v==='제품명';});
+        cSpec=r.indexOf('규격');
+      }
+      if(h<0||(cCode<0&&cName<0)){ alert('엑셀에서 "품목코드/품명"과 "수량" 제목 줄을 못 찾았어요.'); return; }
+      var rows=[];
+      for(var j=h+1;j<aoa.length;j++){
+        var a=aoa[j], qty=parseFloat(a[cQty]); if(!qty) continue;
+        var code=cCode>=0?String(a[cCode]).trim():'', name=cName>=0?String(a[cName]).trim():'';
+        if(!code&&!name) continue;
+        rows.push({code:code,name:name,qty:qty,spec:cSpec>=0?String(a[cSpec]).trim():''});
+      }
+      if(!rows.length){ alert('엑셀에 품목 줄이 없어요.'); return; }
+      var doc={date:date,client:client,fileName:f.name,rows:rows,at:firebase.firestore.FieldValue.serverTimestamp()};
+      await db.collection('obExcel').doc(key).set(doc);
+      S.obx[key]=doc;
+      toast('📋 엑셀 '+rows.length+'줄 등록 ('+client+')','ok');
+      var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems();
+    }catch(e){ alert('엑셀 읽기 오류: '+e.message); }
+  };
+  fr.readAsArrayBuffer(f);
+}
+async function obxDelete(){
+  if(!confirm('이 거래처에 올린 엑셀 대조표를 지울까요?')) return;
+  var key=obxKey();
+  try{ await db.collection('obExcel').doc(key).delete(); S.obx[key]=false; var el=document.getElementById('ob-items'); if(el) el.innerHTML=drawObItems(); }
+  catch(e){ alert('삭제 오류: '+e.message); }
+}
+// 엑셀 줄 ↔ 출고지시서 품목 매칭 (품목코드 우선, 코드가 없으면 품명)
+function obxMatch(x){
+  var order=(S.orders[S.ordDate]||{})[S.outClient]||{}; var items=order.items||[];
+  var rows=x.rows.map(function(r){ return Object.assign({},r,{plan:0,got:0,items:[]}); });
+  var used={};
+  items.forEach(function(it,idx){
+    var p=S.prods.find(function(q){return q.id===it.pid;}); if(!p) return;
+    var m=p.ecountQtyMultiplier||1;
+    var hit=rows.find(function(r){ return r.code && p.ecountCode && String(p.ecountCode).trim()===r.code; });
+    if(!hit){ var pn=obxNorm(p.name); hit=rows.find(function(r){ var rn=obxNorm(r.name); return rn && (pn===rn || pn.indexOf(rn)===0 || rn.indexOf(pn)===0); }); }
+    if(!hit) return;
+    used[idx]=1; hit.plan+=(it.qty||0)*m; hit.got+=(it.scanned||0)*m; hit.items.push(p.name);
+  });
+  var extra=items.filter(function(it,idx){ return !used[idx]; }).map(function(it){ var p=S.prods.find(function(q){return q.id===it.pid;}); return (p?p.name:it.pid)+' '+it.qty; });
+  return {rows:rows, extra:extra};
+}
+function obxPanel(){
+  if(!S.outClient) return '';
+  var key=obxKey(), x=S.obx[key];
+  if(x===undefined){ obxLoad(key); x=null; }
+  var head='<div style="margin-top:1.2rem;border-top:2px dashed #cbd5e1;padding-top:.9rem;">'+
+    '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;">'+
+    '<div style="font-weight:700;font-size:1rem;">📋 엑셀 대조표</div>';
+  if(x===null) return head+'<span style="color:#888;font-size:.85rem;">불러오는 중...</span></div></div>';
+  if(!x) return head+'<button class="btn btn-primary btn-sm" onclick="obxPickFile()">📤 엑셀 올리기</button>'+
+    '<span style="font-size:.8rem;color:var(--sub);">이카운트 판매 엑셀(품목코드·품명·수량)을 올려두면 QR 스캔과 맞춰서 줄마다 완료 표시돼요</span></div></div>';
+  var M=obxMatch(x), done=0;
+  var body=M.rows.map(function(r,i){
+    var st, bg='';
+    if(!r.items.length){ st='<span class="badge" style="background:#fee2e2;color:#b91c1c;">❌ 출고지시서에 없음</span>'; bg='background:#fef2f2;'; }
+    else if(r.got>=r.qty){ st='<span class="badge bg-green">✅ 완료</span>'+(r.got>r.qty?' <span style="color:#d97706;font-size:.75rem;">('+r.got+' 나감)</span>':''); bg='background:#f0fff4;'; done++; }
+    else if(r.got>0) st='<span class="badge bg-yellow">스캔중 '+r.got+'/'+r.qty+'</span>';
+    else st='<span class="badge">대기</span>';
+    var warn=(r.items.length && r.plan!==r.qty)?'<div style="color:#d97706;font-size:.72rem;">⚠️ 출고지시서는 '+r.plan+'</div>':'';
+    return '<tr style="'+bg+'"><td style="text-align:center;color:#888;">'+(i+1)+'</td><td>'+lcH(r.code)+'</td><td>'+lcH(r.name)+
+      (r.items.length?'<div style="font-size:.72rem;color:#64748b;">↔ '+lcH(r.items.join(', '))+'</div>':'')+'</td>'+
+      '<td style="text-align:center;font-weight:700;">'+r.qty+warn+'</td><td style="font-size:.8rem;color:#64748b;">'+lcH(r.spec)+'</td><td>'+st+'</td></tr>';
+  }).join('');
+  var all=done===M.rows.length;
+  return head+
+    '<span style="font-size:.85rem;font-weight:700;color:'+(all?'#16a34a':'#2563eb')+';">'+done+' / '+M.rows.length+' 줄 완료</span>'+
+    '<span style="font-size:.75rem;color:#888;">'+lcH(x.fileName||'')+'</span>'+
+    '<span style="margin-left:auto;display:flex;gap:.3rem;">'+
+      '<button class="btn btn-gray btn-sm" onclick="obxDownload()">⬇️ 완료표시 엑셀</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="obxPickFile()">🔄 다시 올리기</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="obxDelete()">🗑</button></span></div>'+
+    (all?'<div style="background:#dcfce7;color:#166534;font-weight:800;text-align:center;padding:.6rem;border-radius:6px;margin-bottom:.5rem;font-size:1.05rem;">✅ 엑셀표 전체 완료</div>':'')+
+    '<div style="overflow-x:auto;"><table style="font-size:.88rem;"><thead><tr><th style="width:2.5em;">#</th><th>품목코드</th><th>품명</th><th style="text-align:center;">수량</th><th>규격</th><th>상태</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
+    (M.extra.length?'<div style="margin-top:.5rem;padding:.5rem .7rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:.85rem;">⚠️ 출고지시서엔 있는데 엑셀에 없는 품목: <b>'+lcH(M.extra.join(', '))+'</b></div>':'')+
+    '</div>';
+}
+function obxDownload(){
+  var x=S.obx[obxKey()]; if(!x) return;
+  var M=obxMatch(x);
+  var aoa=[['No','품목코드','품명','수량','규격','나간 수량','상태']];
+  M.rows.forEach(function(r,i){ aoa.push([i+1,r.code,r.name,r.qty,r.spec,r.got,!r.items.length?'출고지시서에 없음':r.got>=r.qty?'완료':r.got>0?'스캔중':'대기']); });
+  if(M.extra.length){ aoa.push([]); aoa.push(['','엑셀에 없는 품목',M.extra.join(', ')]); }
+  var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '대조');
+  XLSX.writeFile(wb, S.outClient+'_'+S.ordDate+'_대조.xlsx');
 }
 
 async function checkMissingRegularClients() {
