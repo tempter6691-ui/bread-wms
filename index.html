@@ -1955,7 +1955,7 @@ async function obxMap(ecName, client){
 // 엑셀 줄 ↔ 출고지시서 품목 매칭 (품목코드 우선, 코드가 없으면 품명)
 function obxMatch(client, date){
   var items=((S.orders[date]||{})[client]||{}).items||[];
-  var rows=[]; obxGroupsFor(client,date).forEach(function(g){ g.rows.forEach(function(r){ rows.push(Object.assign({},r,{plan:0,got:0,items:[]})); }); });
+  var rows=[]; obxGroupsFor(client,date).forEach(function(g){ g.rows.forEach(function(r){ rows.push(Object.assign({},r,{plan:0,got:0,items:[],left:0})); }); });
   if(!rows.length) return null;
   var used={};
   items.forEach(function(it,idx){
@@ -1964,10 +1964,10 @@ function obxMatch(client, date){
     var hit=rows.find(function(r){ return r.code && p.ecountCode && String(p.ecountCode).trim()===r.code; });
     if(!hit){ var pn=obxNorm(p.name); hit=rows.find(function(r){ var rn=obxNorm(r.name); return rn && (pn===rn || pn.indexOf(rn)===0 || rn.indexOf(pn)===0); }); }
     if(!hit) return;
-    used[idx]=1; hit.plan+=(it.qty||0)*m; hit.got+=(it.scanned||0)*m; hit.items.push(p.name);
+    used[idx]=1; hit.plan+=(it.qty||0)*m; hit.got+=(it.scanned||0)*m; hit.items.push(p.name); if((it.scanned||0)<(it.qty||0)) hit.left++; // 2026-10-27: 수량 대신 '그 품목이 다 나갔는지'로 완료 판단
   });
-  var extra=items.filter(function(it,idx){ return !used[idx]; }).map(function(it){ var p=S.prods.find(function(q){return q.id===it.pid;}); return (p?p.name:it.pid)+' '+it.qty; });
-  var done=rows.filter(function(r){ return r.items.length && r.got>=r.qty; }).length;
+  var extra=items.filter(function(it,idx){ return !used[idx]; }).map(function(it){ var p=S.prods.find(function(q){return q.id===it.pid;}); return (p?p.name:it.pid); });
+  var done=rows.filter(function(r){ return r.items.length && !r.left; }).length;
   return {rows:rows, extra:extra, done:done, all:done===rows.length};
 }
 function obxBadge(client){
@@ -2009,32 +2009,31 @@ function obxPanel(){
   if(!S.outClient) return '';
   if(S.obxDay[S.ordDate]===undefined){ obxLoadDay(S.ordDate); return ''; }
   var M=obxMatch(S.outClient,S.ordDate); if(!M) return S.obxDay[S.ordDate]?'<div style="margin-top:1rem;font-size:.85rem;color:#d97706;">📋 올린 엑셀에 이 거래처가 없어요 (위쪽 "거래처 연결 보기"에서 연결할 수 있어요)</div>':'';
+  // 2026-10-27 수정: 수량 칸 빼고 "출고지시서에 있나/다 나갔나"만 표시
   var body=M.rows.map(function(r,i){
     var st, bg='';
     if(!r.items.length){ st='<span class="badge" style="background:#fee2e2;color:#b91c1c;">❌ 출고지시서에 없음</span>'; bg='background:#fef2f2;'; }
-    else if(r.got>=r.qty){ st='<span class="badge bg-green">✅ 완료</span>'+(r.got>r.qty?' <span style="color:#d97706;font-size:.75rem;">('+r.got+' 나감)</span>':''); bg='background:#f0fff4;'; }
-    else if(r.got>0) st='<span class="badge bg-yellow">스캔중 '+r.got+'/'+r.qty+'</span>';
+    else if(!r.left){ st='<span class="badge bg-green">✅ 완료</span>'; bg='background:#f0fff4;'; }
     else st='<span class="badge">대기</span>';
-    var warn=(r.items.length && r.plan!==r.qty)?'<div style="color:#d97706;font-size:.72rem;">⚠️ 출고지시서는 '+r.plan+'</div>':'';
     return '<tr style="'+bg+'"><td style="text-align:center;color:#888;">'+(i+1)+'</td><td>'+lcH(r.code)+'</td><td>'+lcH(r.name)+
       (r.items.length?'<div style="font-size:.72rem;color:#64748b;">↔ '+lcH(r.items.join(', '))+'</div>':'')+'</td>'+
-      '<td style="text-align:center;font-weight:700;">'+r.qty+warn+'</td><td style="font-size:.8rem;color:#64748b;">'+lcH(r.spec)+'</td><td>'+st+'</td></tr>';
+      '<td style="font-size:.8rem;color:#64748b;">'+lcH(r.spec)+'</td><td>'+st+'</td></tr>';
   }).join('');
   return '<div style="margin-top:1.2rem;border-top:2px dashed #cbd5e1;padding-top:.9rem;">'+
     '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;"><div style="font-weight:700;font-size:1rem;">📋 엑셀 대조표</div>'+
     '<span style="font-size:.85rem;font-weight:700;color:'+(M.all?'#16a34a':'#2563eb')+';">'+M.done+' / '+M.rows.length+' 줄 완료</span></div>'+
     (M.all?'<div style="background:#dcfce7;color:#166534;font-weight:800;text-align:center;padding:.6rem;border-radius:6px;margin-bottom:.5rem;font-size:1.05rem;">✅ 엑셀표 전체 완료</div>':'')+
-    '<div style="overflow-x:auto;"><table style="font-size:.88rem;"><thead><tr><th style="width:2.5em;">#</th><th>품목코드</th><th>품명</th><th style="text-align:center;">수량</th><th>규격</th><th>상태</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
+    '<div style="overflow-x:auto;"><table style="font-size:.88rem;"><thead><tr><th style="width:2.5em;">#</th><th>품목코드</th><th>품명</th><th>규격</th><th>상태</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
     (M.extra.length?'<div style="margin-top:.5rem;padding:.5rem .7rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:.85rem;">⚠️ 출고지시서엔 있는데 엑셀에 없는 품목: <b>'+lcH(M.extra.join(', '))+'</b></div>':'')+
     '</div>';
 }
 function obxDownloadDay(){
   var d=S.obxDay[S.ordDate]; if(!d) return;
-  var aoa=[['엑셀 거래처','WMS 거래처','품목코드','품명','규격','엑셀 수량','나간 수량','상태']], seen={};
+  var aoa=[['엑셀 거래처','WMS 거래처','품목코드','품명','규격','상태']], seen={};
   (d.groups||[]).forEach(function(g){
     var c=obxClientOf(g,S.ordDate); var M=c&&!seen[c]?obxMatch(c,S.ordDate):null; if(c) seen[c]=1;
-    if(!M){ g.rows.forEach(function(r){ aoa.push([g.ecName,c||'(연결 안 됨)',r.code,r.name,r.spec,r.qty,'','연결 안 됨']); }); return; }
-    M.rows.forEach(function(r){ aoa.push([g.ecName,c,r.code,r.name,r.spec,r.qty,r.got,!r.items.length?'출고지시서에 없음':r.got>=r.qty?'완료':r.got>0?'스캔중':'대기']); });
+    if(!M){ g.rows.forEach(function(r){ aoa.push([g.ecName,c||'(연결 안 됨)',r.code,r.name,r.spec,'연결 안 됨']); }); return; }
+    M.rows.forEach(function(r){ aoa.push([g.ecName,c,r.code,r.name,r.spec,!r.items.length?'출고지시서에 없음':!r.left?'완료':'대기']); });
     if(M.extra.length) aoa.push([g.ecName,c,'','엑셀에 없는 품목: '+M.extra.join(', ')]);
   });
   var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '대조');
