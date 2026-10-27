@@ -1952,92 +1952,100 @@ async function obxMap(ecName, client){
     toast('연결: '+ecName+' → '+(client||'(없음)'),'ok'); obxRefresh();
   }catch(e){ alert('저장 오류: '+e.message); }
 }
-// 엑셀 줄 ↔ 출고지시서 품목 매칭 (품목코드 우선, 코드가 없으면 품명)
+// 엑셀(거래명세표) 줄 ↔ 출고지시서 품목 매칭 (품목코드 우선, 코드가 없으면 품명)
+// 2026-10-27 변경: QR 스캔과 상관없이 "품목이 양쪽에 다 있는지"만 비교 (거래명세표 vs 출고지시서 품목 실수 걸러내기)
 function obxMatch(client, date){
   var items=((S.orders[date]||{})[client]||{}).items||[];
-  var rows=[]; obxGroupsFor(client,date).forEach(function(g){ g.rows.forEach(function(r){ rows.push(Object.assign({},r,{plan:0,got:0,items:[],left:0})); }); });
+  var rows=[]; obxGroupsFor(client,date).forEach(function(g){ g.rows.forEach(function(r){ rows.push(Object.assign({},r,{items:[]})); }); });
   if(!rows.length) return null;
   var used={};
   items.forEach(function(it,idx){
     var p=S.prods.find(function(q){return q.id===it.pid;}); if(!p) return;
-    var m=p.ecountQtyMultiplier||1;
     var hit=rows.find(function(r){ return r.code && p.ecountCode && String(p.ecountCode).trim()===r.code; });
     if(!hit){ var pn=obxNorm(p.name); hit=rows.find(function(r){ var rn=obxNorm(r.name); return rn && (pn===rn || pn.indexOf(rn)===0 || rn.indexOf(pn)===0); }); }
     if(!hit) return;
-    used[idx]=1; hit.plan+=(it.qty||0)*m; hit.got+=(it.scanned||0)*m; hit.items.push(p.name); if((it.scanned||0)<(it.qty||0)) hit.left++; // 2026-10-27: 수량 대신 '그 품목이 다 나갔는지'로 완료 판단
+    used[idx]=1; hit.items.push(p.name);
   });
-  var extra=items.filter(function(it,idx){ return !used[idx]; }).map(function(it){ var p=S.prods.find(function(q){return q.id===it.pid;}); return (p?p.name:it.pid); });
-  var done=rows.filter(function(r){ return r.items.length && !r.left; }).length;
-  return {rows:rows, extra:extra, done:done, all:done===rows.length};
+  var extra=items.filter(function(it,idx){ return !used[idx]; }).map(function(it){ var p=S.prods.find(function(q){return q.id===it.pid;}); return {name:p?p.name:it.pid, code:p&&p.ecountCode?p.ecountCode:''}; });
+  var onlyEx=rows.filter(function(r){ return !r.items.length; });
+  return {rows:rows, extra:extra, onlyEx:onlyEx, bad:onlyEx.length+extra.length, ok:onlyEx.length+extra.length===0};
 }
 function obxBadge(client){
-  var M=obxMatch(client,S.ordDate); if(!M) return '';
-  return M.all?'<span title="엑셀표 전체 완료" style="font-size:.7rem;">📋✅</span>':'<span title="엑셀표 완료 줄" style="font-size:.7rem;color:#2563eb;">📋'+M.done+'/'+M.rows.length+'</span>';
+  if(!S.obxDay[S.ordDate]) return '';
+  var M=obxMatch(client,S.ordDate);
+  if(!M) return '<span title="거래명세표 엑셀에 이 거래처가 없음" style="font-size:.7rem;color:#d97706;">📋없음</span>';
+  return M.ok?'<span title="거래명세표와 품목 일치" style="font-size:.7rem;">✅</span>':'<span title="거래명세표와 품목 다름" style="font-size:.72rem;color:#dc2626;font-weight:800;">⚠️'+M.bad+'</span>';
 }
-// 출고 화면 위쪽: 엑셀 올리기 + 거래처 연결 상태
+// 출고 화면 위쪽: 엑셀 올리기 + 다른 거래처 목록 + 거래처 연결
 function obxDayPanel(){
   var date=S.ordDate, d=S.obxDay[date];
   if(d===undefined){ obxLoadDay(date); d=null; }
-  var btn='<button class="btn btn-primary btn-sm" onclick="obxPickFile()">📤 '+(d?'엑셀 다시 올리기':'이카운트 매출 엑셀 올리기')+'</button>';
+  var btn='<button class="btn btn-primary btn-sm" onclick="obxPickFile()">📤 '+(d?'엑셀 다시 올리기':'거래명세표(매출) 엑셀 올리기')+'</button>';
   if(d===null) return '<span style="font-size:.8rem;color:#888;">📋 엑셀 대조표 불러오는 중...</span>';
-  if(!d) return '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">'+btn+'<span style="font-size:.8rem;color:var(--sub);">이카운트 "매출내역(거래처별 품목별)" 엑셀 하나만 올리면 거래처별로 나눠서 QR 스캔과 맞춰줘요</span></div>';
+  if(!d) return '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">'+btn+'<span style="font-size:.8rem;color:var(--sub);">"매출내역(거래처별 품목별)" 엑셀을 올리면 거래처마다 출고지시서와 품목이 같은지 비교해줘요</span></div>';
   var today=Object.keys(S.orders[date]||{}).filter(function(n){ return (((S.orders[date]||{})[n]||{}).items||[]).length; }).sort(function(a,b){return a.localeCompare(b,'ko');});
-  var groups=d.groups||[], mapped={}, nAll=0, nOk=0;
+  var groups=d.groups||[], mapped={}, nOk=0, nBad=0, unlinked=0, diffs=[];
   var list=groups.map(function(g){
-    var c=obxClientOf(g,date), inToday=c&&today.indexOf(c)>=0; if(c) mapped[c]=1;
-    var M=inToday?obxMatch(c,date):null; if(M){ nOk++; if(M.all) nAll++; }
+    var c=obxClientOf(g,date), inToday=c&&today.indexOf(c)>=0;
+    var M=null;
+    if(inToday && !mapped[c]){ M=obxMatch(c,date); if(M.ok) nOk++; else { nBad++; diffs.push({c:c,M:M}); } }
+    if(c) mapped[c]=1; if(!inToday) unlinked++;
     var opts='<option value="">— 연결 안 됨 —</option>'+today.map(function(n){ return '<option'+(n===c?' selected':'')+'>'+lcH(n)+'</option>'; }).join('')+
       (c&&!inToday?'<option selected>'+lcH(c)+'</option>':'');
     return '<div style="display:flex;align-items:center;gap:.4rem;padding:.2rem 0;border-bottom:1px solid #f1f5f9;font-size:.82rem;">'+
       '<span style="flex:1;min-width:0;">'+(inToday?'':'⚠️ ')+lcH(g.ecName)+' <span style="color:#94a3b8;">('+g.rows.length+'품목)</span></span>→'+
       '<select style="font-size:.8rem;padding:.15rem;max-width:45%;" onchange="obxMap(\''+esc(g.ecName)+'\',this.value)">'+opts+'</select>'+
-      '<span style="width:3.5em;text-align:right;">'+(M?(M.all?'✅':M.done+'/'+M.rows.length):'')+'</span></div>';
+      '<span style="width:2.5em;text-align:right;">'+(M?(M.ok?'✅':'⚠️'+M.bad):'')+'</span></div>';
   }).join('');
   var noExcel=today.filter(function(n){ return !mapped[n]; });
-  var bad=groups.length-nOk;
+  var diffHtml=diffs.map(function(x){
+    return '<div style="padding:.4rem .5rem;border-bottom:1px solid #fecaca;font-size:.85rem;cursor:pointer;" onclick="selObClient(\''+esc(x.c)+'\')">'+
+      '<b>'+lcH(x.c)+'</b>'+
+      (x.M.onlyEx.length?'<div style="color:#b91c1c;">📄 거래명세표에만: '+lcH(x.M.onlyEx.map(function(r){return r.name;}).join(', '))+'</div>':'')+
+      (x.M.extra.length?'<div style="color:#c2410c;">🚚 출고지시서에만: '+lcH(x.M.extra.map(function(r){return r.name;}).join(', '))+'</div>':'')+'</div>';
+  }).join('');
   return '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">'+btn+
-      '<span style="font-size:.85rem;">📋 <b>'+lcH(d.fileName||'')+'</b> · 거래처 '+groups.length+'곳 · <b style="color:#16a34a;">전체완료 '+nAll+'곳</b>'+(bad?' · <b style="color:#dc2626;">연결 안 됨 '+bad+'곳</b>':'')+'</span>'+
+      '<span style="font-size:.85rem;">📋 <b>'+lcH(d.fileName||'')+'</b> · 거래처 '+groups.length+'곳 · <b style="color:#16a34a;">일치 '+nOk+'곳</b>'+
+        (nBad?' · <b style="color:#dc2626;">다름 '+nBad+'곳</b>':'')+(unlinked?' · <b style="color:#d97706;">연결 안 됨 '+unlinked+'곳</b>':'')+'</span>'+
       '<button class="btn btn-gray btn-sm" onclick="obxDownloadDay()">⬇️ 대조 결과 엑셀</button>'+
       '<button class="btn btn-gray btn-sm" onclick="obxDeleteDay()">🗑</button></div>'+
-    '<details'+(bad?' open':'')+' style="margin-top:.4rem;"><summary style="cursor:pointer;font-size:.82rem;color:#2563eb;">거래처 연결 보기/고치기</summary>'+
-      '<div style="max-height:260px;overflow:auto;margin-top:.3rem;">'+list+'</div>'+
-      (noExcel.length?'<div style="font-size:.8rem;color:#d97706;margin-top:.3rem;">⚠️ 오늘 출고지시서엔 있는데 엑셀에 없는 거래처: '+lcH(noExcel.join(', '))+'</div>':'')+
-    '</details>';
+    (diffs.length?'<div style="margin-top:.5rem;border:2px solid #fecaca;border-radius:6px;background:#fff;"><div style="background:#fef2f2;color:#b91c1c;font-weight:800;padding:.4rem .6rem;">⚠️ 품목이 다른 거래처 '+diffs.length+'곳 (누르면 그 거래처로 이동)</div>'+diffHtml+'</div>':
+      (nOk&&!unlinked&&!noExcel.length?'<div style="margin-top:.5rem;background:#dcfce7;color:#166534;font-weight:800;padding:.5rem .6rem;border-radius:6px;">✅ 모든 거래처 품목 일치</div>':''))+
+    (noExcel.length?'<div style="font-size:.82rem;color:#d97706;margin-top:.4rem;">⚠️ 출고지시서엔 있는데 거래명세표 엑셀에 없는 거래처: <b>'+lcH(noExcel.join(', '))+'</b></div>':'')+
+    '<details'+(unlinked?' open':'')+' style="margin-top:.4rem;"><summary style="cursor:pointer;font-size:.82rem;color:#2563eb;">거래처 연결 보기/고치기</summary>'+
+      '<div style="max-height:260px;overflow:auto;margin-top:.3rem;">'+list+'</div></details>';
 }
-// 거래처 고르면 품목표 아래에 나오는 그 거래처 엑셀 줄
+// 거래처 고르면 품목표 아래에 나오는 그 거래처 비교표
 function obxPanel(){
   if(!S.outClient) return '';
   if(S.obxDay[S.ordDate]===undefined){ obxLoadDay(S.ordDate); return ''; }
-  var M=obxMatch(S.outClient,S.ordDate); if(!M) return S.obxDay[S.ordDate]?'<div style="margin-top:1rem;font-size:.85rem;color:#d97706;">📋 올린 엑셀에 이 거래처가 없어요 (위쪽 "거래처 연결 보기"에서 연결할 수 있어요)</div>':'';
-  // 2026-10-27 수정: 수량 칸 빼고 "출고지시서에 있나/다 나갔나"만 표시
-  var body=M.rows.map(function(r,i){
-    var st, bg='';
-    if(!r.items.length){ st='<span class="badge" style="background:#fee2e2;color:#b91c1c;">❌ 출고지시서에 없음</span>'; bg='background:#fef2f2;'; }
-    else if(!r.left){ st='<span class="badge bg-green">✅ 완료</span>'; bg='background:#f0fff4;'; }
-    else st='<span class="badge">대기</span>';
-    return '<tr style="'+bg+'"><td style="text-align:center;color:#888;">'+(i+1)+'</td><td>'+lcH(r.code)+'</td><td>'+lcH(r.name)+
-      (r.items.length?'<div style="font-size:.72rem;color:#64748b;">↔ '+lcH(r.items.join(', '))+'</div>':'')+'</td>'+
-      '<td style="font-size:.8rem;color:#64748b;">'+lcH(r.spec)+'</td><td>'+st+'</td></tr>';
+  var M=obxMatch(S.outClient,S.ordDate); if(!M) return S.obxDay[S.ordDate]?'<div style="margin-top:1rem;font-size:.85rem;color:#d97706;">📋 올린 거래명세표 엑셀에 이 거래처가 없어요 (위쪽 "거래처 연결 보기"에서 연결할 수 있어요)</div>':'';
+  var body=M.rows.map(function(r){
+    var ok=r.items.length>0;
+    return '<tr style="'+(ok?'':'background:#fef2f2;')+'"><td>'+lcH(r.code)+'</td><td>'+lcH(r.name)+'</td><td>'+(ok?lcH(r.items.join(', ')):'<span style="color:#b91c1c;">—</span>')+'</td>'+
+      '<td>'+(ok?'<span class="badge bg-green">✅ 일치</span>':'<span class="badge" style="background:#fee2e2;color:#b91c1c;">❌ 출고지시서에 없음</span>')+'</td></tr>';
+  }).join('')+M.extra.map(function(x){
+    return '<tr style="background:#fff7ed;"><td>'+lcH(x.code)+'</td><td><span style="color:#c2410c;">—</span></td><td>'+lcH(x.name)+'</td>'+
+      '<td><span class="badge" style="background:#ffedd5;color:#c2410c;">❌ 거래명세표에 없음</span></td></tr>';
   }).join('');
   return '<div style="margin-top:1.2rem;border-top:2px dashed #cbd5e1;padding-top:.9rem;">'+
-    '<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem;"><div style="font-weight:700;font-size:1rem;">📋 엑셀 대조표</div>'+
-    '<span style="font-size:.85rem;font-weight:700;color:'+(M.all?'#16a34a':'#2563eb')+';">'+M.done+' / '+M.rows.length+' 줄 완료</span></div>'+
-    (M.all?'<div style="background:#dcfce7;color:#166534;font-weight:800;text-align:center;padding:.6rem;border-radius:6px;margin-bottom:.5rem;font-size:1.05rem;">✅ 엑셀표 전체 완료</div>':'')+
-    '<div style="overflow-x:auto;"><table style="font-size:.88rem;"><thead><tr><th style="width:2.5em;">#</th><th>품목코드</th><th>품명</th><th>규격</th><th>상태</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
-    (M.extra.length?'<div style="margin-top:.5rem;padding:.5rem .7rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;font-size:.85rem;">⚠️ 출고지시서엔 있는데 엑셀에 없는 품목: <b>'+lcH(M.extra.join(', '))+'</b></div>':'')+
+    '<div style="font-weight:700;font-size:1rem;margin-bottom:.6rem;">📋 거래명세표 ↔ 출고지시서 품목 비교</div>'+
+    (M.ok?'<div style="background:#dcfce7;color:#166534;font-weight:800;text-align:center;padding:.6rem;border-radius:6px;margin-bottom:.5rem;font-size:1.05rem;">✅ 품목 일치 ('+M.rows.length+'품목)</div>':
+      '<div style="background:#fee2e2;color:#b91c1c;font-weight:800;text-align:center;padding:.6rem;border-radius:6px;margin-bottom:.5rem;font-size:1.05rem;">⚠️ 품목 다름 '+M.bad+'개</div>')+
+    '<div style="overflow-x:auto;"><table style="font-size:.88rem;"><thead><tr><th>품목코드</th><th>거래명세표(엑셀)</th><th>출고지시서</th><th>결과</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
     '</div>';
 }
 function obxDownloadDay(){
   var d=S.obxDay[S.ordDate]; if(!d) return;
-  var aoa=[['엑셀 거래처','WMS 거래처','품목코드','품명','규격','상태']], seen={};
+  var aoa=[['엑셀 거래처','WMS 거래처','품목코드','거래명세표 품명','출고지시서 품명','결과']], seen={};
   (d.groups||[]).forEach(function(g){
     var c=obxClientOf(g,S.ordDate); var M=c&&!seen[c]?obxMatch(c,S.ordDate):null; if(c) seen[c]=1;
-    if(!M){ g.rows.forEach(function(r){ aoa.push([g.ecName,c||'(연결 안 됨)',r.code,r.name,r.spec,'연결 안 됨']); }); return; }
-    M.rows.forEach(function(r){ aoa.push([g.ecName,c,r.code,r.name,r.spec,!r.items.length?'출고지시서에 없음':!r.left?'완료':'대기']); });
-    if(M.extra.length) aoa.push([g.ecName,c,'','엑셀에 없는 품목: '+M.extra.join(', ')]);
+    if(!M){ g.rows.forEach(function(r){ aoa.push([g.ecName,c||'(연결 안 됨)',r.code,r.name,'','연결 안 됨']); }); return; }
+    M.rows.forEach(function(r){ aoa.push([g.ecName,c,r.code,r.name,r.items.join(', '),r.items.length?'일치':'출고지시서에 없음']); });
+    M.extra.forEach(function(x){ aoa.push([g.ecName,c,x.code,'',x.name,'거래명세표에 없음']); });
   });
   var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '대조');
-  XLSX.writeFile(wb, '출고대조_'+S.ordDate+'.xlsx');
+  XLSX.writeFile(wb, '품목대조_'+S.ordDate+'.xlsx');
 }
 
 async function checkMissingRegularClients() {
