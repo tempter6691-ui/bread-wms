@@ -1398,13 +1398,15 @@ function stkBaseLabel(){
 }
 async function stkDraw(){
   var el=document.getElementById('stk-body'); if(!el) return;
+  setTimeout(audDraw,0);
   if(STK.base===undefined){ el.innerHTML='<div class="card">⏳ 불러오는 중...</div>'; await stkLoadBase(); el=document.getElementById('stk-body'); if(!el) return; }
   var neg=S.prods.filter(function(p){ return !isNoStock(p.id) && (S.inv[p.id]||0)<0; }).sort(function(a,b){return (S.inv[a.id]||0)-(S.inv[b.id]||0);});
   var top='<div class="card" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;">'+
     (STK.base?'<span style="font-size:.95rem;">📌 기준 재고: <b>'+stkBaseLabel()+'</b>'+(STK.base.memo?' <span style="color:var(--sub);">('+lcH(STK.base.memo)+')</span>':'')+'</span>'+
       '<button class="btn btn-primary" onclick="stkRun()" style="font-size:1rem;padding:.55rem 1.2rem;">📦 재고 점검하기</button>'
       :'<span style="font-size:.95rem;color:#b91c1c;font-weight:700;">📌 아직 기준 재고가 없어요</span>')+
-    '<button class="btn btn-gray" onclick="stkSaveBase()" style="margin-left:auto;">📌 지금 재고를 기준으로 저장</button>'+
+    '<button class="btn" style="margin-left:auto;background:#7c3aed;color:#fff;" onclick="AUD.open=!AUD.open;audDraw();">📋 재고조사 입력</button>'+
+    '<button class="btn btn-gray" onclick="stkSaveBase()">📌 지금 재고를 기준으로 저장</button>'+
     '<div style="flex-basis:100%;font-size:.8rem;color:var(--sub);">기준은 재고조사(실사)로 재고를 맞춘 직후에 저장하세요. 기준 이후 기록만 읽어서 계산해요 (기준이 오래될수록 읽는 양이 많아져요 — 매달 재고조사 후 새로 저장 권장).</div>'+
   '</div>';
   var negHtml='<div class="card" style="border:2px solid '+(neg.length?'#fecaca':'#bbf7d0')+';">'+
@@ -1418,13 +1420,20 @@ async function stkDraw(){
     else res='<div class="card" style="border:2px solid #fecaca;">'+
       '<div style="font-size:1.05rem;font-weight:700;margin-bottom:.4rem;">🔴 기록과 재고가 안 맞는 제품 — '+STK.rows.length+'개 <span style="font-size:.8rem;font-weight:400;color:var(--sub);">(기록 '+STK.nLogs+'건 확인)</span></div>'+
       '<div style="font-size:.85rem;color:var(--sub);margin-bottom:.5rem;">기록 없이 재고 숫자가 바뀐 경우예요 (콘솔로 직접 수정, 기준 전 기록을 고치거나 지움, 백업 복원 등). 어느 쪽이 맞는지 실물을 확인한 뒤, 기록이 맞으면 [계산값으로]를 눌러요.</div>'+
-      '<div style="overflow-x:auto;"><table style="font-size:.92rem;"><thead><tr><th>제품</th><th style="text-align:center;">기준</th><th style="text-align:center;">+입고</th><th style="text-align:center;">−입고취소</th><th style="text-align:center;">−출고</th><th style="text-align:center;">계산값</th><th style="text-align:center;">지금 재고</th><th style="text-align:center;">차이</th><th></th></tr></thead><tbody>'+
-      STK.rows.map(function(r){ return '<tr><td style="font-weight:600;">'+lcH(r.name)+'</td><td style="text-align:center;">'+r.base+'</td><td style="text-align:center;color:#16a34a;">'+r.inb+'</td><td style="text-align:center;">'+r.cancel+'</td><td style="text-align:center;">'+r.out+'</td>'+
+      '<div style="overflow-x:auto;"><table style="font-size:.92rem;"><thead><tr><th>제품</th><th style="text-align:center;">기준</th><th style="text-align:center;">+입고</th><th style="text-align:center;">−입고취소</th><th style="text-align:center;">−출고</th><th style="text-align:center;">재고조사</th><th style="text-align:center;">계산값</th><th style="text-align:center;">지금 재고</th><th style="text-align:center;">차이</th><th></th></tr></thead><tbody>'+
+      STK.rows.map(function(r){ return '<tr><td style="font-weight:600;">'+lcH(r.name)+'</td><td style="text-align:center;">'+r.base+'</td><td style="text-align:center;color:#16a34a;">'+r.inb+'</td><td style="text-align:center;">'+r.cancel+'</td><td style="text-align:center;">'+r.out+'</td><td style="text-align:center;">'+(r.adj?(r.adj>0?'+':'')+r.adj:'')+'</td>'+
         '<td style="text-align:center;font-weight:700;">'+r.calc+'</td><td style="text-align:center;font-weight:700;">'+r.cur+'</td><td style="text-align:center;font-weight:800;color:#dc2626;">'+(r.cur-r.calc>0?'+':'')+(r.cur-r.calc)+'</td>'+
         '<td><button class="btn btn-gray btn-sm" onclick="stkFix(\''+r.pid+'\')">계산값으로</button></td></tr>'; }).join('')+
       '</tbody></table></div></div>';
   }
-  el.innerHTML=top+(STK.busy?'<div class="card" style="text-align:center;font-size:1.1rem;">⏳ 재고 점검 중...</div>':res)+negHtml;
+  el.innerHTML=top+'<div id="aud-body"></div>'+(STK.busy?'<div class="card" style="text-align:center;font-size:1.1rem;">⏳ 재고 점검 중...</div>':res)+negHtml;
+}
+async function stkSaveBaseRaw(memo){
+  var iv=await db.collection('inventory').get(), qty={};
+  iv.forEach(function(d){ qty[d.id]=d.data().qty||0; });
+  await db.collection('invBase').doc('current').set({at:firebase.firestore.FieldValue.serverTimestamp(), qty:qty, memo:memo||''});
+  STK.base=undefined; STK.rows=null; await stkLoadBase();
+  return Object.keys(qty).length;
 }
 async function stkSaveBase(){
   var memo=prompt('지금 재고를 기준으로 저장할게요.\n재고조사(실사)로 재고를 맞춘 직후에 하는 게 좋아요.\n메모 (예: 10월말 재고조사):', '');
@@ -1452,6 +1461,7 @@ async function stkRun(){
       if(seen[d.id]) return; seen[d.id]=1; n++;
       var x=d.data(); if(!x.pid) return;
       var r=D[x.pid]=D[x.pid]||{inb:0,cancel:0,out:0};
+      if(x.type==='adjust'){ r.adj=(r.adj||0)+(x.delta||0); return; } // 재고조사 조정
       if(x.type==='inbound') r.inb+=x.qty||0;
       else if(x.type==='outbound'){
         if(x.via==='inboundCancel') r.cancel+=x.qty||0;
@@ -1464,14 +1474,144 @@ async function stkRun(){
     Object.keys(ids).forEach(function(pid){
       if(isNoStock(pid)) return;
       var p=S.prods.find(function(q){return q.id===pid;}); if(!p) return;
-      var r=D[pid]||{inb:0,cancel:0,out:0}, b=base[pid]||0, calc=b+r.inb-r.cancel-r.out, c=cur[pid]||0;
-      if(Math.abs(calc-c)>1e-9) rows.push({pid:pid,name:p.name,base:b,inb:r.inb,cancel:r.cancel,out:r.out,calc:calc,cur:c});
+      var r=D[pid]||{inb:0,cancel:0,out:0}, b=base[pid]||0, calc=b+r.inb-r.cancel-r.out+(r.adj||0), c=cur[pid]||0;
+      if(Math.abs(calc-c)>1e-9) rows.push({pid:pid,name:p.name,base:b,inb:r.inb,cancel:r.cancel,out:r.out,adj:r.adj||0,calc:calc,cur:c});
     });
     rows.sort(function(a,b){ return Math.abs(b.cur-b.calc)-Math.abs(a.cur-a.calc); });
     STK.rows=rows; STK.nLogs=n;
   }catch(e){ alert('재고 점검 오류: '+e.message); }
   STK.busy=false; stkDraw();
 }
+// ── 📋 재고조사 입력 (2026-10-28 추가) ─────────────────────────────
+// 실사 수량을 표에 입력하거나 엑셀로 올리면 → 시스템 재고와 차이 미리보기 → [적용] 시
+//  · 재고를 실사 수량으로 맞춤 (차이만큼 increment)
+//  · 로그: type:'adjust'(입고/출고 집계·이카운트·비즈모아엔 안 섞임), delta, oldQty, newQty, audit:true
+//  · 체크하면 바로 새 기준 재고로 저장
+// 칸을 비워두면 = 안 셈(그대로). 0을 넣으면 0개로 맞춤. 재고관리 안 함 품목은 목록에서 제외.
+var AUD={open:false, vals:{}, q:'', onlyDiff:false};
+function audProds(){
+  return S.prods.filter(function(p){ return !isNoStock(p.id); }).slice().sort(function(a,b){ return String(a.cat||'').localeCompare(String(b.cat||''),'ko') || a.name.localeCompare(b.name,'ko'); });
+}
+function audDraw(){
+  var el=document.getElementById('aud-body'); if(!el) return;
+  if(!AUD.open){ el.innerHTML=''; return; }
+  var ps=audProds(), q=AUD.q.trim().toLowerCase();
+  var entered=0, changed=0, plus=0, minus=0;
+  ps.forEach(function(p){ var v=AUD.vals[p.id]; if(v===undefined||v==='') return; entered++; var d=v-(S.inv[p.id]||0); if(d){ changed++; if(d>0) plus+=d; else minus-=d; } });
+  var rows=ps.filter(function(p){
+    if(q && p.name.toLowerCase().indexOf(q)<0 && String(p.cat||'').toLowerCase().indexOf(q)<0) return false;
+    if(AUD.onlyDiff){ var v=AUD.vals[p.id]; if(v===undefined||v===''||v===(S.inv[p.id]||0)) return false; }
+    return true;
+  });
+  var lastCat=null;
+  var body=rows.map(function(p){
+    var cur=S.inv[p.id]||0, v=AUD.vals[p.id], has=!(v===undefined||v===''), d=has?v-cur:0;
+    var catRow=(p.cat!==lastCat)?'<tr><td colspan="5" style="background:#f1f5f9;font-weight:700;font-size:.82rem;">'+lcH(p.cat||'기타')+'</td></tr>':''; lastCat=p.cat;
+    return catRow+'<tr id="aud-r-'+p.id+'" style="'+(has&&d?'background:#fefce8;':'')+'"><td>'+lcH(p.name)+'</td><td style="text-align:center;color:#64748b;">'+lcH(p.unit||'')+'</td>'+
+      '<td style="text-align:center;">'+cur+'</td>'+
+      '<td style="text-align:center;"><input type="number" inputmode="numeric" value="'+(has?v:'')+'" placeholder="-" style="width:5.5em;text-align:center;padding:.25rem;" oninput="audSet(\''+p.id+'\',this.value)"></td>'+
+      '<td id="aud-d-'+p.id+'" style="text-align:center;font-weight:800;color:'+(d>0?'#16a34a':d<0?'#dc2626':'#94a3b8')+';">'+(has?(d>0?'+':'')+d:'')+'</td></tr>';
+  }).join('');
+  el.innerHTML='<div class="card" style="border:2px solid #c4b5fd;">'+
+    '<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem;">'+
+      '<div style="font-size:1.05rem;font-weight:800;">📋 재고조사 입력</div>'+
+      '<button class="btn btn-gray btn-sm" onclick="audTemplate()">⬇️ 실사표 엑셀 받기</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="audPick()">📤 실사 엑셀 올리기</button>'+
+      '<button class="btn btn-gray btn-sm" onclick="if(confirm(\'입력한 실사 수량을 다 지울까요?\')){AUD.vals={};audDraw();}">🧹 입력 지우기</button>'+
+      '<span style="margin-left:auto;font-size:.85rem;" id="aud-sum">입력 <b>'+entered+'</b>개 · 차이 <b style="color:#dc2626;">'+changed+'</b>개 (<span style="color:#16a34a;">+'+plus+'</span> / <span style="color:#dc2626;">-'+minus+'</span>)</span>'+
+    '</div>'+
+    '<div style="font-size:.8rem;color:var(--sub);margin-bottom:.5rem;">실사표 엑셀을 받아서 "실사수량" 칸만 채워 올리거나, 아래 표에 바로 입력하세요. <b>빈칸 = 안 셈(그대로)</b>, 0 = 0개. 재고관리 안 함 품목은 빠져 있어요.</div>'+
+    '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem;">'+
+      '<input type="text" placeholder="제품/분류 검색..." value="'+lcH(AUD.q)+'" oninput="AUD.q=this.value;audDraw();var e=this;setTimeout(function(){var n=document.getElementById(\'aud-q\');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);}},0);" id="aud-q" style="flex:1;min-width:180px;padding:.4rem;">'+
+      '<label style="font-size:.85rem;cursor:pointer;"><input type="checkbox" '+(AUD.onlyDiff?'checked':'')+' onchange="AUD.onlyDiff=this.checked;audDraw();"> 차이 있는 것만</label>'+
+    '</div>'+
+    '<div style="max-height:480px;overflow:auto;border:1px solid #e2e8f0;border-radius:6px;"><table style="font-size:.9rem;"><thead style="position:sticky;top:0;background:#fff;z-index:1;"><tr><th>제품</th><th style="text-align:center;">단위</th><th style="text-align:center;">시스템 재고</th><th style="text-align:center;">실사 수량</th><th style="text-align:center;">차이</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
+    '<div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.7rem;">'+
+      '<input type="text" id="aud-memo" placeholder="메모 (예: 10월말 재고조사)" style="flex:1;min-width:200px;padding:.45rem;">'+
+      '<label style="font-size:.85rem;cursor:pointer;"><input type="checkbox" id="aud-base" checked> 적용 후 기준 재고로 저장</label>'+
+      '<button class="btn" style="background:#7c3aed;color:#fff;font-size:1rem;padding:.55rem 1.3rem;" onclick="audApply()">✅ 재고조사 적용</button>'+
+    '</div></div>';
+}
+function audSet(pid, v){
+  if(v===''||v==null) delete AUD.vals[pid]; else { var n=Number(v); if(isNaN(n)) return; AUD.vals[pid]=n; }
+  var cur=S.inv[pid]||0, has=AUD.vals[pid]!==undefined, d=has?AUD.vals[pid]-cur:0;
+  var td=document.getElementById('aud-d-'+pid); if(td){ td.textContent=has?(d>0?'+':'')+d:''; td.style.color=d>0?'#16a34a':d<0?'#dc2626':'#94a3b8'; }
+  var tr=document.getElementById('aud-r-'+pid); if(tr) tr.style.background=has&&d?'#fefce8':'';
+  var entered=0, changed=0, plus=0, minus=0;
+  Object.keys(AUD.vals).forEach(function(id){ if(isNoStock(id)) return; entered++; var dd=AUD.vals[id]-(S.inv[id]||0); if(dd){ changed++; if(dd>0) plus+=dd; else minus-=dd; } });
+  var sm=document.getElementById('aud-sum'); if(sm) sm.innerHTML='입력 <b>'+entered+'</b>개 · 차이 <b style="color:#dc2626;">'+changed+'</b>개 (<span style="color:#16a34a;">+'+plus+'</span> / <span style="color:#dc2626;">-'+minus+'</span>)';
+}
+function audTemplate(){
+  var aoa=[['ID','분류','제품명','단위','시스템재고','실사수량']];
+  audProds().forEach(function(p){ aoa.push([p.id,p.cat||'',p.name,p.unit||'',S.inv[p.id]||0,'']); });
+  var ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:7},{wch:16},{wch:30},{wch:6},{wch:10},{wch:10}];
+  var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '실사표');
+  XLSX.writeFile(wb, '실사표_'+chkFmt(new Date())+'.xlsx');
+}
+function audPick(){
+  var inp=document.getElementById('audFile');
+  if(!inp){ inp=document.createElement('input'); inp.type='file'; inp.id='audFile'; inp.accept='.xlsx,.xls,.csv'; inp.style.display='none';
+    inp.onchange=function(){ var f=inp.files[0]; inp.value=''; if(f) audRead(f); }; document.body.appendChild(inp); }
+  inp.click();
+}
+function audRead(f){
+  var fr=new FileReader();
+  fr.onload=function(){
+    try{
+      var wb=XLSX.read(new Uint8Array(fr.result),{type:'array'});
+      var aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true,blankrows:false});
+      var h=-1,ci=-1,cn=-1,cq=-1;
+      for(var i=0;i<Math.min(aoa.length,10)&&h<0;i++){
+        var r=aoa[i].map(function(v){return String(v).replace(/\s/g,'');});
+        cq=r.findIndex(function(v){return v.indexOf('실사')>=0;}); if(cq<0) cq=r.findIndex(function(v){return v==='수량'||v==='재고';});
+        cn=r.findIndex(function(v){return v==='제품명'||v==='품명'||v==='품목명';}); ci=r.indexOf('ID');
+        if(cq>=0&&(cn>=0||ci>=0)) h=i;
+      }
+      if(h<0){ alert('엑셀에서 "제품명"과 "실사수량" 제목 줄을 못 찾았어요. 실사표 엑셀 양식을 받아서 써주세요.'); return; }
+      var norm=function(x){ return String(x||'').replace(/\s+/g,'').toLowerCase(); };
+      var ok=0, skip=0, notFound=[];
+      for(var j=h+1;j<aoa.length;j++){
+        var a=aoa[j], v=a[cq]; if(v===''||v==null){ skip++; continue; }
+        var n=Number(String(v).replace(/,/g,'')); if(isNaN(n)){ skip++; continue; }
+        var id=ci>=0?String(a[ci]).trim():'', nm=cn>=0?String(a[cn]).trim():'';
+        var p=(id&&S.prods.find(function(x){return x.id===id;}))||S.prods.find(function(x){return x.name===nm;})||S.prods.find(function(x){return norm(x.name)===norm(nm);});
+        if(!p){ notFound.push(nm||id); continue; }
+        if(isNoStock(p.id)){ skip++; continue; }
+        AUD.vals[p.id]=n; ok++;
+      }
+      AUD.open=true; audDraw();
+      alert('실사 수량 '+ok+'개 불러왔어요.'+(notFound.length?'\n\n⚠️ 제품을 못 찾은 줄 '+notFound.length+'개:\n'+notFound.slice(0,20).join(', '):'')+'\n\n표에서 차이를 확인하고 [재고조사 적용]을 누르세요.');
+    }catch(e){ alert('엑셀 읽기 오류: '+e.message); }
+  };
+  fr.readAsArrayBuffer(f);
+}
+async function audApply(){
+  var ids=Object.keys(AUD.vals).filter(function(id){ return !isNoStock(id) && S.prods.find(function(p){return p.id===id;}); });
+  if(!ids.length){ alert('입력한 실사 수량이 없어요'); return; }
+  var memo=((document.getElementById('aud-memo')||{}).value||'').trim()||(chkFmt(new Date())+' 재고조사');
+  var saveBase=!!(document.getElementById('aud-base')||{}).checked;
+  try{
+    var iv=await db.collection('inventory').get(), cur={};
+    iv.forEach(function(d){ cur[d.id]=d.data().qty||0; });
+    var ch=ids.map(function(id){ var p=S.prods.find(function(x){return x.id===id;}); return {pid:id,name:p.name,old:cur[id]||0,neu:AUD.vals[id],d:AUD.vals[id]-(cur[id]||0)}; }).filter(function(x){ return x.d!==0; });
+    if(!confirm('재고조사 적용\n입력 '+ids.length+'개 중 차이 있는 '+ch.length+'개 제품의 재고를 실사 수량으로 바꿀게요.'+(saveBase?'\n적용 후 기준 재고로 저장해요.':'')+'\n\n메모: '+memo)) return;
+    var today=chkFmt(new Date());
+    for(var i=0;i<ch.length;i+=200){
+      var b=db.batch();
+      ch.slice(i,i+200).forEach(function(x){
+        b.set(db.collection('inventory').doc(x.pid),{qty:firebase.firestore.FieldValue.increment(x.d)},{merge:true});
+        b.set(db.collection('logs').doc(),{type:'adjust',audit:true,adjust:true,pid:x.pid,pname:x.name,delta:x.d,qty:Math.abs(x.d),oldQty:x.old,newQty:x.neu,reason:'재고조사',memo:memo,date:today,ts:firebase.firestore.FieldValue.serverTimestamp()});
+      });
+      await b.commit();
+    }
+    ch.forEach(function(x){ S.inv[x.pid]=(S.inv[x.pid]||0)+x.d; });
+    var nb=0; if(saveBase) nb=await stkSaveBaseRaw(memo);
+    AUD.vals={}; AUD.open=false;
+    toast('✅ 재고조사 적용: '+ch.length+'개 제품'+(saveBase?' · 기준 저장':''),'ok');
+    stkDraw();
+  }catch(e){ alert('적용 오류: '+e.message); }
+}
+
 async function stkFix(pid){
   var r=(STK.rows||[]).find(function(x){return x.pid===pid;}); if(!r) return;
   var d=r.calc-r.cur;
@@ -4713,7 +4853,7 @@ async function showProdHistory(pid, pname) {
       var tsDateStr = t ? (t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0')) : '날짜없음';
       // 2026-10-16 추가: 제품 수정으로 바꾼 재고(조정)는 입고/출고 합계에 섞지 않고 따로 보여줌
       if(data.adjust || /수정으로 재고 변경/.test(data.memo||'')){
-        adjRows.push({date: data.date || tsDateStr, diff: (data.type==='inbound'?1:-1)*(data.qty||0), reason: data.reason || (data.memo||'').replace(/^수정으로 재고 변경 \([^)]*\)\s*-?\s*/,'') || '(사유 없음)', memo: data.memo||''});
+        adjRows.push({date: data.date || tsDateStr, diff: (data.type==='adjust'?(data.delta||0):(data.type==='inbound'?1:-1)*(data.qty||0)), reason: data.reason || (data.memo||'').replace(/^수정으로 재고 변경 \([^)]*\)\s*-?\s*/,'') || '(사유 없음)', memo: data.memo||''});
         return;
       }
       if(data.type === 'inbound'){
@@ -5199,6 +5339,7 @@ async function loadLogs() {
     snap.forEach(function(d){
       var r=d.data();
       if(r.type!=='inbound' && r.type!=='outbound') return;
+      if(r.adjust) return; // 2026-10-28: 제품 수정/재고조사로 바꾼 재고(조정)는 입고 기록에 안 섞음
       var t=r.ts&&r.ts.toDate?r.ts.toDate():null;
       if(!t) return;
       var dateStr=t.getFullYear()+'-'+(t.getMonth()+1).toString().padStart(2,'0')+'-'+t.getDate().toString().padStart(2,'0');
