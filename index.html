@@ -2240,7 +2240,9 @@ function obxMatch(client, date){
   items.forEach(function(it,idx){
     var p=S.prods.find(function(q){return q.id===it.pid;}); if(!p) return;
     var hit=rows.find(function(r){ return r.code && p.ecountCode && String(p.ecountCode).trim()===r.code; });
-    if(!hit){ var pn=obxNorm(p.name); hit=rows.find(function(r){ var rn=obxNorm(r.name); return rn && (pn===rn || pn.indexOf(rn)===0 || rn.indexOf(pn)===0); }); }
+    // 2026-10-29: 품명 비교 때 괄호·규격 표기 무시 — "슈(피)(150개/box)" ↔ "슈피"
+    if(!hit){ var nk=function(x){ return obxNorm(x).replace(/\((\d+\s*개|\d+\s*줄|\d+\s*kg)[^)]*\)/gi,'').replace(/[()\[\]]/g,''); };
+      var pn=nk(p.name); hit=rows.find(function(r){ var rn=nk(r.name); return rn && (pn===rn || pn.indexOf(rn)===0 || rn.indexOf(pn)===0); }); }
     if(!hit) return;
     used[idx]=1; hit.items.push(p.name);
   });
