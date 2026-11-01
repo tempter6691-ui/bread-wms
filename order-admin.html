@@ -790,6 +790,13 @@ async function exportToOrder(id) {
     var dupMsg = buildExportDupConfirmMsg(id, resolvedClient, dateStr, existingItems, orderContributions, prevContribution);
     if (dupMsg && !confirm(dupMsg)) return;
 
+    // 2026-11-02 수정: 위에서 읽은 뒤 확인창을 누르는 사이(몇 초~몇 분)에 창고에서 스캔하거나 다른 주문이 들어오면
+    // 예전엔 옛날 내용으로 거래처 카드 전체를 덮어써서 스캔 기록·추가 품목이 사라질 수 있었음 → 트랜잭션으로 서버 최신값 위에 다시 계산해서 저장
+    await loadProdCatMap();
+    var buildMerged = function(existingClientData) {
+    var existingItems = (existingClientData && existingClientData.items) || [];
+    var orderContributions = Object.assign({}, (existingClientData && existingClientData.orderContributions) || {});
+    var prevContribution = orderContributions[id];
     var mergedMap = {};
     existingItems.forEach(function(item){ mergedMap[item.pid] = Object.assign({}, item); });
 
@@ -820,16 +827,12 @@ async function exportToOrder(id) {
     // 2026-10-26 추가: 재등록으로 수량이 이미 출고(스캔/완료)된 수량보다 작아지면 막음
     // (출고지시서 수량만 줄고 이미 빠진 재고·출고로그는 그대로 남아 어긋남). 늘어난 경우엔 완료 표시를 풀어 다시 출고되게.
     var underShipped = Object.keys(mergedMap).map(function(k){ return mergedMap[k]; }).filter(function(it){ return (it.scanned||0) > Math.max(0, it.qty||0); });
-    if (underShipped.length) {
-      alert('⛔ 이미 출고된 수량보다 적게 바뀌는 품목이 있어서 등록을 멈췄어요:\n'+underShipped.map(function(it){ return '· '+it.pid+' 출고 '+(it.scanned||0)+'개 → 새 수량 '+Math.max(0,it.qty||0)+'개'; }).join('\n')+'\n\n출고관리 화면에서 ↩️로 먼저 취소한 뒤 다시 등록해주세요.');
-      return;
-    }
+    if (underShipped.length) return {under: underShipped};
     Object.keys(mergedMap).forEach(function(k){ var it=mergedMap[k]; if((it.scanned||0)>0 || it.done) it.done = (it.scanned||0) >= (it.qty||0); });
 
     // 수량이 0 이하로 떨어진 항목은 정리 (재등록 과정에서 빼고 다시 더했는데 0이 된 경우)
     var finalItems = Object.keys(mergedMap).map(function(k){ return mergedMap[k]; }).filter(function(it){ return (it.qty||0) > 0; });
     // 같은 품목군(분류)끼리 자동으로 묶어서 정렬
-    await loadProdCatMap();
     finalItems = groupItemsByCat(finalItems);
 
     // 이 주문이 이번에 반영한 수량을 기록 (다음에 또 재등록할 때 이 값을 빼고 다시 더함)
@@ -846,7 +849,19 @@ async function exportToOrder(id) {
     // 2026-10-05 수정: 처음 등록되는 거래처만 등록 시각(addedAt) 저장 → 출고지시서 맨 위에 표시
     // 이미 있는 거래처에 주문을 합치거나 재등록할 때는 기존 순서를 유지하도록 addedAt을 건드리지 않음(merge:true)
     if (!existingClientData) clientData.addedAt = Date.now();
-    await ordRef.set({ [resolvedClient]: clientData }, { merge: true });
+    return {clientData: clientData};
+    };
+    var txOut = null;
+    await db.runTransaction(async function(tx){
+      var fresh = await tx.get(ordRef);
+      var freshClient = fresh.exists ? (fresh.data()||{})[resolvedClient] : null;
+      txOut = buildMerged(freshClient);
+      if (txOut.clientData) tx.set(ordRef, { [resolvedClient]: txOut.clientData }, { merge: true });
+    });
+    if (txOut.under) {
+      alert('⛔ 이미 출고된 수량보다 적게 바뀌는 품목이 있어서 등록을 멈췄어요:\n'+txOut.under.map(function(it){ return '· '+(it.pname||it.pid)+' 출고 '+(it.scanned||0)+'개 → 새 수량 '+Math.max(0,it.qty||0)+'개'; }).join('\n')+'\n\n출고관리 화면에서 ↩️로 먼저 취소한 뒤 다시 등록해주세요.');
+      return;
+    }
 
     // 발주 상태를 exported로 업데이트
     // 2026-10-05 수정: 실제로 반영한 날짜/거래처명도 기록 → 배송일 입력란을 나중에 바꿔도 취소 시 정확한 문서에서 차감
