@@ -2885,6 +2885,7 @@ function fullMemo(name, memo){
   return f ? (rest ? f+' / '+rest : f) : rest;
 }
 
+var CLIENT_TAGS = {'루클라비더화이트':'1호2단'}; // 2026-11-05: 출고지시서 카드 거래처명 옆 빨간 글씨
 function drawOrdCard(name, data) {
   var items=(data||{}).items||[], cl=S.clients.find(function(c){return c.name===name;}), sid=safeid(name);
   var drv = (data||{}).driver || (cl && cl.driver) || '';
@@ -2895,6 +2896,9 @@ function drawOrdCard(name, data) {
   var driverBadge = drv ? '<span class="badge bg-blue" style="margin-left:.4rem;font-size:.7rem;">'+drv+'</span>' : '<span class="badge" style="margin-left:.4rem;font-size:.7rem;background:#eee;color:#888;">미배정</span>';
   var lockBadge = locked ? ' <span style="font-size:.7rem;color:#27ae60;font-weight:600;">[잠김]</span>' : '';
   var codeBadge = cl&&cl.code ? ' <span style="font-size:.7rem;color:#888;font-weight:400;">('+cl.code+')</span>' : '';
+  // 2026-11-05 추가: 거래처 이름 옆 빨간 표시 (CLIENT_TAGS 또는 거래처 nameTag 필드)
+  var nTag = (cl&&cl.nameTag) || CLIENT_TAGS[name] || '';
+  if(nTag) codeBadge += ' <span style="font-size:.85rem;color:#e11d48;font-weight:800;">'+lcH(nTag)+'</span>';
   var lockBtn = locked
     ? '<button class="btn btn-gray btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">수정</button>'
     : '<button class="btn btn-success btn-sm" style="margin-right:.3rem;" onclick="toggleLock(\''+en+'\')">입력완료</button>';
