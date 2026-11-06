@@ -6497,7 +6497,7 @@ async function bmPreview() {
             if(!item.pid||!item.qty) return;
             var prod=S.prods.find(function(p){return p.id===item.pid;});
             if(!prod){ noProdWarnings.push(clientName+' - '+item.pid+' ('+dstr+')'); return; }
-            var ecCode=prod.ecountCode||prod.id;
+            var ecCode=prod.bmCode||prod.ecountCode||prod.id; // 2026-11-06: 비즈모아 전용 품목코드(bmCode)가 있으면 우선
             var mult=prod.ecountQtyMultiplier||1;
             var client=S.clients.find(function(c){return c.name===clientName||(c.aliases&&c.aliases.indexOf(clientName)!==-1);});
             var price=(client&&S.priceHistory[client.id+'__'+item.pid])||0;
@@ -6533,7 +6533,7 @@ async function bmPreview() {
       if(!d.client||!d.pid||!d.qty)return;
       var prod=S.prods.find(function(p){return p.id===d.pid;});
       if(!prod){ noProdWarnings.push((d.client||'?')+' - '+(d.pname||d.pid)+' ('+logDate.slice(0,4)+'-'+logDate.slice(4,6)+'-'+logDate.slice(6,8)+')'); return; }
-      var ecCode=prod.ecountCode||prod.id;
+      var ecCode=prod.bmCode||prod.ecountCode||prod.id; // 2026-11-06: 비즈모아 전용 품목코드(bmCode)가 있으면 우선
       var mult=prod.ecountQtyMultiplier||1;
       var client=S.clients.find(function(c){return c.name===d.client||(c.aliases&&c.aliases.indexOf(d.client)!==-1);});
       var price=(client&&S.priceHistory[client.id+'__'+d.pid])||0;
