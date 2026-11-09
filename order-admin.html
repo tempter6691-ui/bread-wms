@@ -453,7 +453,8 @@ async function loadOrders() {
   document.getElementById('orders-wrap').innerHTML = '<div class="empty">로딩 중...</div>';
   try {
     await loadClients();
-    var snap = await db.collection('orders_request').orderBy('ts','desc').get();
+    // 2026-11-09 수정: 발주 전체(몇 달치)를 매번 다 읽던 것을 최근 60일만 → Firebase 읽기 한도 절약
+    var snap = await db.collection('orders_request').where('ts','>=',firebase.firestore.Timestamp.fromDate(new Date(Date.now()-60*864e5))).orderBy('ts','desc').get();
     allOrders = [];
     snap.forEach(function(d){ allOrders.push(Object.assign({id:d.id}, d.data())); });
     updateStats();
@@ -1036,7 +1037,7 @@ function blinkTitle(msg) {
 
 // 실시간 발주 변경 감지 (신규 발주 추가 시 자동 새로고침 + 알림)
 let _lastSnapCount = 0;
-db.collection('orders_request')
+db.collection('orders_request').where('ts','>=',firebase.firestore.Timestamp.fromDate(new Date(Date.now()-60*864e5))) // 2026-11-09: 최근 60일만 감시
   .onSnapshot(function(snap){
     if(_lastSnapCount !== 0 && snap.size > _lastSnapCount) {
       var newCount = snap.size - _lastSnapCount;

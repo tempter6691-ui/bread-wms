@@ -2649,6 +2649,8 @@ async function bulkCompleteOb() {
     if(left.length){ targets.push(n); cnt+=left.length; }
   });
   if(!cnt){ toast('이 날짜에 미완료 품목이 없어요','ok'); return; }
+  // 2026-11-09 추가: 오늘 이후 날짜를 실수로 전체 완료하는 사고 방지 (11/05에 11/06 289건 완료됨)
+  if(d>todayStr()){ var typed=prompt('⚠️ '+d+'은(는) 아직 오지 않은 날짜예요!\n정말 미리 전체 완료하려면 "완료"라고 입력하세요.'); if(typed!=='완료') return; }
   if(!confirm(d+' / '+S.outDriver+'\n\n거래처 '+targets.length+'곳, 미완료 품목 '+cnt+'건을 전부 수동 완료 처리할까요?\n(재고 자동 차감 + 출고 로그 기록)')) return;
 
   var doneCnt=0, allOk=false;
@@ -5361,6 +5363,19 @@ async function loadLogs() {
     // type 조건까지 같이 걸면 복합 인덱스를 미리 만들어둬야 해서(인덱스 없인 오류 발생),
     // ts 범위 하나만 걸어서 조회하고 type(inbound/outbound)은 아래에서 걸러냄
     // (2026-08-21: 위 방식으로 바꿨다가 실제로 "복합 인덱스 필요" 오류가 나서 재수정)
+    // 2026-11-09 수정: "전체보기"(최근 30일)는 logs를 통째로 읽어서 거래처 출고 로그까지 수만 건을 읽었음
+    // (+1/-1·수량수정 누를 때마다 다시 읽어서 Firebase 하루 읽기 한도 초과의 주원인) → 날짜·품목별 합계인 dailyInbound로 대체.
+    // 날짜수정 버튼용 로그 ID는 그 날짜를 누를 때만 따로 읽음(changeLogDateLazy)
+    if(!filterDate){
+      var cut=new Date(); cut.setDate(cut.getDate()-30);
+      var cutStr=cut.getFullYear()+'-'+String(cut.getMonth()+1).padStart(2,'0')+'-'+String(cut.getDate()).padStart(2,'0');
+      var dsnap=await db.collection('dailyInbound').where('date','>=',cutStr).get();
+      var dP={};
+      dsnap.forEach(function(d){ var r=d.data(); if(!r.date||!(r.qty)) return;
+        var nm=r.pname||((S.prods.find(function(x){return x.id===r.pid;})||{}).name)||r.pid||'-';
+        dP[r.date]=dP[r.date]||{}; dP[r.date][nm]=(dP[r.date][nm]||0)+(r.qty||0); });
+      return drawIbDays(el, dP, {});
+    }
     var snap = await db.collection('logs')
       .where('ts','>=',rangeStartTs).where('ts','<=',rangeEndTs).get();
 
@@ -5393,7 +5408,11 @@ async function loadLogs() {
     // 2026-10-19 수정: "날짜수정" 버튼이 아예 동작하지 않던 문제 — onclick="..." 안에 JSON.stringify(docIds)의
     // 큰따옴표가 들어가서 속성이 중간에 끊겼음. ID 목록은 여기 담아두고 버튼에는 날짜만 넘김.
     window._ibDayDocIds = dayDocIds;
-
+    drawIbDays(el, dayProd, dayDocIds);
+  } catch(e){el.innerHTML='<p style="color:red;">오류: '+linkifyErr(e.message)+'</p>';}
+}
+function drawIbDays(el, dayProd, dayDocIds){
+  try {
     var dates=Object.keys(dayProd).sort(function(a,b){return b.localeCompare(a);});
     if(!dates.length){el.innerHTML='<p style="color:#aaa;">해당 날짜 입고 기록 없음</p>';return;}
 
@@ -5407,7 +5426,7 @@ async function loadLogs() {
           '<span>📅 '+date+'</span>'+
           '<div style="display:flex;align-items:center;gap:.5rem;">'+
             '<span>총 '+total+'개</span>'+
-            (docIds.length?'<button onclick="changeLogDate(\''+date+'\',window._ibDayDocIds[\''+date+'\'])" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:.2rem .5rem;border-radius:4px;cursor:pointer;font-size:.75rem;">날짜수정</button>':'')+
+            ('<button onclick="changeLogDateLazy(\''+date+'\')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:.2rem .5rem;border-radius:4px;cursor:pointer;font-size:.75rem;">날짜수정</button>')+
           '</div>'+
         '</div>'+
         '<table style="border-radius:0 0 4px 4px;overflow:hidden;">'+
@@ -5574,6 +5593,18 @@ async function adjustLogQty(pname, date, delta, cur) {
 }
 
 // ── LOG DATE CHANGE ──────────────────────────────────────────
+// 2026-11-09: 전체보기(dailyInbound)에서는 로그 ID가 없어서, 날짜수정 누를 때 그 날짜 로그만 읽어옴
+async function changeLogDateLazy(date){
+  var ids=(window._ibDayDocIds||{})[date];
+  if(!ids||!ids.length){
+    try{
+      var a=firebase.firestore.Timestamp.fromDate(new Date(date+'T00:00:00')), b=firebase.firestore.Timestamp.fromDate(new Date(date+'T23:59:59.999'));
+      var sn=await db.collection('logs').where('ts','>=',a).where('ts','<=',b).get();
+      ids=[]; sn.forEach(function(d){ var r=d.data(); if(r.adjust) return; if(r.type==='inbound'||(r.type==='outbound'&&r.via==='inboundCancel')) ids.push(d.id); });
+    }catch(e){ alert('기록 조회 오류: '+e.message); return; }
+  }
+  return changeLogDate(date, ids);
+}
 async function changeLogDate(oldDate, docIds) {
   if(!docIds || !docIds.length){ alert('변경할 기록을 찾지 못했어요. 입고기록을 다시 조회해주세요.'); return; }
   var newDate = prompt('새 날짜를 입력하세요 (예: 2026-05-29)', oldDate);
