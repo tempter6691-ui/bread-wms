@@ -4656,6 +4656,7 @@ function pgProducts() {
       '<button class="btn btn-success btn-sm" onclick="showProductsExcelModal()">📥 엑셀로 내보내기</button>'+
       '<button class="btn btn-gray btn-sm" onclick="printProductsView()">🖨️ 화면 그대로 내보내기</button>'+
       '<button class="btn btn-primary btn-sm" onclick="showAddProd()">+ 추가</button>'+
+      '<button class="btn btn-gray btn-sm" title="거래처 발주화면에 보이는 제품목록을 지금 제품관리 내용으로 맞춥니다" onclick="rebuildOrderProducts()">🔄 발주앱 제품목록 새로고침</button>'+
     '</div>'+
     '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.75rem;padding:.6rem;background:#f8f9fa;border-radius:6px;">'+
       '<span style="font-size:.82rem;font-weight:600;color:#555;">📦 출고 조회 (과거 실적):</span>'+
@@ -5023,6 +5024,7 @@ async function doAddProd() {
     S.prods.push({id:id,qr:qr,name:name,cat:cat,unit:unit});
     saveCacheLS('products', S.prods);
     closeModal(); toast(name+' 추가됨','ok'); drawProducts();
+    scheduleOrderProductsRebuild();
   } catch(e){
     if(e.message==='DUPLICATE_QR'){ toast('이미 다른 곳에서 등록된 QR코드예요','err'); }
     else { toast('오류:'+e.message,'err'); }
@@ -5108,10 +5110,40 @@ async function doEditProd(pid) {
     S.inv[p.id]=(S.inv[p.id]||0)+actualDiff;
     saveCacheLS('products', S.prods);
     closeModal(); toast(name+' 수정됨','ok'); drawProducts();
+    scheduleOrderProductsRebuild();
   } catch(e){
     if(e.message==='DUPLICATE_QR'){ toast('이미 다른 상품이 쓰고 있는 QR코드예요','err'); }
     else { toast('오류:'+e.message,'err'); }
   }
+}
+
+// 2026-11-09 추가: 거래처 발주앱(order.html)용 제품목록 묶음 문서 (settings/orderProducts)
+// 거래처가 발주화면을 열 때 제품 300여 개를 하나씩 읽지 않고 이 문서 1개만 읽게 해서 읽기 한도 절약.
+// 제품 추가/수정/삭제 후 자동 갱신 + 제품관리의 버튼으로 수동 갱신. 콘솔에서 rebuildOrderProducts() 로도 실행 가능.
+async function rebuildOrderProducts(silent){
+  try{
+    var ps=await db.collection('products').get();
+    var items=[];
+    ps.forEach(function(d){ items.push(Object.assign({id:d.id},d.data())); });
+    if(!items.length) throw new Error('제품이 0개라 갱신하지 않았어요');
+    var size=JSON.stringify(items).length;
+    if(size>900000) throw new Error('제품목록이 너무 커요('+Math.round(size/1024)+'KB)');
+    await db.collection('settings').doc('orderProducts').set({items:items,count:items.length,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    // 덤: WMS 화면의 제품 캐시도 서버 최신값으로 맞춤
+    S.prods=items.map(function(p){ var q=Object.assign({},p); q.unit=(q.unit&&String(q.unit).trim())?String(q.unit).trim():'판'; return q; });
+    saveCacheLS('products', S.prods);
+    if(!silent) toast('발주앱 제품목록 갱신 완료 ('+items.length+'개)','ok');
+    console.log('[발주앱 제품목록] 갱신 완료', items.length+'개');
+    return items.length;
+  }catch(e){
+    console.error('[발주앱 제품목록] 갱신 실패', e);
+    toast('발주앱 제품목록 갱신 실패: '+e.message+' — 제품관리에서 「발주앱 제품목록 새로고침」을 눌러주세요','err');
+  }
+}
+var _opRebuildTimer=null;
+function scheduleOrderProductsRebuild(){
+  clearTimeout(_opRebuildTimer);
+  _opRebuildTimer=setTimeout(function(){ rebuildOrderProducts(true); }, 3000);
 }
 
 async function delProd(pid) {
@@ -5127,6 +5159,7 @@ async function delProd(pid) {
     S.prods=S.prods.filter(function(x){return x.id!==pid;});
     saveCacheLS('products', S.prods);
     toast(p.name+' 삭제됨','ok'); drawProducts();
+    scheduleOrderProductsRebuild();
   } catch(e){toast('오류:'+e.message,'err');}
 }
 
@@ -5845,6 +5878,7 @@ async function doRestore(input) {
         });
         await b.commit();
         toast(missingProds.length+'개 삭제된 상품만 복원했습니다 (기존 상품은 보호됨)','ok');
+        scheduleOrderProductsRebuild();
       } else {
         toast('복원할 상품 없음 (모든 상품이 이미 존재 — 기존 데이터 보호됨)','ok');
       }

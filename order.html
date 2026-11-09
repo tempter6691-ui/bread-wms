@@ -257,8 +257,8 @@ var _orderState = {};
 var _firstOrderSnap = true;
 function startOrderStatusListener() {
   if (!S.client) return;
-  db.collection('orders_request').where('client','==',S.client)
-    .onSnapshot(function(snap){
+  // 2026-11-09: 최근 14일 발주만 감시 (읽기 한도 절약). 인덱스 없으면 기존 방식으로 자동 전환
+  var _onSnap = function(snap){
       var changed = false;
       snap.forEach(function(d){
         var o = d.data();
@@ -278,8 +278,15 @@ function startOrderStatusListener() {
         toast('📩 더브레드뱅크에서 확인/답변이 도착했어요!');
       }
       _firstOrderSnap = false;
+    };
+  db.collection('orders_request').where('client','==',S.client)
+    .where('ts','>=',firebase.firestore.Timestamp.fromDate(new Date(Date.now()-ORDER_RECENT_DAYS*864e5)))
+    .onSnapshot(_onSnap, function(err){
+      console.warn('[발주상태] 최근기간 조회 실패 → 전체 조회로 전환', err && err.message);
+      db.collection('orders_request').where('client','==',S.client).onSnapshot(_onSnap);
     });
 }
+var ORDER_RECENT_DAYS = 14;
 
 function getParam(key) {
   return decodeURIComponent(new URLSearchParams(window.location.search).get(key)||'').trim();
@@ -288,9 +295,18 @@ function getParam(key) {
 async function init() {
   var client = getParam('c');
   try {
-    var snap = await db.collection('products').get();
+    // 2026-11-09: 제품목록 묶음 문서(settings/orderProducts) 1개만 읽음 → 읽기 한도 절약.
+    // 묶음 문서가 없거나 비어 있으면 예전처럼 제품 전체를 읽음
     S.prods=[];
-    snap.forEach(function(d){S.prods.push(Object.assign({id:d.id},d.data()));});
+    try{
+      var opDoc = await db.collection('settings').doc('orderProducts').get();
+      var opItems = opDoc.exists ? (opDoc.data().items||[]) : [];
+      if(Array.isArray(opItems) && opItems.length) S.prods = opItems.map(function(p){ return Object.assign({},p); });
+    }catch(oe){ console.warn('[제품목록] 묶음 문서 읽기 실패 → 전체 조회', oe && oe.message); }
+    if(!S.prods.length){
+      var snap = await db.collection('products').get();
+      snap.forEach(function(d){S.prods.push(Object.assign({id:d.id},d.data()));});
+    }
     // orderHidden:true 인 제품은 발주앱(거래처 화면)에서만 숨김 - WMS 제품관리 데이터는 그대로 유지됨
     S.prods = S.prods.filter(function(p){ return !p.orderHidden; });
     // 2026-10-13 수정: orderOnlyClients: 지정된 거래처만 발주앱에서 볼 수 있음 (WMS 재고관리엔 영향 없음)
@@ -653,10 +669,18 @@ function closeHistory(){
   document.getElementById('modal-history').classList.remove('show');
 }
 
-async function loadHistory(){
+async function loadHistory(showAll){
   document.getElementById('history-list').innerHTML='<div style="text-align:center;padding:1.5rem;color:#aaa;font-size:.85rem;">로딩 중...</div>';
   try {
-    var snap=await db.collection('orders_request').where('client','==',S.client).get();
+    // 2026-11-09: 기본은 최근 14일만 읽음 (읽기 한도 절약). '이전 내역 보기'를 누를 때만 전체 조회
+    var baseQ=db.collection('orders_request').where('client','==',S.client);
+    var snap;
+    if(showAll){ snap=await baseQ.get(); }
+    else {
+      try { snap=await baseQ.where('ts','>=',firebase.firestore.Timestamp.fromDate(new Date(Date.now()-ORDER_RECENT_DAYS*864e5))).get(); }
+      catch(ie){ console.warn('[발주내역] 최근기간 조회 실패 → 전체 조회', ie && ie.message); snap=await baseQ.get(); showAll=true; }
+    }
+    var moreBtn = showAll ? '' : '<button class="reorder-btn" style="margin-top:.6rem;background:#f1f1f1;color:#555;" onclick="loadHistory(true)">📂 '+ORDER_RECENT_DAYS+'일 이전 내역 보기</button>';
     var orders=[];
     snap.forEach(function(d){orders.push(Object.assign({id:d.id},d.data()));});
     orders.sort(function(a,b){
@@ -664,7 +688,7 @@ async function loadHistory(){
       var tb=b.ts&&b.ts.toDate?b.ts.toDate().getTime():0;
       return tb-ta;
     });
-    if(!orders.length){document.getElementById('history-list').innerHTML='<p style="text-align:center;color:#aaa;padding:2rem;font-size:.85rem;">발주 내역이 없어요</p>';window._historyOrders=[];return;}
+    if(!orders.length){document.getElementById('history-list').innerHTML='<p style="text-align:center;color:#aaa;padding:2rem;font-size:.85rem;">'+(showAll?'발주 내역이 없어요':'최근 '+ORDER_RECENT_DAYS+'일 발주 내역이 없어요')+'</p>'+moreBtn;window._historyOrders=[];return;}
     var html='';
     orders.forEach(function(o,idx){
       var t=o.ts&&o.ts.toDate?o.ts.toDate():new Date();
@@ -695,7 +719,7 @@ async function loadHistory(){
         '</div>'+
       '</div>';
     });
-    document.getElementById('history-list').innerHTML=html;
+    document.getElementById('history-list').innerHTML=html+moreBtn;
     window._historyOrders=orders;
   } catch(e){
     document.getElementById('history-list').innerHTML='<p style="color:red;font-size:.82rem;">오류: '+e.message+'</p>';
