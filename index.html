@@ -2021,6 +2021,33 @@ async function manualIn(pid) {
 }
 
 // ── OUTBOUND ─────────────────────────────────────────────────
+// 2026-11-12 추가: 출고 화면 합계 — 그날(기사별) 나갈 수량을 단위(판/박스/봉/개)별로 합산
+function obNamesFor(drv){
+  var todayOrd=S.orders[S.ordDate]||{};
+  return Object.keys(todayOrd).filter(function(n){
+    if(!((todayOrd[n]||{}).items||[]).length) return false;
+    if(drv==='전체') return true;
+    var od=(todayOrd[n]||{}).driver; if(od) return od===drv;
+    var cl=S.clients.find(function(c){return c.name===n;}); return cl&&cl.driver===drv;
+  });
+}
+function obUnitTotals(names){
+  var todayOrd=S.orders[S.ordDate]||{}, u={};
+  names.forEach(function(n){ ((todayOrd[n]||{}).items||[]).forEach(function(it){
+    var p=S.prods.find(function(x){return x.id===it.pid;}); var un=(p&&p.unit&&String(p.unit).trim())||'판';
+    u[un]=(u[un]||0)+(Number(it.qty)||0);
+  }); });
+  return u;
+}
+function obUnitText(u, big){
+  var col={'판':'#333','박스':'#2563eb','봉':'#9333ea','개':'#ea580c'};
+  var parts=['판','박스','봉','개'].filter(function(k){return u[k];}).map(function(k){
+    return '<span style="'+(big?'color:'+col[k]+';':'')+'font-weight:700;">'+u[k].toLocaleString()+k+'</span>';
+  });
+  Object.keys(u).forEach(function(k){ if(['판','박스','봉','개'].indexOf(k)<0&&u[k]) parts.push('<b>'+u[k].toLocaleString()+esc(k)+'</b>'); });
+  return parts.length?parts.join(big?' · ':'·'):'<span style="color:#aaa;">0</span>';
+}
+
 function pgOutbound() {
   var todayOrd=S.orders[S.ordDate]||{};
   if(!S.outDriver) S.outDriver='전체';
@@ -2046,10 +2073,12 @@ function pgOutbound() {
     '<div class="card-title">기사 선택</div>'+
     '<div class="driver-tabs">'+
       '<div class="dtab'+(S.outDriver==='전체'?' active':'')+'" onclick="S.outDriver=\'전체\';S.outClient=null;go(\'outbound\');">전체</div>'+
-      DRIVERS.map(function(d){return '<div class="dtab'+(S.outDriver===d?' active':'')+'" onclick="S.outDriver=\''+d+'\';S.outClient=null;go(\'outbound\');">'+d+'</div>';}).join('')+
+      DRIVERS.map(function(d){var dn=obNamesFor(d); return '<div class="dtab'+(S.outDriver===d?' active':'')+'" onclick="S.outDriver=\''+d+'\';S.outClient=null;go(\'outbound\');" style="text-align:center;line-height:1.25;">'+d+(dn.length?'<div style="font-size:.66rem;font-weight:500;opacity:.9;margin-top:.1rem;">'+dn.length+'곳 · '+obUnitText(obUnitTotals(dn))+'</div>':'')+'</div>';}).join('')+
     '</div>'+
     '<div id="missing-clients-warning"></div>'+
-    '<div class="card-title" style="margin-top:.5rem;">거래처 선택</div>'+
+    '<div class="card-title" style="margin-top:.5rem;display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;">거래처 선택'+
+      (names.length?'<span style="font-size:.82rem;font-weight:500;color:#555;background:#f1f5f9;border-radius:6px;padding:.2rem .6rem;">'+(S.outDriver==='전체'?'전체':esc(S.outDriver))+' '+names.length+'곳 합계: '+obUnitText(obUnitTotals(names),true)+'</span>':'')+
+    '</div>'+
     '<input id="ob-q" type="text" style="width:100%;padding:.45rem;margin-bottom:.6rem;" placeholder="거래처 검색..." oninput="filterObClients()">'+
     '<div id="ob-clients">'+
       (names.length?names.map(function(n){
