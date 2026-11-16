@@ -278,6 +278,11 @@ function confirmItem(clientName, pid) {
   // 헤더/요약 업데이트
   updateCardHeader(clientName);
   updateSummary();
+  // 2026-11-16 추가: 수동 '확인' 누른 뒤 커서를 그 거래처의 QR 스캔 칸으로 자동 이동 (바로 다음 스캔 가능)
+  setTimeout(function(){
+    var sc=document.getElementById('scan_'+safeid(clientName));
+    if(sc){ try{ sc.focus({preventScroll:true}); }catch(e){ sc.focus(); } }
+  },50);
 }
 
 // ── 스캔 소리 (2026-08-31 추가) ──────────────────────────
