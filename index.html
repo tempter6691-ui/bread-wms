@@ -3763,7 +3763,10 @@ function searchProd(clientName, sid, q) {
   var el=document.getElementById('psres_'+sid); if(!el) return;
   if(!q.trim()){el.innerHTML='';return;}
   var m=S.prods.filter(function(p){return p.name.toLowerCase().indexOf(q.toLowerCase())>=0||(p.qr||'').toLowerCase().indexOf(q.toLowerCase())>=0;}).slice(0,12);
-  el.innerHTML=m.map(function(p){return '<button class="client-btn" style="font-size:.76rem;" onclick="addItem(\''+esc(clientName)+'\',\''+p.id+'\',\''+sid+'\')">'+p.name+'['+p.qr+']</button>';}).join('');
+  // 2026-11-25 추가: 1단/2단 제품은 연한 색으로 구분 (1단=연파랑, 2단=연주황)
+  el.innerHTML=m.map(function(p){
+    var tier=/1단/.test(p.name)?'background:#e8f1ff;border-color:#a9c8f5;color:#1d4e89;':(/2단/.test(p.name)?'background:#fff0e0;border-color:#f3c48f;color:#8a4b0f;':'');
+    return '<button class="client-btn" style="font-size:.76rem;'+tier+'" onclick="addItem(\''+esc(clientName)+'\',\''+p.id+'\',\''+sid+'\')">'+p.name+'['+p.qr+']</button>';}).join('');
 }
 
 // 출고지시서에서, 분류(cat)가 달라도 이름에 이 키워드가 들어간 품목끼리는 서로 붙어있게 묶음
