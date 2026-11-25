@@ -4338,8 +4338,8 @@ function printOrders(onlyNames) {
         function obTierMark(n){
           return String(n).replace(/([12])단/g, function(m, t){
             return t==='1'
-              ? '<span style="display:inline-block;border:1.5px solid #000;border-radius:3px;padding:0 3px;margin-left:2px;font-weight:900;background:#fff;color:#000;">1단</span>'
-              : '<span style="display:inline-block;border:1.5px solid #000;border-radius:3px;padding:0 3px;margin-left:2px;font-weight:900;background:#000;color:#fff;">2단</span>';
+              ? '<span style="display:inline-block;border:1px solid #000;border-radius:2px;padding:0 1px;margin-left:1px;font-size:8px;line-height:1.1;font-weight:900;vertical-align:1px;white-space:nowrap;background:#fff;color:#000;">1단</span>'
+              : '<span style="display:inline-block;border:1px solid #000;border-radius:2px;padding:0 1px;margin-left:1px;font-size:8px;line-height:1.1;font-weight:900;vertical-align:1px;white-space:nowrap;background:#000;color:#fff;">2단</span>';
           });
         }
         for(var i=0; i<left.length; i++){
